@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <!-- Semi-transparent dark background for Glass effect -->
+    <!-- Using a very dark blue/black with 60% opacity -->
+    <solid android:color="#990F172A" />
+    
+    <!-- Rounded Corners -->
+    <corners android:radius="24dp" />
+    
+    <!-- Thin white border for "glass edge" look -->
+    <stroke android:width="1.5dp" android:color="#40FFFFFF" />
+</shape>

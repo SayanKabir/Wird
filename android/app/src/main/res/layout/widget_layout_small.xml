@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_glass_bg"
+    android:padding="12dp">
+
+    <!-- Centered Content -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_centerInParent="true"
+        android:gravity="center_horizontal">
+
+        <!-- UP NEXT Label -->
+        <TextView
+            android:id="@+id/widget_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="UP NEXT"
+            android:textColor="#CCFFFFFF"
+            android:textSize="9sp"
+            android:letterSpacing="0.25"
+            android:textStyle="bold"
+            android:layout_marginBottom="2dp" />
+
+        <!-- Prayer Name -->
+        <TextView
+            android:id="@+id/next_prayer_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MAGHRIB"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginBottom="0dp" />
+
+        <!-- Time -->
+        <TextView
+            android:id="@+id/next_prayer_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="5:44 PM"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:fontFamily="sans-serif-light" />
+            
+        <!-- Secondary / Next Info (Hidden by default or small) -->
+        <TextView
+            android:id="@+id/widget_secondary_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Next: Isha 7:30"
+            android:textColor="#AAFFFFFF"
+            android:textSize="10sp"
+            android:layout_marginTop="4dp"
+            android:fontFamily="sans-serif"
+            android:visibility="visible" />
+            
+    </LinearLayout>
+
+</RelativeLayout>
