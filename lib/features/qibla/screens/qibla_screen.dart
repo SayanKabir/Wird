@@ -80,16 +80,17 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
 
         final double targetHeading = event.heading!;
 
-        // --- FIXED: Shortest Path Interpolation ---
+        // --- Shortest Path Interpolation ---
         // Calculate the difference between where we are and where we want to be
         double diff = targetHeading - _currentVisualHeading;
 
         // Normalize the difference to -180...180 to find shortest path
-        // e.g., if we are at 350 and target is 10:
-        // diff = 10 - 350 = -340
-        // -340 + 360 = +20. So we rotate +20 degrees (Right) instead of -340 (Left).
-        while (diff < -180) diff += 360;
-        while (diff > 180) diff -= 360;
+        while (diff < -180) {
+          diff += 360;
+        }
+        while (diff > 180) {
+          diff -= 360;
+        }
 
         final double endHeading = _currentVisualHeading + diff;
 
@@ -126,35 +127,54 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
     if (isAligned) HapticFeedback.selectionClick();
 
     return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          bottom: false,
-          child: Column(
-            children: [
-              _buildHeader(), // Restored header
-              const SizedBox(height: 16),
-  
-              Expanded(
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    _buildCompassVisual(isAligned),
-                    if (_isCalibrating)
-                      Positioned(
-                        top: 20,
-                        child: _buildCalibrationBadge(),
+      backgroundColor: Colors.transparent,
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final double screenWidth = constraints.maxWidth;
+            final double screenHeight = constraints.maxHeight;
+
+            // Dynamically scale compass based on available screen space
+            final double compassSize = math.min(screenWidth * 0.8, screenHeight * 0.45);
+
+            return SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Column(
+                    children: [
+                      _buildHeader(),
+                      const SizedBox(height: 16),
+
+                      Expanded(
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // Pass the dynamic size down
+                            _buildCompassVisual(isAligned, compassSize),
+                            if (_isCalibrating)
+                              Positioned(
+                                top: 20,
+                                child: _buildCalibrationBadge(),
+                              ),
+                          ],
+                        ),
                       ),
-                  ],
+                      _buildStatusFooter(isAligned, offset),
+                      // Responsive bottom padding to avoid nav overlap
+                      SizedBox(height: math.max(80, screenHeight * 0.15)),
+                    ],
+                  ),
                 ),
               ),
-              _buildStatusFooter(isAligned, offset),
-              const SizedBox(height: 150), // Increased to avoid bottom nav overlap
-            ],
-          ),
+            );
+          },
         ),
-      );
-    }
-    
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Padding(
       padding: const EdgeInsets.only(top: 24, bottom: 0),
@@ -162,7 +182,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
         children: [
           Text(
             "FIND QIBLA",
-            style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.5))
+            style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5))
                 .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -185,7 +205,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
     );
   }
 
-  Widget _buildCompassVisual(bool isAligned) {
+  Widget _buildCompassVisual(bool isAligned, double compassSize) {
     return AnimatedBuilder(
       animation: _smoothHeading,
       builder: (context, child) {
@@ -194,60 +214,59 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
         return Transform.rotate(
           angle: -_smoothHeading.value * (math.pi / 180),
           child: SizedBox(
-            width: 300,
-            height: 300,
+            width: compassSize,
+            height: compassSize,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 // A. Outer Tick Ring
                 CustomPaint(
-                  size: const Size(300, 300),
+                  size: Size(compassSize, compassSize),
                   painter: _CompassTickPainter(),
                 ),
 
-                // B. Cardinal Directions (N, S, E, W)
+                // B. Cardinal Directions (N, S, E, W) scaled down slightly
                 CustomPaint(
-                  size: const Size(260, 260),
+                  size: Size(compassSize * 0.86, compassSize * 0.86),
                   painter: _CardinalPainter(),
                 ),
 
                 // C. The Qibla Pointer
-                // Rotates by Qibla angle relative to North (0).
-                // Since the parent Stack rotates to keep North at 0, this pointer stays at the correct world bearing.
                 Transform.rotate(
                   angle: _qiblaDirection * (math.pi / 180),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        margin: const EdgeInsets.only(bottom: 180),
+                        // Proportional margin pushes it up relative to screen size
+                        margin: EdgeInsets.only(bottom: compassSize * 0.6),
                         child: Column(
                           children: [
                             Text(
                               '🕋',
                               style: TextStyle(
-                                fontSize: 44,
-                                height: 1.0, // Tight fit
+                                fontSize: compassSize * 0.15, // Scales with screen
+                                height: 1.0,
                                 shadows: [
                                   Shadow(
-                                    color: Colors.black.withOpacity(0.3),
+                                    color: Colors.black.withValues(alpha: 0.3),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 12),
+                            SizedBox(height: compassSize * 0.04),
                             Container(
                               width: 4,
-                              height: 40,
+                              height: compassSize * 0.13,
                               decoration: BoxDecoration(
                                 color: isAligned ? AppColors.qiblaAligned : AppColors.spiritualGold,
                                 borderRadius: BorderRadius.circular(4),
                                 boxShadow: [
                                   BoxShadow(
                                     color: (isAligned ? AppColors.qiblaAligned : AppColors.spiritualGold)
-                                        .withOpacity(0.6),
+                                        .withValues(alpha: 0.6),
                                     blurRadius: 12,
                                     spreadRadius: 2,
                                   )
@@ -270,7 +289,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
 
   Widget _buildStatusFooter(bool isAligned, double offset) {
     String status = "Searching";
-    Color color = Colors.white.withOpacity(0.5);
+    Color color = Colors.white.withValues(alpha: 0.5);
 
     if (isAligned) {
       status = "ALIGNED";
@@ -302,9 +321,9 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
             key: ValueKey(status),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withOpacity(0.3)),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -338,9 +357,9 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
-            color: AppColors.statusMissed.withOpacity(0.15),
+            color: AppColors.kaabaGold.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.statusMissed.withOpacity(0.4)),
+            border: Border.all(color: AppColors.statusMissed.withValues(alpha: 0.4)),
           ),
           child: Column(
             children: [
@@ -359,7 +378,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
               const SizedBox(height: 4),
               Text(
                 "Wave phone in figure-8",
-                style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.8)),
+                style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.12)),
               ),
             ],
           ),
@@ -373,7 +392,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.explore_off, size: 48, color: Colors.white.withOpacity(0.3)),
+          Icon(Icons.explore_off, size: 48, color: Colors.white.withValues(alpha: 0.3)),
           const SizedBox(height: 16),
           Text("Compass Unavailable", style: AppTextStyles.h3()),
         ],
@@ -391,12 +410,12 @@ class _CompassTickPainter extends CustomPainter {
     final radius = size.width / 2;
 
     final tickPaint = Paint()
-      ..color = Colors.white.withOpacity(0.2)
+      ..color = Colors.white.withValues(alpha: 0.2)
       ..strokeWidth = 1.5
       ..strokeCap = StrokeCap.round;
 
     final majorTickPaint = Paint()
-      ..color = Colors.white.withOpacity(0.5)
+      ..color = Colors.white.withValues(alpha: 0.5)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
 
@@ -406,7 +425,8 @@ class _CompassTickPainter extends CustomPainter {
       if (isCardinal) continue;
 
       final angle = i * (math.pi / 180);
-      final double length = isMajor ? 12 : 6;
+      // Tick length now scales with canvas size
+      final double length = isMajor ? size.width * 0.04 : size.width * 0.02;
 
       final start = Offset(
         center.dx + (radius - length) * math.sin(angle),
@@ -420,6 +440,7 @@ class _CompassTickPainter extends CustomPainter {
       canvas.drawLine(start, end, isMajor ? majorTickPaint : tickPaint);
     }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
@@ -433,26 +454,33 @@ class _CardinalPainter extends CustomPainter {
     final directions = ['N', 'E', 'S', 'W'];
     final angles = [0.0, 90.0, 180.0, 270.0];
 
+    final double padding = size.width * 0.05; // Dynamic padding from edge
+
     for (int i = 0; i < 4; i++) {
       final angle = angles[i] * (math.pi / 180);
       final isNorth = directions[i] == 'N';
-      final textOffset = Offset(
-        center.dx + (radius - 15) * math.sin(angle) - 10,
-        center.dy - (radius - 15) * math.cos(angle) - 12,
-      );
+
       textPainter.text = TextSpan(
         text: directions[i],
         style: TextStyle(
           fontFamily: 'Inter',
-          fontSize: isNorth ? 20 : 16,
+          fontSize: isNorth ? size.width * 0.075 : size.width * 0.06, // Scales text seamlessly
           fontWeight: FontWeight.bold,
-          color: isNorth ? AppColors.statusMissed : Colors.white.withOpacity(0.9),
+          color: isNorth ? AppColors.statusMissed : Colors.white.withValues(alpha: 0.9),
         ),
       );
       textPainter.layout();
+
+      // Auto-centers the text exactly on the offset instead of guessing
+      final textOffset = Offset(
+        center.dx + (radius - padding) * math.sin(angle) - textPainter.width / 2,
+        center.dy - (radius - padding) * math.cos(angle) - textPainter.height / 2,
+      );
+
       textPainter.paint(canvas, textOffset);
     }
   }
+
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

@@ -51,7 +51,7 @@ class SunnahTile extends StatelessWidget {
               child: Icon(
                 categoryIcon,
                 color: isPracticedToday
-                    ? const Color(0xFF73D38A).withValues(alpha: 0.8)
+                    ? AppColors.statusOnTime.withValues(alpha: 0.8)
                     : Colors.white.withValues(alpha: 0.45),
                 size: 16,
               ),
@@ -79,7 +79,7 @@ class SunnahTile extends StatelessWidget {
                         Icon(
                           Icons.check_circle_rounded,
                           size: 16,
-                          color: const Color(0xFF73D38A),
+                          color: AppColors.statusOnTime,
                         ),
                       ],
                     ],

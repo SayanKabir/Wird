@@ -5,6 +5,7 @@ import 'package:wird2/models/prayer_status.dart'; // Ensure correct path
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/utils/hijri_date.dart'; // Import Hijri utility
+import '../../../models/prayer.dart';
 import '../bloc/prayer_bloc.dart';
 import '../widgets/prayer_card.dart';
 
@@ -16,7 +17,9 @@ class ScheduleView extends StatelessWidget {
   Widget build(BuildContext context) {
     // 1. Format Dates
     final gregorianStr = DateFormat('EEEE, d MMM').format(state.date); // e.g., "Saturday, 31 Jan"
-    final hijri = HijriDate.fromGregorian(state.date);
+    final now = DateTime.now();
+    final maghribTime = state.prayerTimes[Prayer.maghrib]?.startTime;
+    final hijri = HijriDate.fromDateTime(now, maghribTime: maghribTime);
     final hijriStr = '${hijri.day} ${hijri.monthNameEnglish} ${hijri.year} AH'; // e.g., "12 Sha'ban 1444 AH"
 
     return SafeArea(
@@ -127,7 +130,7 @@ class ScheduleView extends StatelessWidget {
                             child: Builder(
                               builder: (context) {
                                 final now = DateTime.now();
-                                final hasStarted = timeData == null || now.isAfter(timeData.startTime);
+                                final hasStarted = timeData == null || prayer.isSunnah || now.isAfter(timeData.startTime);
                                 final isCompleted = entry?.status.isCompleted ?? false;
                                 
                                 return PrayerCard(

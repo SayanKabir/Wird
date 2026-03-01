@@ -118,13 +118,23 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       showWeatherWidget: fields[13] == null ? true : fields[13] as bool,
       weatherTheme:
           fields[14] == null ? WeatherTheme.auto : fields[14] as WeatherTheme,
+      sunnahNotificationsEnabled:
+          fields[15] == null ? true : fields[15] as bool,
+      islamicEventsEnabled: fields[16] == null ? true : fields[16] as bool,
+      quranShowTranslation: fields[17] == null ? true : fields[17] as bool,
+      quranShowTransliteration: fields[18] == null ? false : fields[18] as bool,
+      quranArabicFontSize: fields[19] == null ? 28.0 : fields[19] as double,
+      quranTranslationFontSize:
+          fields[20] == null ? 14.0 : fields[20] as double,
+      quranSelectedTranslation:
+          fields[21] == null ? 'Saheeh Intl' : fields[21] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(15)
+      ..writeByte(22)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -154,7 +164,21 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(13)
       ..write(obj.showWeatherWidget)
       ..writeByte(14)
-      ..write(obj.weatherTheme);
+      ..write(obj.weatherTheme)
+      ..writeByte(15)
+      ..write(obj.sunnahNotificationsEnabled)
+      ..writeByte(16)
+      ..write(obj.islamicEventsEnabled)
+      ..writeByte(17)
+      ..write(obj.quranShowTranslation)
+      ..writeByte(18)
+      ..write(obj.quranShowTransliteration)
+      ..writeByte(19)
+      ..write(obj.quranArabicFontSize)
+      ..writeByte(20)
+      ..write(obj.quranTranslationFontSize)
+      ..writeByte(21)
+      ..write(obj.quranSelectedTranslation);
   }
 
   @override

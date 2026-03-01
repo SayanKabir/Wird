@@ -1,9 +1,19 @@
+import 'package:hive/hive.dart';
 import '../../models/sunnah.dart';
 
 /// Unified repository for all Sunnah data including dhikr/azkar entries.
 /// Replaces the old SunnahRepository + AzkarRepository with one enriched source.
 class SunnahRepository {
   late final List<Sunnah> _sunnahs = _seeds.map((s) => s.toSunnah()).toList(growable: false);
+  Box? _prefsBox;
+  static const String _boxName = 'sunnah_prefs';
+  static const String _keyWeeklyId = 'weekly_sunnah_id';
+  static const String _keyWeekStart = 'week_start_timestamp';
+
+  /// Initialize repository and open storage
+  Future<void> init() async {
+    _prefsBox = await Hive.openBox(_boxName);
+  }
 
   // ───────────────────────────── public API ─────────────────────────────
 
@@ -20,22 +30,56 @@ class SunnahRepository {
     }
   }
 
-  /// Number of times the user has skipped the weekly sunnah this week.
-  int _skipOffset = 0;
-
   Future<Sunnah> getWeeklySunnah() async {
     if (_sunnahs.isEmpty) throw StateError('No Sunnahs available.');
+    
+    // Calculate start of current week (Monday)
     final now = DateTime.now();
-    final monday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final weekSeed = monday.millisecondsSinceEpoch ~/ Duration.millisecondsPerDay;
-    return _sunnahs[(weekSeed + _skipOffset) % _sunnahs.length];
+    // Monday = 1, so subtract (weekday - 1)
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: now.weekday - 1));
+    final currentWeekStart = monday.millisecondsSinceEpoch;
+
+    // Check stored week
+    final storedWeekStart = _prefsBox?.get(_keyWeekStart) as int?;
+    final storedId = _prefsBox?.get(_keyWeeklyId) as String?;
+
+    // If new week or no stored data, pick a new random sunnah
+    if (storedWeekStart != currentWeekStart || storedId == null) {
+      final newSunnah = _pickRandomSunnah();
+      
+      await _prefsBox?.put(_keyWeekStart, currentWeekStart);
+      await _prefsBox?.put(_keyWeeklyId, newSunnah.id);
+      
+      return newSunnah;
+    }
+
+    // Return stored sunnah, fallback to random if ID not found
+    final sunnah = _sunnahs.firstWhere(
+      (s) => s.id == storedId,
+      orElse: () => _pickRandomSunnah(),
+    );
+    
+    return sunnah;
   }
 
-  /// Advances to the next sunnah for this week.
+  /// Advances to the next sunnah for this week (manually shuffled by user).
+  /// This persists the change so it stays for the rest of the week.
   Future<Sunnah> skipWeeklySunnah() async {
-    _skipOffset++;
-    return getWeeklySunnah();
+    final currentId = _prefsBox?.get(_keyWeeklyId) as String?;
+    
+    // Pick different one
+    Sunnah newSunnah;
+    do {
+      newSunnah = _pickRandomSunnah();
+    } while (newSunnah.id == currentId && _sunnahs.length > 1);
+
+    await _prefsBox?.put(_keyWeeklyId, newSunnah.id);
+    return newSunnah;
+  }
+
+  Sunnah _pickRandomSunnah() {
+    return _sunnahs[DateTime.now().microsecondsSinceEpoch % _sunnahs.length];
   }
 
   // ───────────────────────────── seed data ──────────────────────────────
@@ -160,19 +204,22 @@ class SunnahRepository {
     _S(cat: 'Charity & Generosity', t: 'Sadaqah jariyah (ongoing charity)', ref: 'Muslim 1631', g: 'Sahih', diff: SunnahDifficulty.medium, freq: SunnahFrequency.occasional, desc: 'The Prophet ﷺ said: "When a person dies, his deeds come to an end except three: ongoing charity, knowledge benefited from, and a righteous child who prays for him." (Muslim 1631)', vir: 'A charity that keeps giving reward even after death.'),
     _S(cat: 'Charity & Generosity', t: 'Smile — the easiest sadaqah', ref: 'Tirmidhi 1956', g: 'Hasan', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Your smiling in the face of your brother is charity." (Tirmidhi 1956)', vir: 'No wealth needed — just a genuine smile.'),
 
-    _S(cat: 'Knowledge & Dhikr', t: 'Complete Morning Azkar', ref: 'Hisn al-Muslim (Morning Adhkar)', g: 'Authenticated', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'Recite morning adhkar including Ayat al-Kursi (1x), Surah Ikhlas/Falaq/Nas (3x), and Sayyid al-Istighfar. (Hisn al-Muslim)', vir: 'Morning azkar form a shield of protection for the entire day.', tasbihId: 'morning_azkar', tips: ['Use the digital tasbih to track repeated adhkar.', 'Best recited between Fajr and sunrise.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Complete Evening Azkar', ref: 'Hisn al-Muslim (Evening Adhkar)', g: 'Authenticated', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'Recite evening adhkar including Ayat al-Kursi (1x), Surah Ikhlas/Falaq/Nas (3x), and protective duas. (Hisn al-Muslim)', vir: 'Evening azkar protect you through the night.', tasbihId: 'evening_azkar', tips: ['Use the digital tasbih to track repeated adhkar.', 'Best recited between Asr and Maghrib.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Complete Before-Sleep Azkar', ref: 'Hisn al-Muslim (Sleep Adhkar)', g: 'Authenticated', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'Before sleep recite: SubhanAllah (33x), Alhamdulillah (33x), and Allahu Akbar (34x), along with sleep adhkar. (Hisn al-Muslim)', vir: 'Sleep adhkar ensure protection and angelic guardianship.', tasbihId: 'before_sleep_azkar', tips: ['Use the digital tasbih to track repeated adhkar.', 'Combine with the sunnah of sleeping on the right side.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Say SubhanAllah 33 times after prayer', ref: 'Muslim 596', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Whoever says SubhanAllah 33 times, Alhamdulillah 33 times, Allahu Akbar 33 times, and completes 100 with La ilaha illAllah — his sins will be forgiven even if they are like the foam of the sea." (Muslim 596)', vir: 'All past sins forgiven — an effortless daily practice.', arabic: 'سُبْحَانَ اللَّهِ', translit: 'SubhanAllah', transl: 'Glory be to Allah', tasbihId: 'subhanallah', reps: 33, tips: ['Use the digital tasbih to track counts.', 'Say after each of the five daily prayers.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Say Alhamdulillah 33 times after prayer', ref: 'Muslim 596', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'Part of the post-prayer dhikr formula. (Muslim 596)', vir: 'Gratitude to Allah after every prayer purifies the soul.', arabic: 'الْحَمْدُ لِلَّهِ', translit: 'Alhamdulillah', transl: 'All praise is due to Allah', tasbihId: 'alhamdulillah', reps: 33, tips: ['Use the digital tasbih to track counts.', 'Say after each of the five daily prayers.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Say Allahu Akbar 34 times after prayer', ref: 'Muslim 596', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'Part of the post-prayer dhikr formula. (Muslim 596)', vir: 'Affirming Allah\'s greatness after every prayer.', arabic: 'اللَّهُ أَكْبَرُ', translit: 'Allahu Akbar', transl: 'Allah is the Greatest', tasbihId: 'allahuakbar', reps: 34, tips: ['Use the digital tasbih to track counts.', 'Say after each of the five daily prayers.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Istighfar 100 times daily', ref: 'Muslim 2702, Bukhari 6307', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "By Allah, I seek Allah\'s forgiveness more than seventy times a day." (Bukhari 6307)', vir: 'Regular istighfar opens doors of provision and relief.', arabic: 'أَسْتَغْفِرُ اللَّهَ', translit: 'Astaghfirullah', transl: 'I seek forgiveness from Allah', tasbihId: 'astaghfirullah', reps: 100, tips: ['Use the digital tasbih to track counts.', 'Split counts across the day to stay consistent.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Say La ilaha illAllah 100 times', ref: 'Bukhari 3293, Muslim 2691', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Whoever says La ilaha illAllah 100 times, he gets the reward of freeing ten slaves, 100 good deeds, 100 sins erased, and is protected from Shaytan." (Bukhari 3293)', vir: 'Protection from Shaytan and mountains of reward.', arabic: 'لَا إِلَـٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ', translit: "La ilaha illAllahu wahdahu la sharika lah", transl: 'There is no god but Allah alone, with no partner.', tasbihId: 'la_ilaha_illallah', reps: 100, tips: ['Use the digital tasbih to track counts.', 'Split counts across the day to stay consistent.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Send Salawat on the Prophet ﷺ', ref: 'Muslim 408, Tirmidhi 2457', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Whoever sends salawat upon me once, Allah sends blessings upon him ten times." (Muslim 408)', vir: 'Every salawat returns tenfold blessings from Allah.', arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ', translit: "Allahumma salli 'ala Muhammad wa 'ala ali Muhammad", transl: 'O Allah, send blessings on Muhammad and on the family of Muhammad.', tasbihId: 'salawat', tips: ['Use the digital tasbih to track counts.', 'Especially on Friday — it is presented to the Prophet ﷺ.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Tasbih of Fatimah', ref: 'Bukhari 3113', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ taught Fatimah: SubhanAllah 33, Alhamdulillah 33, Allahu Akbar 34 — before sleeping. (Bukhari 3113)', vir: 'Better than having a servant — strength from dhikr.', tasbihId: 'subhanallah', tips: ['Use the digital tasbih to track counts.', 'Recite before sleeping for energy and strength.']),
-    _S(cat: 'Knowledge & Dhikr', t: 'Read Quran daily', ref: 'Bukhari 5027, Muslim 798', g: 'Sahih', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Read the Quran, for it will come on the Day of Judgment as an intercessor for its people." (Muslim 804)', vir: 'Every letter earns ten rewards — the Quran intercedes.'),
-    _S(cat: 'Knowledge & Dhikr', t: 'Seek knowledge', ref: 'Tirmidhi 2646, Abu Dawud 3641', g: 'Hasan', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Seeking knowledge is an obligation upon every Muslim." (Ibn Majah 224)', vir: 'Knowledge is the foundation of righteous action.'),
-    _S(cat: 'Knowledge & Dhikr', t: 'Memorize Quran', ref: 'Bukhari 4937', g: 'Sahih', diff: SunnahDifficulty.advanced, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "The best of you are those who learn the Quran and teach it." (Bukhari 5027)', vir: 'Memorizing Quran elevates your rank in both worlds.'),
+    // ━━━━━━━━━━━━━━━ DHIKR & AZKAR (10) ━━━━━━━━━━━━━━━
+    _S(cat: 'Dhikr & Azkar', t: 'Complete Morning Azkar', ref: 'Hisn al-Muslim (Morning Adhkar)', g: 'Authenticated', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'Recite morning adhkar including Ayat al-Kursi (1x), Surah Ikhlas/Falaq/Nas (3x), and Sayyid al-Istighfar. (Hisn al-Muslim)', vir: 'Morning azkar form a shield of protection for the entire day.', tasbihId: 'morning_azkar', tips: ['Use the digital tasbih to track repeated adhkar.', 'Best recited between Fajr and sunrise.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Complete Evening Azkar', ref: 'Hisn al-Muslim (Evening Adhkar)', g: 'Authenticated', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'Recite evening adhkar including Ayat al-Kursi (1x), Surah Ikhlas/Falaq/Nas (3x), and protective duas. (Hisn al-Muslim)', vir: 'Evening azkar protect you through the night.', tasbihId: 'evening_azkar', tips: ['Use the digital tasbih to track repeated adhkar.', 'Best recited between Asr and Maghrib.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Complete Before-Sleep Azkar', ref: 'Hisn al-Muslim (Sleep Adhkar)', g: 'Authenticated', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'Before sleep recite: SubhanAllah (33x), Alhamdulillah (33x), and Allahu Akbar (34x), along with sleep adhkar. (Hisn al-Muslim)', vir: 'Sleep adhkar ensure protection and angelic guardianship.', tasbihId: 'before_sleep_azkar', tips: ['Use the digital tasbih to track repeated adhkar.', 'Combine with the sunnah of sleeping on the right side.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Say SubhanAllah 33 times after prayer', ref: 'Muslim 596', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Whoever says SubhanAllah 33 times, Alhamdulillah 33 times, Allahu Akbar 33 times, and completes 100 with La ilaha illAllah — his sins will be forgiven even if they are like the foam of the sea." (Muslim 596)', vir: 'All past sins forgiven — an effortless daily practice.', arabic: 'سُبْحَانَ اللَّهِ', translit: 'SubhanAllah', transl: 'Glory be to Allah', tasbihId: 'subhanallah', reps: 33, tips: ['Use the digital tasbih to track counts.', 'Say after each of the five daily prayers.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Say Alhamdulillah 33 times after prayer', ref: 'Muslim 596', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'Part of the post-prayer dhikr formula. (Muslim 596)', vir: 'Gratitude to Allah after every prayer purifies the soul.', arabic: 'الْحَمْدُ لِلَّهِ', translit: 'Alhamdulillah', transl: 'All praise is due to Allah', tasbihId: 'alhamdulillah', reps: 33, tips: ['Use the digital tasbih to track counts.', 'Say after each of the five daily prayers.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Say Allahu Akbar 34 times after prayer', ref: 'Muslim 596', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'Part of the post-prayer dhikr formula. (Muslim 596)', vir: 'Affirming Allah\'s greatness after every prayer.', arabic: 'اللَّهُ أَكْبَرُ', translit: 'Allahu Akbar', transl: 'Allah is the Greatest', tasbihId: 'allahuakbar', reps: 34, tips: ['Use the digital tasbih to track counts.', 'Say after each of the five daily prayers.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Istighfar 100 times daily', ref: 'Muslim 2702, Bukhari 6307', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "By Allah, I seek Allah\'s forgiveness more than seventy times a day." (Bukhari 6307)', vir: 'Regular istighfar opens doors of provision and relief.', arabic: 'أَسْتَغْفِرُ اللَّهَ', translit: 'Astaghfirullah', transl: 'I seek forgiveness from Allah', tasbihId: 'astaghfirullah', reps: 100, tips: ['Use the digital tasbih to track counts.', 'Split counts across the day to stay consistent.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Say La ilaha illAllah 100 times', ref: 'Bukhari 3293, Muslim 2691', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Whoever says La ilaha illAllah 100 times, he gets the reward of freeing ten slaves, 100 good deeds, 100 sins erased, and is protected from Shaytan." (Bukhari 3293)', vir: 'Protection from Shaytan and mountains of reward.', arabic: 'لَا إِلَـٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ', translit: "La ilaha illAllahu wahdahu la sharika lah", transl: 'There is no god but Allah alone, with no partner.', tasbihId: 'la_ilaha_illallah', reps: 100, tips: ['Use the digital tasbih to track counts.', 'Split counts across the day to stay consistent.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Send Salawat on the Prophet ﷺ', ref: 'Muslim 408, Tirmidhi 2457', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Whoever sends salawat upon me once, Allah sends blessings upon him ten times." (Muslim 408)', vir: 'Every salawat returns tenfold blessings from Allah.', arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ', translit: "Allahumma salli 'ala Muhammad wa 'ala ali Muhammad", transl: 'O Allah, send blessings on Muhammad and on the family of Muhammad.', tasbihId: 'salawat', tips: ['Use the digital tasbih to track counts.', 'Especially on Friday — it is presented to the Prophet ﷺ.']),
+    _S(cat: 'Dhikr & Azkar', t: 'Tasbih of Fatimah', ref: 'Bukhari 3113', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ taught Fatimah: SubhanAllah 33, Alhamdulillah 33, Allahu Akbar 34 — before sleeping. (Bukhari 3113)', vir: 'Better than having a servant — strength from dhikr.', tasbihId: 'subhanallah', tips: ['Use the digital tasbih to track counts.', 'Recite before sleeping for energy and strength.']),
+    
+    // ━━━━━━━━━━━━━━━ KNOWLEDGE (4) ━━━━━━━━━━━━━━━
+    _S(cat: 'Knowledge', t: 'Read Quran daily', ref: 'Bukhari 5027, Muslim 798', g: 'Sahih', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Read the Quran, for it will come on the Day of Judgment as an intercessor for its people." (Muslim 804)', vir: 'Every letter earns ten rewards — the Quran intercedes.'),
+    _S(cat: 'Knowledge', t: 'Seek knowledge', ref: 'Tirmidhi 2646, Abu Dawud 3641', g: 'Hasan', diff: SunnahDifficulty.medium, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "Seeking knowledge is an obligation upon every Muslim." (Ibn Majah 224)', vir: 'Knowledge is the foundation of righteous action.'),
+    _S(cat: 'Knowledge', t: 'Memorize Quran', ref: 'Bukhari 4937', g: 'Sahih', diff: SunnahDifficulty.advanced, freq: SunnahFrequency.daily, desc: 'The Prophet ﷺ said: "The best of you are those who learn the Quran and teach it." (Bukhari 5027)', vir: 'Memorizing Quran elevates your rank in both worlds.'),
 
     _S(cat: 'Travel', t: 'Say travel dua when setting out', ref: 'Muslim 1342, Tirmidhi 3447', g: 'Sahih', diff: SunnahDifficulty.easy, freq: SunnahFrequency.occasional, desc: 'The Prophet ﷺ would say: "SubhanAlladhi sakhkhara lana hadha..." when starting a journey. (Muslim 1342)', vir: 'Travel dua invites Allah\'s protection on your journey.', arabic: 'سُبْحَانَ الَّذِي سَخَّرَ لَنَا هَـٰذَا وَمَا كُنَّا لَهُ مُقْرِنِينَ', translit: 'SubhanAlladhi sakhkhara lana hadha wa ma kunna lahu muqrinin', transl: 'Glory to Him Who has subjected this to us, and we could never have it by our efforts.'),
     _S(cat: 'Travel', t: 'Pray two rakah before traveling', ref: 'Bayhaqi, Tabarani', g: 'Hasan', diff: SunnahDifficulty.easy, freq: SunnahFrequency.occasional, desc: 'The Prophet ﷺ would pray two rak\'ahs before setting out on a journey. (Bayhaqi)', vir: 'Starting the journey with prayer invites Allah\'s blessing.'),

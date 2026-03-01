@@ -24,7 +24,7 @@ class SunnahPageHeader extends StatelessWidget {
           ).copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        Text(subheading, style: AppTextStyles.h1(color: Colors.white)),
+        Text(subheading, style: AppTextStyles.h2(color: Colors.white)),
       ],
     );
   }

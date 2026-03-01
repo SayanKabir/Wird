@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -8,15 +10,18 @@ import '../../../core/constants/text_styles.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
 import '../../../core/utils/hijri_date.dart';
 import '../../../core/utils/islamic_day_utils.dart';
+import '../../../widgets/common/string_lights_overlay.dart';
 
 class IslamicCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
   final PrayerPeriod prayerPeriod;
+  final DateTime? maghribTime;
 
   const IslamicCalendarScreen({
     super.key,
     this.initialDate,
     this.prayerPeriod = PrayerPeriod.isha,
+    this.maghribTime,
   });
 
   @override
@@ -37,10 +42,13 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
     final now = DateTime.now();
-    final hijriNow = HijriDate.fromGregorian(now);
+    final hijriNow = HijriDate.fromDateTime(now, maghribTime: widget.maghribTime);
     final hijriFocused = HijriDate.fromGregorian(_focusedMonth);
     final gradientColors = AppColors.getGradientForPeriod(widget.prayerPeriod);
+    final todayEvent = IslamicDayUtils.messageForDate(now, maghribTime: widget.maghribTime);
+    final hasSpecialDay = todayEvent != null;
 
     return Container(
       decoration: BoxDecoration(
@@ -54,57 +62,73 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
         backgroundColor: Colors.transparent,
         body: SafeArea(
           bottom: false,
-          child: CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // 1. Header
-              SliverToBoxAdapter(
-                child: _Header(
-                  hijriFocused: hijriFocused,
-                  focusedMonth: _focusedMonth,
-                ).animate().fadeIn(duration: 400.ms),
-              ),
-
-              // 2. Today Card
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                sliver: SliverToBoxAdapter(
-                  child: _TodayCard(now: now, hijri: hijriNow)
-                      .animate()
-                      .fadeIn(delay: 150.ms, duration: 500.ms)
-                      .slideY(begin: 0.08, curve: Curves.easeOutCubic),
+          child: Stack(
+            children: [
+              // String lights for special days
+              if (hasSpecialDay)
+                Positioned(
+                  top: screenHeight * 0.02,
+                  left: 0,
+                  right: 0,
+                  height: screenHeight * 0.18,
+                  child: const StringLightsOverlay(),
                 ),
-              ),
 
-              // 3. Calendar Grid
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
-                sliver: SliverToBoxAdapter(
-                  child: RepaintBoundary(
-                    child: _CalendarSection(
+              // Main content
+              CustomScrollView(
+                physics: const BouncingScrollPhysics(),
+                slivers: [
+                  // 1. Header
+                  SliverToBoxAdapter(
+                    child: _Header(
+                      hijriFocused: hijriFocused,
                       focusedMonth: _focusedMonth,
-                      selectedDate: _selectedDate,
-                      today: DateTime(now.year, now.month, now.day),
-                      onMonthChanged: (m) =>
-                          setState(() => _focusedMonth = m),
-                      onDateSelected: (d) =>
-                          setState(() => _selectedDate = d),
-                    ),
-                  )
-                      .animate()
-                      .fadeIn(delay: 300.ms, duration: 500.ms)
-                      .slideY(begin: 0.08, curve: Curves.easeOutCubic),
-                ),
-              ),
+                    ).animate().fadeIn(duration: 400.ms),
+                  ),
 
-              // 4. Special Days
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
-                sliver: SliverToBoxAdapter(
-                  child: _SpecialDaysList(focusedMonth: _focusedMonth)
-                      .animate()
-                      .fadeIn(delay: 450.ms, duration: 500.ms),
-                ),
+                  // 2. Today Card
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    sliver: SliverToBoxAdapter(
+                      child: _TodayCard(now: now, hijri: hijriNow, maghribTime: widget.maghribTime)
+                          .animate()
+                          .fadeIn(delay: 150.ms, duration: 500.ms)
+                          .slideY(begin: 0.08, curve: Curves.easeOutCubic),
+                    ),
+                  ),
+
+                  // 3. Calendar Grid
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                    sliver: SliverToBoxAdapter(
+                      child: RepaintBoundary(
+                        child: _CalendarSection(
+                          focusedMonth: _focusedMonth,
+                          selectedDate: _selectedDate,
+                          today: DateTime(now.year, now.month, now.day),
+                          maghribTime: widget.maghribTime,
+                          onMonthChanged: (m) =>
+                              setState(() => _focusedMonth = m),
+                          onDateSelected: (d) =>
+                              setState(() => _selectedDate = d),
+                        ),
+                      )
+                          .animate()
+                          .fadeIn(delay: 300.ms, duration: 500.ms)
+                          .slideY(begin: 0.08, curve: Curves.easeOutCubic),
+                    ),
+                  ),
+
+                  // 4. Special Days
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
+                    sliver: SliverToBoxAdapter(
+                      child: _SpecialDaysList(focusedMonth: _focusedMonth)
+                          .animate()
+                          .fadeIn(delay: 450.ms, duration: 500.ms),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -181,12 +205,13 @@ class _Header extends StatelessWidget {
 class _TodayCard extends StatelessWidget {
   final DateTime now;
   final HijriDate hijri;
+  final DateTime? maghribTime;
 
-  const _TodayCard({required this.now, required this.hijri});
+  const _TodayCard({required this.now, required this.hijri, this.maghribTime});
 
   @override
   Widget build(BuildContext context) {
-    final todayEvent = IslamicDayUtils.messageForDate(now);
+    final todayEvent = IslamicDayUtils.messageForDate(now, maghribTime: maghribTime);
     final hasEvent = todayEvent != null;
     final accentColor =
         hasEvent ? IslamicDayUtils.accentColor(todayEvent.type) : AppColors.kaabaGold;
@@ -277,6 +302,114 @@ class _TodayCard extends StatelessWidget {
 }
 
 // =============================================================================
+// MAGHRIB INFO PILL — Centered pill, tap to show glassmorphic SnackBar
+// =============================================================================
+
+class _MaghribInfoPill extends StatelessWidget {
+  final DateTime? maghribTime;
+
+  const _MaghribInfoPill({this.maghribTime});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        _showInfoSnackBar(context);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.nightlight_round,
+              size: 14,
+              color: AppColors.kaabaGold.withValues(alpha: 0.8),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              "Dates change at Maghrib",
+              style: AppTextStyles.tiny(
+                color: Colors.white.withValues(alpha: 0.6),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showInfoSnackBar(BuildContext context) {
+    final now = DateTime.now();
+    final beforeHijri = HijriDate.fromGregorian(
+      now.subtract(const Duration(days: 1)),
+    );
+    final afterHijri = HijriDate.fromGregorian(now);
+    final dayStr = DateFormat('d MMM').format(now);
+
+    final isAfterMaghrib = maghribTime != null && now.isAfter(maghribTime!);
+    final maghribStr = maghribTime != null
+        ? DateFormat('h:mm a').format(maghribTime!)
+        : 'Maghrib';
+
+    final message = isAfterMaghrib
+        ? 'Islamic dates change at Maghrib. $dayStr became ${afterHijri.day} ${afterHijri.monthNameEnglish} after $maghribStr.'
+        : 'Islamic dates change at Maghrib. $dayStr is ${beforeHijri.day} ${beforeHijri.monthNameEnglish} until $maghribStr, then changes to ${afterHijri.day} ${afterHijri.monthNameEnglish}.';
+
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        behavior: SnackBarBehavior.floating,
+        padding: EdgeInsets.zero,
+        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+        content: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.kaabaGold.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.nightlight_round, color: AppColors.kaabaGold, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      message,
+                      style: AppTextStyles.small(color: Colors.white).copyWith(height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+}
+
+// =============================================================================
 // CALENDAR SECTION
 // =============================================================================
 
@@ -284,6 +417,7 @@ class _CalendarSection extends StatelessWidget {
   final DateTime focusedMonth;
   final DateTime selectedDate;
   final DateTime today;
+  final DateTime? maghribTime;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onDateSelected;
 
@@ -291,6 +425,7 @@ class _CalendarSection extends StatelessWidget {
     required this.focusedMonth,
     required this.selectedDate,
     required this.today,
+    this.maghribTime,
     required this.onMonthChanged,
     required this.onDateSelected,
   });
@@ -302,16 +437,26 @@ class _CalendarSection extends StatelessWidget {
     final events = <int, IslamicDayMessage?>{};
 
     for (var i = 0; i < monthDates.length; i++) {
-      hijriDates[i] = HijriDate.fromGregorian(monthDates[i]);
+      hijriDates[i] = HijriDate.fromGregorian(
+        monthDates[i].subtract(const Duration(days: 1)),
+      );
       events[i] = IslamicDayUtils.messageForDate(monthDates[i]);
     }
 
-    final hijriMid = HijriDate.fromGregorian(
-      DateTime(focusedMonth.year, focusedMonth.month, 15),
-    );
+    // --- FIX 1: Clever Hijri Month Naming ---
+    // Check the Hijri month at the start and end of the Gregorian month.
+    final startOfMonth = DateTime(focusedMonth.year, focusedMonth.month, 1);
+    final endOfMonth = DateTime(focusedMonth.year, focusedMonth.month + 1, 0);
+
+    final hijriStart = HijriDate.fromGregorian(startOfMonth.subtract(const Duration(days: 1)));
+    final hijriEnd = HijriDate.fromGregorian(endOfMonth.subtract(const Duration(days: 1)));
+
+    final String hijriMonthDisplay = hijriStart.month == hijriEnd.month
+        ? hijriStart.monthNameEnglish
+        : '${hijriStart.monthNameEnglish} / ${hijriEnd.monthNameEnglish}';
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(28),
@@ -319,25 +464,29 @@ class _CalendarSection extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // Month Navigator is now perfectly symmetrical
           _MonthNavigator(
             focusedMonth: focusedMonth,
-            hijriMonthName: hijriMid.monthNameEnglish,
+            hijriMonthName: hijriMonthDisplay,
             onChanged: onMonthChanged,
           ),
           const SizedBox(height: 20),
           const _WeekdayHeader(),
           const SizedBox(height: 12),
           _buildGrid(monthDates, hijriDates, events),
+          const SizedBox(height: 16),
+          // Clean layout placement at the bottom
+          _MaghribInfoPill(maghribTime: maghribTime),
         ],
       ),
     );
   }
 
   Widget _buildGrid(
-    List<DateTime> monthDates,
-    Map<int, HijriDate> hijriDates,
-    Map<int, IslamicDayMessage?> events,
-  ) {
+      List<DateTime> monthDates,
+      Map<int, HijriDate> hijriDates,
+      Map<int, IslamicDayMessage?> events,
+      ) {
     final rows = <Widget>[];
     for (var row = 0; row < 6; row++) {
       final cells = <Widget>[];
@@ -702,7 +851,9 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = IslamicDayUtils.accentColor(entry.message.type);
     final icon = IslamicDayUtils.iconForType(entry.message.type);
-    final hijri = HijriDate.fromGregorian(entry.date);
+    final hijri = HijriDate.fromGregorian(
+      entry.date.subtract(const Duration(days: 1)),
+    );
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),

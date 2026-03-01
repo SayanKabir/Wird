@@ -32,8 +32,13 @@ Designed with a **modern glassmorphic UI**, Wird focuses on serenity, focus, and
 
 ### 📿 **Digital Tasbih & Dhikr**
 - **Focused Experience**: Clean interface for counting Dhikr.
-- **Lifetime Stats**: tracks every generic bead counted.
-- **Presets**: Coming soon (Morning/Evening Adhkar).
+- **Dynamic Flows**: Guided step-by-step sequences for Morning, Evening, and After-Salah Azkar, powered by authentic Hadith.
+- **Lifetime Stats**: Tracks every generic bead counted.
+
+### 📖 **Noble Quran Reader**
+- **Beautiful Typography**: Clean and authentic script styling.
+- **Translations & Transliterations**: Available per ayah for deeper understanding.
+- **Seamless Navigation**: Keep track of your reading progress effortlessly.
 
 ### 🔔 **Smart Notifications**
 - **Flexible Alerts**: Adhan, simple ping, or silent notifications.
@@ -100,8 +105,9 @@ Built with ❤️ using the best of the Flutter ecosystem:
 - [x] **Basic Notifications**
 - [x] **Sunnah Revival System** (Beta)
 - [x] **Statistics & Insights**
-- [ ] **Qibla Compass** (Refining UI)
-- [ ] **Full Azkar Library** (Morning/Evening)
+- [x] **Qibla Compass**
+- [x] **Full Azkar Library & Dynamic Flows**
+- [x] **Quran Reader Module**
 - [ ] **Cloud Sync & Backup**
 - [ ] **Home Screen Widgets** (Expansion)
 

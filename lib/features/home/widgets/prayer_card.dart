@@ -8,6 +8,7 @@ import '../../../models/prayer.dart';
 import '../../../models/prayer_status.dart';
 import '../../../models/prayer_log.dart';
 import '../../../core/services/prayer_service.dart';
+import '../../tasbih/screens/tasbih_screen.dart';
 
 class PrayerCard extends StatefulWidget {
   final Prayer prayer;
@@ -389,10 +390,10 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
     bool isFilled;
     
     if (isCompleted) {
-      buttonLabel = "Completed";
-      buttonIcon = Icons.check_circle_rounded;
-      buttonColor = AppColors.statusOnTime;
-      isFilled = false;
+      buttonLabel = "Read Azkar";
+      buttonIcon = Icons.auto_stories_rounded;
+      buttonColor = AppColors.spiritualGold;
+      isFilled = true;
     } else if (status == PrayerStatus.upcoming) {
       buttonLabel = "Not Started";
       buttonIcon = Icons.schedule_rounded;
@@ -418,11 +419,19 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
             label: buttonLabel,
             icon: buttonIcon,
             color: buttonColor,
-            onTap: canMarkComplete ? () {
+            onTap: isCompleted ? () {
+              HapticFeedback.selectionClick();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TasbihScreen(initialFlow: 'after_prayer'),
+                ),
+              );
+            } : canMarkComplete ? () {
               HapticFeedback.mediumImpact();
               widget.onMarkComplete?.call();
             } : null,
-            isFilled: isFilled && canMarkComplete,
+            isFilled: isFilled && (canMarkComplete || isCompleted),
           ),
         ),
         const SizedBox(width: 12),

@@ -7,6 +7,8 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../models/settings.dart';
+import '../../../widgets/common/premium_flowing_loader.dart';
+
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -107,9 +109,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: AppColors.background.withOpacity(0.8),
+                      color: AppColors.background.withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -124,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Text(
                           "To notify you exactly when prayer time begins, please enable 'Alarms & reminders' for Wird in your device settings.",
                           textAlign: TextAlign.center,
-                          style: AppTextStyles.body(color: Colors.white.withOpacity(0.7)),
+                          style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.7)),
                         ),
                         const SizedBox(height: 24),
                         Row(
@@ -223,10 +225,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               height: 300,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: AppColors.spiritualGold.withOpacity(0.05),
+                color: AppColors.spiritualGold.withValues(alpha: 0.05),
                 boxShadow: [
                   BoxShadow(
-                    color: AppColors.buttonPrimary.withOpacity(0.1),
+                    color: AppColors.buttonPrimary.withValues(alpha: 0.1),
                     blurRadius: 100,
                     spreadRadius: 50,
                   )
@@ -278,11 +280,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             height: 4,
             width: isCurrent ? 32 : 12,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.spiritualGold : Colors.white.withOpacity(0.1),
+              color: isActive ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(2),
               boxShadow: isActive ? [
                 BoxShadow(
-                  color: AppColors.spiritualGold.withOpacity(0.5),
+                  color: AppColors.spiritualGold.withValues(alpha: 0.5),
                   blurRadius: 8,
                 )
               ] : null,
@@ -294,44 +296,67 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildWelcomePage() {
-    return Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Hero Icon
-          Container(
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.03),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.activeGlow.withOpacity(0.1),
-                  blurRadius: 40,
-                  spreadRadius: 10,
-                )
-              ],
-            ),
-            child: const Icon(Icons.mosque_rounded, size: 64, color: Colors.white),
-          ),
-          const SizedBox(height: 40),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Spacer(),
+                    // Hero Icon
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.03),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.activeGlow.withValues(alpha: 0.1),
+                            blurRadius: 40,
+                            spreadRadius: 10,
+                          )
+                        ],
+                      ),
+                      child: const Icon(Icons.mosque_rounded, size: 64, color: Colors.white),
+                    ),
+                    const SizedBox(height: 40),
 
-          Text("Wird", style: AppTextStyles.h1(color: Colors.white)),
-          const SizedBox(height: 16),
-          Text(
-            "Your mindful companion for\nstaying connected to the Divine.",
-            style: AppTextStyles.bodyLarge(color: Colors.white.withOpacity(0.7)),
-            textAlign: TextAlign.center,
+                    Text("Wird", style: AppTextStyles.h1(color: Colors.white)),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Your mindful companion for\nstaying connected to the Divine.",
+                      style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.7)),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 48),
+
+                    // Features List (Single Column)
+                    Column(
+                      children: [
+                        _buildFeatureRow(Icons.menu_book_rounded, "Quran with Translation"),
+                        _buildFeatureRow(Icons.access_time_rounded, "Precise Prayer Times"),
+                        _buildFeatureRow(Icons.explore_rounded, "Qibla Direction"),
+                        _buildFeatureRow(Icons.auto_stories_rounded, "Sunnah Revival"),
+                        _buildFeatureRow(Icons.fingerprint_rounded, "Digital Tasbih"),
+                        _buildFeatureRow(Icons.notifications_active_rounded, "Adhan Reminders"),
+                        _buildFeatureRow(Icons.wallpaper_rounded, "Dynamic Backgrounds"),
+                      ],
+                    ),
+                    const Spacer(flex: 2),
+                  ],
+                ),
+              ),
+            ),
           ),
-          const Spacer(),
-          _buildFeatureRow(Icons.access_time_rounded, "Precise Prayer Times"),
-          _buildFeatureRow(Icons.explore_rounded, "Qibla Direction"),
-          _buildFeatureRow(Icons.notifications_active_rounded, "Adhan Reminders"),
-          const Spacer(),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -343,82 +368,94 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           Icon(icon, size: 18, color: AppColors.spiritualGold),
           const SizedBox(width: 12),
-          Text(text, style: AppTextStyles.body(color: Colors.white.withOpacity(0.6))),
+          Text(text, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.6))),
         ],
       ),
     );
   }
 
   Widget _buildLocationPage() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildHeroIcon(Icons.location_on_rounded, AppColors.spiritualGold),
-          const SizedBox(height: 32),
-          Text("Set Location", style: AppTextStyles.h2()),
-          const SizedBox(height: 12),
-          Text(
-            "We calculate prayer times based on\nthe sun's position at your coordinates.",
-            style: AppTextStyles.body(color: Colors.white60),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 40),
-
-          // Glass Card for Status
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Padding(
                 padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                ),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    if (_location != null) ...[
-                      const Icon(Icons.check_circle, color: AppColors.statusOnTime, size: 32),
-                      const SizedBox(height: 12),
-                      Text(
-                        _location!.displayName,
-                        style: AppTextStyles.h3(),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        "Coordinates set successfully",
-                        style: AppTextStyles.tiny(color: Colors.white54),
-                      ),
-                    ] else ...[
-                      const Icon(Icons.public, color: Colors.white30, size: 32),
-                      const SizedBox(height: 12),
-                      Text("Location not set", style: AppTextStyles.body(color: Colors.white54)),
-                    ],
+                    _buildHeroIcon(Icons.location_on_rounded, AppColors.spiritualGold),
+                    const SizedBox(height: 32),
+                    Text("Set Location", style: AppTextStyles.h2()),
+                    const SizedBox(height: 12),
+                    Text(
+                      "We calculate prayer times based on\nthe sun's position at your coordinates.",
+                      style: AppTextStyles.body(color: Colors.white60),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
 
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Text(_error!, style: AppTextStyles.small(color: AppColors.statusMissed)),
-                    ]
+                    // Glass Card for Status
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Container(
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                          ),
+                          child: Column(
+                            children: [
+                              if (_location != null) ...[
+                                const Icon(Icons.check_circle, color: AppColors.statusOnTime, size: 32),
+                                const SizedBox(height: 12),
+                                Text(
+                                  _location!.displayName,
+                                  style: AppTextStyles.h3(),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Coordinates set successfully",
+                                  style: AppTextStyles.tiny(color: Colors.white54),
+                                ),
+                              ] else ...[
+                                const Icon(Icons.public, color: Colors.white30, size: 32),
+                                const SizedBox(height: 12),
+                                Text("Location not set", style: AppTextStyles.body(color: Colors.white54)),
+                              ],
+
+                              if (_error != null) ...[
+                                const SizedBox(height: 16),
+                                Text(_error!, style: AppTextStyles.small(color: AppColors.statusMissed)),
+                              ]
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    _buildPrimaryButton(
+                      label: _location != null ? "Refresh Location" : "Detect Location",
+                      icon: Icons.my_location,
+                      onPressed: _isLoading ? null : _getLocation,
+                      isLoading: _isLoading,
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-
-          const SizedBox(height: 24),
-
-          _buildPrimaryButton(
-            label: _location != null ? "Refresh Location" : "Detect Location",
-            icon: Icons.my_location,
-            onPressed: _isLoading ? null : _getLocation,
-            isLoading: _isLoading,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -482,80 +519,92 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildNotificationPage() {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _buildHeroIcon(Icons.notifications_active_rounded, AppColors.spiritualGold),
-          const SizedBox(height: 32),
-          Text("Stay Connected", style: AppTextStyles.h2()),
-          const SizedBox(height: 12),
-          Text(
-            "Gentle reminders for the 5 daily prayers.",
-            style: AppTextStyles.body(color: Colors.white60),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 40),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: IntrinsicHeight(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildHeroIcon(Icons.notifications_active_rounded, AppColors.spiritualGold),
+                    const SizedBox(height: 32),
+                    Text("Stay Connected", style: AppTextStyles.h2()),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Gentle reminders for the 5 daily prayers.",
+                      style: AppTextStyles.body(color: Colors.white60),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 40),
 
-          // Status Card
-          if (_notificationPermissionGranted == true)
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppColors.statusOnTime.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.statusOnTime.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.check_circle, color: AppColors.statusOnTime),
-                  const SizedBox(width: 12),
-                  Text("Enabled Successfully", style: AppTextStyles.body(color: AppColors.statusOnTime)),
-                ],
-              ),
-            )
-          else
-            _buildPrimaryButton(
-              label: "Enable Notifications",
-              icon: Icons.notifications_none_rounded,
-              onPressed: _isLoading ? null : _requestNotificationPermission,
-              isLoading: _isLoading,
-            ),
+                    // Status Card
+                    if (_notificationPermissionGranted == true)
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: AppColors.statusOnTime.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.statusOnTime.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.check_circle, color: AppColors.statusOnTime),
+                            const SizedBox(width: 12),
+                            Text("Enabled Successfully", style: AppTextStyles.body(color: AppColors.statusOnTime)),
+                          ],
+                        ),
+                      )
+                    else
+                      _buildPrimaryButton(
+                        label: "Enable Notifications",
+                        icon: Icons.notifications_none_rounded,
+                        onPressed: _isLoading ? null : _requestNotificationPermission,
+                        isLoading: _isLoading,
+                      ),
 
-          const Spacer(),
+                    const Spacer(),
 
-          // Summary Card
-          if (_location != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withOpacity(0.1)),
-                  ),
-                  child: Column(
-                    children: [
-                      Text("SUMMARY", style: AppTextStyles.tiny(color: Colors.white30)),
-                      const SizedBox(height: 16),
-                      _buildSummaryRow("City", _location!.city ?? "Unknown"),
-                      const Divider(color: Colors.white10),
-                      _buildSummaryRow("Method", _calculationMethod.shortName),
-                      const Divider(color: Colors.white10),
-                      _buildSummaryRow("Asr", _madhab == MadhabType.hanafi ? "Hanafi" : "Standard"),
-                    ],
-                  ),
+                    // Summary Card
+                    if (_location != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: BackdropFilter(
+                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                          child: Container(
+                            padding: const EdgeInsets.all(24),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.05),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                            ),
+                            child: Column(
+                              children: [
+                                Text("SUMMARY", style: AppTextStyles.tiny(color: Colors.white30)),
+                                const SizedBox(height: 16),
+                                _buildSummaryRow("City", _location!.city ?? "Unknown"),
+                                const Divider(color: Colors.white10),
+                                _buildSummaryRow("Method", _calculationMethod.shortName),
+                                const Divider(color: Colors.white10),
+                                _buildSummaryRow("Asr", _madhab == MadhabType.hanafi ? "Hanafi" : "Standard"),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
             ),
-          const SizedBox(height: 20),
-        ],
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -567,10 +616,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       height: 100,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.05),
+        color: Colors.white.withValues(alpha: 0.05),
         boxShadow: [
           BoxShadow(
-            color: glowColor.withOpacity(0.2),
+            color: glowColor.withValues(alpha: 0.2),
             blurRadius: 40,
             spreadRadius: 5,
           )
@@ -597,10 +646,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: compact ? 12 : 16),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.spiritualGold.withOpacity(0.15) : Colors.white.withOpacity(0.03),
+          color: isSelected ? AppColors.spiritualGold.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.spiritualGold.withOpacity(0.5) : Colors.white.withOpacity(0.05),
+            color: isSelected ? AppColors.spiritualGold.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05),
           ),
         ),
         child: Row(
@@ -666,11 +715,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.white.withOpacity(0.1)),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
           ),
         ),
         child: isLoading
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            ? const PremiumFlowingLoader(size: 20, color: Colors.white)
             : Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -695,7 +744,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           end: Alignment.topCenter,
           colors: [
             AppColors.background,
-            AppColors.background.withOpacity(0),
+            AppColors.background.withValues(alpha: 0),
           ],
         ),
       ),
@@ -721,7 +770,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
               ),
               child: _isLoading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                  ? const PremiumFlowingLoader(size: 20, color: Colors.black)
                   : const Text("Get Started", style: TextStyle(fontWeight: FontWeight.bold)),
             )
           else

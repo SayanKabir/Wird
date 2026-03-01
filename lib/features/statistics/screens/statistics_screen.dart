@@ -13,6 +13,8 @@ import '../../../models/prayer.dart';
 import '../../../models/prayer_status.dart';
 import '../../../models/sunnah_progress.dart';
 import '../../../models/tasbih.dart';
+import '../../../core/repositories/quran_progress_repository.dart';
+import '../../../models/quran_progress.dart';
 
 // -----------------------------------------------------------------------------
 // MAIN STATISTICS SCREEN
@@ -30,8 +32,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   final AchievementService _achievementService = AchievementService();
   final SunnahProgressRepository _sunnahProgressRepo = SunnahProgressRepository();
   final TasbihRepository _tasbihRepo = TasbihRepository();
+  final QuranProgressRepository _quranProgressRepo = QuranProgressRepository();
 
   SunnahProgress? _sunnahProgress;
+  QuranProgress? _quranProgress;
   List<Tasbih>? _tasbihs;
   bool _dataLoaded = false;
 
@@ -43,11 +47,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   Future<void> _loadExtraData() async {
     final progress = await _sunnahProgressRepo.getProgress();
+    final quranProg = await _quranProgressRepo.getProgress();
     await _tasbihRepo.init();
     final tasbihs = await _tasbihRepo.getAllTasbihs();
     if (mounted) {
       setState(() {
         _sunnahProgress = progress;
+        _quranProgress = quranProg;
         _tasbihs = tasbihs;
         _dataLoaded = true;
       });
@@ -98,9 +104,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
-        child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
+        child: RefreshIndicator(
+          color: AppColors.activeGlow,
+          onRefresh: _loadExtraData,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
+            slivers: [
             // ─── Page Header ───
             SliverToBoxAdapter(
               child: Padding(
@@ -216,6 +227,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             if (_dataLoaded)
               SliverToBoxAdapter(child: _sectionDivider()),
 
+            // ─── Quran Reading Section ───
+            if (_dataLoaded) ..._quranSlivers(),
+
+            // ─── Divider ───
+            if (_dataLoaded)
+              SliverToBoxAdapter(child: _sectionDivider()),
+
             // ─── Tasbih & Dhikr Section ───
             if (_dataLoaded) ..._tasbihSlivers(),
 
@@ -228,6 +246,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
+        ),
         ),
       ),
     );
@@ -301,6 +320,58 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     ];
   }
 
+  // ─── Quran section slivers ───
+  List<Widget> _quranSlivers() {
+    final q = _quranProgress;
+    if (q == null) return [];
+
+    const quranAccent = Color(0xFF64B5F6);
+
+    return [
+      SliverToBoxAdapter(child: _sectionHeader("QURAN READING", quranAccent)),
+
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+        sliver: SliverGrid.count(
+          crossAxisCount: 2,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 14,
+          childAspectRatio: 1.25,
+          children: [
+            _buildGlassMetricCard(
+              title: "Total Read",
+              value: "${q.totalVersesRead}",
+              unit: "VERSES",
+              icon: Icons.menu_book_rounded,
+              color: quranAccent,
+            ),
+            _buildGlassMetricCard(
+              title: "Days Read",
+              value: "${q.daysRead}",
+              unit: "DAYS",
+              icon: Icons.event_available_rounded,
+              color: const Color(0xFF9CCC65),
+            ),
+            _buildGlassMetricCard(
+              title: "Current Streak",
+              value: "${q.currentStreak}",
+              unit: "DAYS",
+              icon: Icons.local_fire_department_rounded,
+              color: AppColors.streakFire,
+            ),
+            _buildGlassMetricCard(
+              title: "Best Streak",
+              value: "${q.longestStreak}",
+              unit: "DAYS",
+              icon: Icons.emoji_events_rounded,
+              color: AppColors.spiritualGold,
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
   // ─── Tasbih section slivers ───
   List<Widget> _tasbihSlivers() {
     final tasbihs = _tasbihs;
@@ -369,53 +440,83 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   // --- Components for Statistics Screen ---
 
   Widget _buildHeroStreakCard(int streak) {
+    final bool isActive = streak > 0;
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(28),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
             gradient: LinearGradient(
               colors: [
-                AppColors.streakFire.withOpacity(0.18),
-                AppColors.streakFire.withOpacity(0.04),
+                AppColors.streakFire.withOpacity(0.15),
+                AppColors.streakFire.withOpacity(0.05),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(
-              color: AppColors.streakFire.withOpacity(0.25),
-            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.streakFire.withOpacity(0.2)),
           ),
-          child: Column(
+          child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
+                  color: AppColors.streakFire.withOpacity(0.2),
                   shape: BoxShape.circle,
-                  color: AppColors.streakFire.withOpacity(0.08),
                 ),
-                child: const Text("🔥", style: TextStyle(fontSize: 44)),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                "$streak",
-                style: AppTextStyles.streak(color: Colors.white).copyWith(
-                  fontSize: 60,
-                  height: 1.0,
+                child: const Icon(
+                  Icons.local_fire_department_rounded,
+                  color: AppColors.streakFire,
+                  size: 28,
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                "DAY STREAK",
-                style: AppTextStyles.tiny(color: AppColors.streakFire).copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 2.5,
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Current Streak",
+                      style: AppTextStyles.tiny(color: Colors.white54),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          "$streak",
+                          style: AppTextStyles.h2(color: Colors.white),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          streak == 1 ? "Day" : "Days",
+                          style: AppTextStyles.body(
+                              color: AppColors.streakFire.withOpacity(0.9)
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+              if (isActive)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.streakFire.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.streakFire.withOpacity(0.3)),
+                  ),
+                  child: Text(
+                    "Active",
+                    style: AppTextStyles.small(color: AppColors.streakFire, weight: FontWeight.bold),
+                  ),
+                ),
             ],
           ),
         ),
@@ -709,78 +810,67 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   // ─────────────── Sunnah Widgets ───────────────
 
   Widget _buildSunnahHero(SunnahProgress p) {
+    const sunnahAccent = Color(0xFF73D38A);
+
     return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
             gradient: LinearGradient(
               colors: [
-                const Color(0xFF73D38A).withOpacity(0.18),
-                const Color(0xFF73D38A).withOpacity(0.04),
+                sunnahAccent.withOpacity(0.15),
+                sunnahAccent.withOpacity(0.05),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            border: Border.all(
-              color: const Color(0xFF73D38A).withOpacity(0.25),
-            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: sunnahAccent.withOpacity(0.2)),
           ),
           child: Row(
             children: [
-              // Streak column
-              Expanded(
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFF73D38A).withOpacity(0.08),
-                      ),
-                      child: const Text("🌱", style: TextStyle(fontSize: 32)),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "${p.currentStreak}",
-                      style: AppTextStyles.streak(color: Colors.white).copyWith(fontSize: 40, height: 1.0),
-                    ),
-                    Text(
-                      "DAY STREAK",
-                      style: AppTextStyles.tiny(color: const Color(0xFF73D38A))
-                          .copyWith(fontWeight: FontWeight.w700, letterSpacing: 2.5),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: sunnahAccent.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: sunnahAccent,
+                  size: 28,
                 ),
               ),
-              Container(width: 1, height: 60, color: Colors.white.withOpacity(0.06)),
-              // Level column
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.spiritualGold.withOpacity(0.08),
-                      ),
-                      child: const Text("⭐", style: TextStyle(fontSize: 32)),
-                    ),
-                    const SizedBox(height: 8),
                     Text(
                       "Level ${p.level}",
                       style: AppTextStyles.h2(color: Colors.white),
                     ),
+                    const SizedBox(height: 2),
                     Text(
-                      "${p.totalPoints} pts",
-                      style: AppTextStyles.tiny(color: AppColors.spiritualGold)
-                          .copyWith(fontWeight: FontWeight.w700, letterSpacing: 1),
+                      "${p.totalPoints} pts  •  ${p.currentStreak} day streak",
+                      style: AppTextStyles.tiny(color: sunnahAccent),
                     ),
                   ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Text(
+                  "Rank",
+                  style: AppTextStyles.small(color: Colors.white70, weight: FontWeight.bold),
                 ),
               ),
             ],

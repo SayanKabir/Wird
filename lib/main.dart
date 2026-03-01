@@ -17,11 +17,17 @@ import 'core/repositories/sunnah_progress_repository.dart';
 import 'features/azkar/bloc/azkar_bloc.dart';
 import 'core/repositories/azkar_repository.dart';
 import 'features/tasbih/bloc/tasbih_bloc.dart';
+import 'features/quran/bloc/quran_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'core/repositories/tasbih_repository.dart';
+import 'core/repositories/quran_repository.dart';
 import 'models/sunnah.dart';
 import 'models/azkar.dart';
 import 'models/tasbih.dart';
+import 'models/surah.dart';
+import 'models/verse.dart';
+import 'models/quran_bookmark.dart';
+import 'models/quran_progress.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +46,10 @@ void main() async {
   Hive.registerAdapter(AzkarCategoryAdapter());
   Hive.registerAdapter(AzkarAdapter());
   Hive.registerAdapter(TasbihAdapter());
+  Hive.registerAdapter(SurahAdapter());
+  Hive.registerAdapter(VerseAdapter());
+  Hive.registerAdapter(QuranBookmarkAdapter());
+  Hive.registerAdapter(QuranProgressAdapter());
 
   // Set preferred orientations
   await SystemChrome.setPreferredOrientations([
@@ -57,23 +67,40 @@ void main() async {
     ),
   );
 
-  runApp(const WirdApp());
+  final sunnahRepository = SunnahRepository();
+  await sunnahRepository.init();
+
+  final quranRepository = QuranRepository();
+  await quranRepository.init();
+
+  runApp(WirdApp(
+    sunnahRepository: sunnahRepository,
+    quranRepository: quranRepository,
+  ));
 }
 
 class WirdApp extends StatelessWidget {
-  const WirdApp({super.key});
+  final SunnahRepository sunnahRepository;
+  final QuranRepository quranRepository;
+
+  const WirdApp({
+    super.key,
+    required this.sunnahRepository,
+    required this.quranRepository,
+  });
 
   @override
   Widget build(BuildContext context) {
     final storageService = StorageService();
-    final isOnboardingComplete = storageService.isOnboardingCompleted();
+    final isOnboardingCompleted = storageService.isOnboardingCompleted();
 
     return MultiBlocProvider(
       providers: [
-        RepositoryProvider(create: (context) => SunnahRepository()),
+        RepositoryProvider.value(value: sunnahRepository),
         RepositoryProvider(create: (context) => SunnahProgressRepository()),
         RepositoryProvider(create: (context) => AzkarRepository()),
         RepositoryProvider(create: (context) => TasbihRepository()),
+        RepositoryProvider.value(value: quranRepository),
         BlocProvider<PrayerBloc>(
           create: (context) => PrayerBloc()..add(LoadPrayers()),
         ),
@@ -93,12 +120,17 @@ class WirdApp extends StatelessWidget {
             repository: context.read<TasbihRepository>(),
           )..add(LoadTasbihs()),
         ),
+        BlocProvider<QuranBloc>(
+          create: (context) => QuranBloc(
+            repository: context.read<QuranRepository>(),
+          )..add(LoadSurahs()),
+        ),
       ],
       child: MaterialApp(
         title: 'Wird',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(),
-        initialRoute: isOnboardingComplete ? '/home' : '/onboarding',
+        initialRoute: isOnboardingCompleted ? '/home' : '/onboarding',
         routes: {
           '/onboarding': (context) => const OnboardingScreen(),
           '/home': (context) => const HomeScreen(),

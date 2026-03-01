@@ -376,6 +376,34 @@ class AppSettings extends Equatable {
   @HiveField(14, defaultValue: WeatherTheme.auto)
   final WeatherTheme weatherTheme;
 
+  /// Whether weekly sunnah notifications are enabled
+  @HiveField(15, defaultValue: true)
+  final bool sunnahNotificationsEnabled;
+
+  /// Whether special Islamic event notifications are enabled
+  @HiveField(16, defaultValue: true)
+  final bool islamicEventsEnabled;
+
+  /// Whether to show Translation in Quran Reading
+  @HiveField(17, defaultValue: true)
+  final bool quranShowTranslation;
+
+  /// Whether to show Transliteration in Quran Reading
+  @HiveField(18, defaultValue: false)
+  final bool quranShowTransliteration;
+
+  /// Quran Arabic font size
+  @HiveField(19, defaultValue: 28.0)
+  final double quranArabicFontSize;
+
+  /// Quran Translation font size
+  @HiveField(20, defaultValue: 14.0)
+  final double quranTranslationFontSize;
+
+  /// Selected translation name
+  @HiveField(21, defaultValue: 'Saheeh Intl')
+  final String quranSelectedTranslation;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -392,6 +420,13 @@ class AppSettings extends Equatable {
     this.notificationSettings = const {},
     this.showWeatherWidget = true,
     this.weatherTheme = WeatherTheme.auto,
+    this.sunnahNotificationsEnabled = true,
+    this.islamicEventsEnabled = true,
+    this.quranShowTranslation = true,
+    this.quranShowTransliteration = false,
+    this.quranArabicFontSize = 28.0,
+    this.quranTranslationFontSize = 14.0,
+    this.quranSelectedTranslation = 'Saheeh Intl',
   });
 
   /// Default settings
@@ -416,6 +451,13 @@ class AppSettings extends Equatable {
     Map<String, PrayerNotificationSettings>? notificationSettings,
     bool? showWeatherWidget,
     WeatherTheme? weatherTheme,
+    bool? sunnahNotificationsEnabled,
+    bool? islamicEventsEnabled,
+    bool? quranShowTranslation,
+    bool? quranShowTransliteration,
+    double? quranArabicFontSize,
+    double? quranTranslationFontSize,
+    String? quranSelectedTranslation,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -433,6 +475,13 @@ class AppSettings extends Equatable {
       notificationSettings: notificationSettings ?? this.notificationSettings,
       showWeatherWidget: showWeatherWidget ?? this.showWeatherWidget,
       weatherTheme: weatherTheme ?? this.weatherTheme,
+      sunnahNotificationsEnabled: sunnahNotificationsEnabled ?? this.sunnahNotificationsEnabled,
+      islamicEventsEnabled: islamicEventsEnabled ?? this.islamicEventsEnabled,
+      quranShowTranslation: quranShowTranslation ?? this.quranShowTranslation,
+      quranShowTransliteration: quranShowTransliteration ?? this.quranShowTransliteration,
+      quranArabicFontSize: quranArabicFontSize ?? this.quranArabicFontSize,
+      quranTranslationFontSize: quranTranslationFontSize ?? this.quranTranslationFontSize,
+      quranSelectedTranslation: quranSelectedTranslation ?? this.quranSelectedTranslation,
     );
   }
 
@@ -452,6 +501,13 @@ class AppSettings extends Equatable {
     notificationSettings,
     showWeatherWidget,
     weatherTheme,
+    sunnahNotificationsEnabled,
+    islamicEventsEnabled,
+    quranShowTranslation,
+    quranShowTransliteration,
+    quranArabicFontSize,
+    quranTranslationFontSize,
+    quranSelectedTranslation,
   ];
 }
 

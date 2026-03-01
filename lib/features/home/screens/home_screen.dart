@@ -11,10 +11,12 @@ import '../../../models/prayer.dart';
 import '../../../models/prayer_status.dart';
 import '../bloc/prayer_bloc.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
+import '../../../widgets/common/string_lights_overlay.dart';
 import '../widgets/celestial_background.dart';
 import '../widgets/countdown_timer.dart';
 import 'schedule_view.dart';
 import '../../sunnah/screens/sunnah_screen.dart';
+import '../../quran/screens/quran_screen.dart';
 import '../../statistics/screens/statistics_screen.dart';
 import '../../qibla/screens/qibla_screen.dart'; // Re-added
 import '../../islamic_calendar/screens/islamic_calendar_screen.dart';
@@ -26,6 +28,9 @@ import '../../../core/services/debug_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../models/settings.dart';
+import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../tasbih/screens/tasbih_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,14 +40,14 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final PageController _pageController = PageController(initialPage: 1);
+  final PageController _pageController = PageController(initialPage: 2);
   final NotificationService _notificationService = NotificationService();
   final WeatherService _weatherService = WeatherService();
   final LocationService _locationService = LocationService();
   final DebugService _debugService = DebugService();
   final StorageService _storageService = StorageService();
 
-  int _currentPage = 1;
+  int _currentPage = 2;
   bool _showPermissionWarning = false;
   WeatherData? _weather;
   Timer? _weatherTimer;
@@ -95,13 +100,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _scheduleSunnahAndEventNotifications() async {
     try {
+      final settings = _storageService.getSettings();
+
       // Schedule weekly sunnah reminder
-      final sunnahRepo = context.read<SunnahRepository>();
-      final weeklySunnah = await sunnahRepo.getWeeklySunnah();
-      await _notificationService.scheduleWeeklySunnahReminder(weeklySunnah.title);
+      if (settings.sunnahNotificationsEnabled) {
+        final sunnahRepo = context.read<SunnahRepository>();
+        final weeklySunnah = await sunnahRepo.getWeeklySunnah();
+        await _notificationService.scheduleWeeklySunnahReminder(weeklySunnah.title);
+      } else {
+        await _notificationService.cancelSunnahNotifications();
+      }
 
       // Schedule special Islamic day notification (if today is special)
-      await _notificationService.scheduleSpecialDayNotification();
+      if (settings.islamicEventsEnabled) {
+        await _notificationService.scheduleSpecialDayNotification();
+      } else {
+        await _notificationService.cancelEventNotifications();
+      }
     } catch (e) {
       debugPrint('[HomeScreen] Failed to schedule sunnah/event notifications: $e');
     }
@@ -232,27 +247,30 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPageChanged: _onPageChanged,
                         physics: const BouncingScrollPhysics(),
                         children: [
-                          const SettingsScreen(),
+                          const SettingsScreen(), // 0
+                          const QuranScreen(), // 1
                           _DashboardView(
-                            // Home
+                            // 2 (Home)
                             state: state,
                             weather:
                                 settings.showWeatherWidget
                                     ? effectiveWeather
                                     : null,
+                            showIslamicEvents: settings.islamicEventsEnabled,
+                            onNavRequest: _navToPage,
                           ),
-                          ScheduleView(state: state), // All Prayers
-                          const SunnahScreen(), // Sunnah Hub
-                          const QiblaScreen(), // Qibla
-                          const StatisticsScreen(), // Stats
+                          ScheduleView(state: state), // 3
+                          const SunnahScreen(), // 4
+                          const QiblaScreen(), // 5
+                          const StatisticsScreen(), // 6
                         ],
                       ),
                       // Floating Navigation Capsule
                       Positioned(
                         left: 0,
                         right: 0,
-                        bottom: 30,
-                        child: Center(child: _buildMinimalIndicator()),
+                        bottom: MediaQuery.of(context).padding.bottom + 16,
+                        child: Center(child: _buildMinimalIndicator(MediaQuery.sizeOf(context).width)),
                       ),
 
                       // Permission Warning Overlay
@@ -276,30 +294,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMinimalIndicator() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            32,
-          ), // High curvature for capsule shape
+  Widget _buildMinimalIndicator(double screenWidth) {
+    // Determine responsive sizing based on screen width
+    final isSmallScreen = screenWidth < 380;
+    final containerHeight = isSmallScreen ? 48.0 : 56.0;
+    final horizontalPadding = isSmallScreen ? 4.0 : 6.0;
+    final iconWidth = isSmallScreen ? 42.0 : 48.0;
+    final iconHeight = isSmallScreen ? 40.0 : 44.0;
+    final iconSize = isSmallScreen ? 20.0 : 22.0;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: ClipRRect(
+          borderRadius: BorderRadius.circular(32), // High curvature for capsule shape
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
-              height: 56, // Reduced height for more compacted look
-              padding: const EdgeInsets.symmetric(
-                horizontal: 6,
-              ), // Tighter padding
+              height: containerHeight,
+              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(
-                  alpha: 0.4,
-                ), // Darker for contrast
+                color: Colors.black.withValues(alpha: 0.4), // Darker for contrast
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
-                  color: Colors.white.withValues(
-                    alpha: 0.08,
-                  ), // Subtle glass edge
+                  color: Colors.white.withValues(alpha: 0.08), // Subtle glass edge
                   width: 1,
                 ),
                 boxShadow: [
@@ -313,25 +330,19 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min, // Hug contents
                 children: [
-                  _buildIndicatorIcon(0, Icons.tune_rounded), // Settings
-                  _buildIndicatorIcon(1, Icons.grid_view_rounded), // Home
-                  _buildIndicatorIcon(
-                    2,
-                    Icons.calendar_month_rounded,
-                  ), // Schedule (All Prayers)
-                  _buildIndicatorIcon(3, Icons.auto_stories_rounded), // Sunnah
-                  _buildIndicatorIcon(4, Icons.explore_rounded), // Qibla
-                  _buildIndicatorIcon(5, Icons.bar_chart_rounded), // Stats
+                  _buildIndicatorIcon(1, Icons.menu_book_rounded, iconWidth, iconHeight, iconSize), // Quran
+                  _buildIndicatorIcon(2, Icons.grid_view_rounded, iconWidth, iconHeight, iconSize), // Home
+                  _buildIndicatorIcon(3, Icons.calendar_month_rounded, iconWidth, iconHeight, iconSize), // Schedule
+                  _buildIndicatorIcon(4, Icons.auto_stories_rounded, iconWidth, iconHeight, iconSize), // Sunnah
                 ],
               ),
             ),
           ),
-        ),
       ),
     );
   }
 
-  Widget _buildIndicatorIcon(int index, IconData icon) {
+  Widget _buildIndicatorIcon(int index, IconData icon, double width, double height, double size) {
     final isSelected = _currentPage == index;
 
     return GestureDetector(
@@ -340,14 +351,14 @@ class _HomeScreenState extends State<HomeScreen> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOutBack,
-        width: 48,
-        height: 44,
+        width: width,
+        height: height,
         alignment: Alignment.center,
         transform:
             Matrix4.identity()..scale(isSelected ? 1.1 : 1.0), // Subtle pop
         child: Icon(
           icon,
-          size: 22, // Reduced from 26
+          size: size,
           color:
               isSelected ? Colors.white : Colors.white.withValues(alpha: 0.3),
           // Add a subtle glow only to the active icon
@@ -449,15 +460,23 @@ class _HomeScreenState extends State<HomeScreen> {
 class _DashboardView extends StatelessWidget {
   final PrayerLoaded state;
   final WeatherData? weather;
+  final bool showIslamicEvents;
+  final void Function(int) onNavRequest;
 
-  const _DashboardView({required this.state, this.weather});
+  const _DashboardView({
+    required this.state,
+    this.weather,
+    required this.showIslamicEvents,
+    required this.onNavRequest,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.sizeOf(context).height;
     final textColor = AppColors.getContentColor(state.prayerPeriod);
     final now = DateTime.now();
-    final hijri = HijriDate.fromGregorian(state.date);
-    final isRamadanMode = IslamicDayUtils.isRamadanDate(state.date);
+    final maghribTime = state.prayerTimes[Prayer.maghrib]?.startTime;
+    final isRamadanMode = IslamicDayUtils.isRamadanDate(now, maghribTime: maghribTime);
     final nextEvent = IslamicDayUtils.nextImportantEvent(state.date);
 
     final sortedTimes =
@@ -485,91 +504,154 @@ class _DashboardView extends StatelessWidget {
     final bool hasActivePrayer = derivedCurrent != null;
 
     return SafeArea(
+      bottom: false,
       child: Stack(
         children: [
-          if (isRamadanMode)
-            const Positioned.fill(child: _RamadanModeOverlay()),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildHeader(context, state.date, textColor, state.currentStreak),
-              _buildSpecialDayBanner(state.date, textColor),
-              if (isRamadanMode)
-                _buildRamadanModeStrip(hijri.day, textColor)
-              else if (nextEvent != null)
-                _buildNextEventCountdown(nextEvent, textColor),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(flex: 2),
-
-                      // SCENARIO A: Active Prayer Window
-                      if (hasActivePrayer) ...[
-                        _CurrentPrayerSection(
-                          prayer: derivedCurrent,
-                          state: state,
-                          textColor: textColor,
+          if (isRamadanMode && showIslamicEvents)
+            Positioned(
+              top: screenHeight * 0.02,   // 2% of the screen height
+              left: 0,
+              right: 0,
+              height: screenHeight * 0.18, // 18% of the screen height gives the cables room to hang
+              child: const StringLightsOverlay(),
+            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: IntrinsicHeight(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildHeader(context, state.date, textColor, state.currentStreak, maghribTime),
+                        // _buildSpecialDayBanner(state.date, textColor, maghribTime),
+                        if (showIslamicEvents && !isRamadanMode && nextEvent != null)
+                          _buildNextEventCountdown(nextEvent, textColor),
+                        
+                        // NEW MULTI-TOOL QUICK ACTIONS
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildQuickAction(context, icon: Icons.explore_rounded, label: "Qibla", onTap: () => onNavRequest(5), textColor: textColor),
+                              _buildQuickAction(context, icon: Icons.bar_chart_rounded, label: "Statistics", onTap: () => onNavRequest(6), textColor: textColor),
+                              _buildQuickAction(context, icon: Icons.tune_rounded, label: "Settings", onTap: () => onNavRequest(0), textColor: textColor),
+                            ],
+                          ),
                         ),
+                        
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 24),
 
-                        const SizedBox(height: 32),
+                                // SCENARIO A: Active Prayer Window
+                                if (hasActivePrayer) ...[
+                                  _CurrentPrayerSection(
+                                    prayer: derivedCurrent!,
+                                    state: state,
+                                    textColor: textColor,
+                                  ),
 
-                        Container(
-                          width: 100,
-                          height: 1,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                textColor.withValues(alpha: 0.0),
-                                textColor.withValues(alpha: 0.3),
-                                textColor.withValues(alpha: 0.0),
+                                  const SizedBox(height: 32),
+
+                                  Container(
+                                    width: 100,
+                                    height: 1,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          textColor.withValues(alpha: 0.0),
+                                          textColor.withValues(alpha: 0.3),
+                                          textColor.withValues(alpha: 0.0),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 32),
+
+                                  if (derivedNext != null)
+                                    _NextPrayerSection(
+                                      prayer: derivedNext,
+                                      state: state,
+                                      textColor: textColor,
+                                      showLabel: true,
+                                    ),
+                                ]
+                                // SCENARIO B: No Active Prayer (Waiting)
+                                else ...[
+                                  _WaitingForNextSection(
+                                    nextPrayer: derivedNext,
+                                    state: state,
+                                    textColor: textColor,
+                                    streak: state.currentStreak,
+                                  ),
+                                ],
+
+                                // Bottom padding to clear the floating nav bar
+                                SizedBox(height: MediaQuery.of(context).padding.bottom + 100),
                               ],
                             ),
                           ),
                         ),
-
-                        const SizedBox(height: 32),
-
-                        if (derivedNext != null)
-                          _NextPrayerSection(
-                            prayer: derivedNext,
-                            state: state,
-                            textColor: textColor,
-                            showLabel: true,
-                          ),
-                      ]
-                      // SCENARIO B: No Active Prayer (Waiting)
-                      else ...[
-                        _WaitingForNextSection(
-                          nextPrayer: derivedNext,
-                          state: state,
-                          textColor: textColor,
-                          streak: state.currentStreak,
-                        ),
                       ],
-
-                      const Spacer(flex: 3),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           ),
         ],
       ),
     );
   }
 
+  Widget _buildQuickAction(BuildContext context, {required IconData icon, required String label, required VoidCallback onTap, required Color textColor}) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: textColor.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: textColor.withValues(alpha: 0.1)),
+                ),
+                child: Icon(icon, color: textColor.withValues(alpha: 0.8), size: 28),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(label, style: AppTextStyles.tiny(color: textColor.withValues(alpha: 0.7)).copyWith(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader(
-    BuildContext context,
-    DateTime date,
-    Color textColor,
-    int streak,
-  ) {
-    final hijri = HijriDate.fromGregorian(date);
-    final todayEvent = IslamicDayUtils.messageForDate(date);
+      BuildContext context,
+      DateTime date,
+      Color textColor,
+      int streak,
+      DateTime? maghribTime,
+      ) {
+    final now = DateTime.now();
+    final hijri = HijriDate.fromDateTime(now, maghribTime: maghribTime);
+    final todayEvent = IslamicDayUtils.messageForDate(now, maghribTime: maghribTime);
     final hasEvent = todayEvent != null;
     final accentColor = hasEvent
         ? IslamicDayUtils.accentColor(todayEvent.type)
@@ -584,78 +666,97 @@ class _DashboardView extends StatelessWidget {
             child: GestureDetector(
               onTap: () => _openIslamicCalendar(context, date),
               behavior: HitTestBehavior.opaque,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      accentColor.withValues(alpha: hasEvent ? 0.14 : 0.08),
-                      accentColor.withValues(alpha: hasEvent ? 0.06 : 0.04),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: accentColor.withValues(alpha: hasEvent ? 0.35 : 0.12),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
+              // Start Glassmorphism implementation
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      // Made the gradient more subtle and translucent for glass effect
+                      gradient: LinearGradient(
+                        colors: [
+                          accentColor.withValues(alpha: hasEvent ? 0.12 : 0.1),
+                          accentColor.withValues(alpha: hasEvent ? 0.05 : 0.02),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      child: Icon(
-                        hasEvent
-                            ? IslamicDayUtils.iconForType(todayEvent.type)
-                            : Icons.calendar_month_rounded,
-                        size: 16,
-                        color: accentColor.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(16),
+                      // Made border slightly crisper but still transparent
+                      border: Border.all(
+                        color: accentColor.withValues(alpha: hasEvent ? 0.3 : 0.15),
+                        width: 1.0,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Column(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '${hijri.day} ${hijri.monthNameEnglish} ${hijri.year}',
-                          style: AppTextStyles.small(
-                            color: textColor.withValues(alpha: 0.95),
-                            weight: FontWeight.w600,
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            // Slightly adjusted opacity for the icon background to pop on glass
+                            color: accentColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          child: Icon(
+                            hasEvent
+                                ? IslamicDayUtils.iconForType(todayEvent.type)
+                                : Icons.calendar_month_rounded,
+                            size: 16,
+                            color: accentColor.withValues(alpha: 0.9),
+                          ),
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          hasEvent ? todayEvent.title : 'Islamic Calendar',
-                          style: AppTextStyles.tiny(
-                            color: hasEvent
-                                ? accentColor
-                                : textColor.withValues(alpha: 0.5),
-                          ).copyWith(fontWeight: hasEvent ? FontWeight.w600 : FontWeight.w400),
+                        const SizedBox(width: 10),
+                        Flexible( // Added Flexible here to prevent overflow on small screens
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${hijri.day} ${hijri.monthNameEnglish} ${hijri.year}',
+                                style: AppTextStyles.small(
+                                  color: textColor.withValues(alpha: 0.95),
+                                  weight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                hasEvent ? todayEvent.title : 'Islamic Calendar',
+                                style: AppTextStyles.tiny(
+                                  color: hasEvent
+                                      ? accentColor
+                                      : textColor.withValues(alpha: 0.6),
+                                ).copyWith(
+                                    fontWeight:
+                                    hasEvent ? FontWeight.w600 : FontWeight.w400),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 16,
+                          color: textColor.withValues(alpha: 0.4),
                         ),
                       ],
                     ),
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      size: 16,
-                      color: textColor.withValues(alpha: 0.3),
-                    ),
-                  ],
+                  ),
                 ),
               ),
+              // End Glassmorphism implementation
             ),
           ),
+          // ... (Rest of the Row remains unchanged: Weather and Streak widgets)
           Row(
             children: [
               // Weather Widget
@@ -696,6 +797,9 @@ class _DashboardView extends StatelessWidget {
     final prayerPeriod = prayerState is PrayerLoaded
         ? prayerState.prayerPeriod
         : PrayerPeriod.isha;
+    final maghribTime = prayerState is PrayerLoaded
+        ? prayerState.prayerTimes[Prayer.maghrib]?.startTime
+        : null;
 
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -705,6 +809,7 @@ class _DashboardView extends StatelessWidget {
             (context, animation, secondaryAnimation) => IslamicCalendarScreen(
               initialDate: date,
               prayerPeriod: prayerPeriod,
+              maghribTime: maghribTime,
             ),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           final curvedAnimation = CurvedAnimation(
@@ -727,8 +832,9 @@ class _DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildSpecialDayBanner(DateTime date, Color textColor) {
-    final message = IslamicDayUtils.messageForDate(date);
+  Widget _buildSpecialDayBanner(DateTime date, Color textColor, DateTime? maghribTime) {
+    final now = DateTime.now();
+    final message = IslamicDayUtils.messageForDate(now, maghribTime: maghribTime);
     if (message == null ||
         message.type == IslamicEventType.jummah ||
         message.type == IslamicEventType.ayyamAlBeed) {
@@ -839,40 +945,7 @@ class _DashboardView extends StatelessWidget {
     );
   }
 
-  Widget _buildRamadanModeStrip(int ramadanDay, Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: const Color(0xFFD4AF37).withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: const Color(0xFFD4AF37).withValues(alpha: 0.3),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.auto_awesome_rounded,
-              size: 18,
-              color: const Color(0xFFD4AF37),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Ramadan mode active • Day $ramadanDay',
-                style: AppTextStyles.small(
-                  color: textColor.withValues(alpha: 0.92),
-                  weight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+
 
   Widget _buildWeatherWidget(WeatherData data, Color textColor) {
     IconData icon;
@@ -915,60 +988,6 @@ class _DashboardView extends StatelessWidget {
   }
 }
 
-class _RamadanModeOverlay extends StatelessWidget {
-  const _RamadanModeOverlay();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    const Color(0xFF3A7859).withValues(alpha: 0.16),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 24,
-            right: 26,
-            child: Icon(
-              Icons.nightlight_round_rounded,
-              size: 88,
-              color: const Color(0xFFD4AF37).withValues(alpha: 0.18),
-            ),
-          ),
-          Positioned(
-            top: 52,
-            right: 96,
-            child: Icon(
-              Icons.star_rounded,
-              size: 12,
-              color: Colors.white.withValues(alpha: 0.22),
-            ),
-          ),
-          Positioned(
-            top: 86,
-            right: 54,
-            child: Icon(
-              Icons.star_rounded,
-              size: 10,
-              color: Colors.white.withValues(alpha: 0.16),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _CurrentPrayerSection extends StatelessWidget {
   final Prayer prayer;
@@ -983,7 +1002,9 @@ class _CurrentPrayerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCompleted = state.statuses[prayer]?.status.isCompleted ?? false;
+    final entry = state.statuses[prayer];
+    final isCompleted = entry?.status.isCompleted ?? false;
+    final isJamaah = entry?.isJamaah ?? false;
     final timeData = state.prayerTimes[prayer];
 
     // Calculate time remaining for CURRENT prayer window
@@ -1001,6 +1022,19 @@ class _CurrentPrayerSection extends StatelessWidget {
                 HapticFeedback.mediumImpact();
                 context.read<PrayerBloc>().add(
                   MarkPrayerComplete(prayer: prayer, isOnTime: true),
+                );
+              }
+              : null,
+      onLongPress:
+          !isCompleted
+              ? () {
+                HapticFeedback.heavyImpact();
+                context.read<PrayerBloc>().add(
+                  MarkPrayerComplete(
+                    prayer: prayer,
+                    isOnTime: true,
+                    isJamaah: true,
+                  ),
                 );
               }
               : null,
@@ -1039,34 +1073,137 @@ class _CurrentPrayerSection extends StatelessWidget {
             const SizedBox(height: 16),
 
             if (isCompleted)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: AppColors.statusOnTime.withValues(alpha: 0.5),
+              Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                            color: AppColors.statusOnTime.withValues(alpha: 0.5),
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.check,
+                              size: 14,
+                              color: AppColors.statusOnTime,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              "COMPLETED",
+                              style: AppTextStyles.tiny(
+                                color: AppColors.statusOnTime,
+                              ).copyWith(fontWeight: FontWeight.bold, letterSpacing: 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const TasbihScreen(initialFlow: 'after_prayer'),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.spiritualGold.withValues(alpha: 0.15),
+                            border: Border.all(
+                              color: AppColors.spiritualGold.withValues(alpha: 0.5),
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.auto_stories_rounded,
+                                size: 14,
+                                color: AppColors.spiritualGold,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                "READ AZKAR",
+                                style: AppTextStyles.tiny(
+                                  color: AppColors.spiritualGold,
+                                ).copyWith(fontWeight: FontWeight.bold, letterSpacing: 1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.check,
-                      size: 14,
-                      color: AppColors.statusOnTime,
+                  const SizedBox(height: 10),
+                  // Jamaah toggle pill
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      context.read<PrayerBloc>().add(
+                        ToggleJamaah(prayer: prayer),
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isJamaah
+                            ? textColor.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        border: Border.all(
+                          color: isJamaah
+                              ? textColor.withValues(alpha: 0.4)
+                              : textColor.withValues(alpha: 0.15),
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.groups_rounded,
+                            size: 14,
+                            color: isJamaah
+                                ? textColor.withValues(alpha: 0.8)
+                                : textColor.withValues(alpha: 0.35),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            "Jamaah",
+                            style: AppTextStyles.tiny(
+                              color: isJamaah
+                                  ? textColor.withValues(alpha: 0.8)
+                                  : textColor.withValues(alpha: 0.35),
+                            ).copyWith(
+                              fontWeight: isJamaah ? FontWeight.w600 : FontWeight.normal,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      "COMPLETED",
-                      style: AppTextStyles.tiny(
-                        color: AppColors.statusOnTime,
-                      ).copyWith(fontWeight: FontWeight.bold, letterSpacing: 1),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               )
             else
               Column(
@@ -1079,9 +1216,9 @@ class _CurrentPrayerSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // --- RESTORED: Tap to Mark ---
+                  // Tap / Long-press hint
                   Text(
-                    "Tap to mark as prayed",
+                    "Tap to mark  •  Hold for jamaah",
                     style: AppTextStyles.tiny(
                       color: textColor.withValues(alpha: 0.4),
                     ),
@@ -1262,7 +1399,7 @@ class _LoadingView extends StatelessWidget {
     return const Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: CircularProgressIndicator(color: AppColors.activeGlow),
+        child: PremiumFlowingLoader(color: AppColors.activeGlow),
       ),
     );
   }

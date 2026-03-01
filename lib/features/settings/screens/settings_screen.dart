@@ -1,7 +1,11 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:wird2/widgets/common/premium_flowing_loader.dart';
+import '../../../widgets/common/glass_snackbar.dart';
+import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
@@ -13,6 +17,8 @@ import '../../home/bloc/prayer_bloc.dart';
 import '../../../core/services/debug_service.dart';
 import '../../../core/services/weather_service.dart';
 import '../../../core/utils/moon_phase_utils.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -152,14 +158,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: AppTextStyles.body(color: Colors.white)),
-        backgroundColor: AppColors.statusMissed,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
-    );
+    if (mounted) {
+      GlassSnackBar.show(
+        context,
+        message: message,
+        isError: true,
+      );
+    }
   }
 
   @override
@@ -200,8 +205,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            // 3. Calculations
-            _buildSectionHeader("CALCULATIONS"),
+            // ── PRAYER SETTINGS ──
+            _buildSectionHeader("PRAYER SETTINGS"),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -237,52 +242,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ),
-                ]),
-              ),
-            ),
-
-            // 4. Visuals
-            _buildSectionHeader("VISUALS"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
+                  _buildDivider(),
                   _buildSwitchRow(
-                    title: "Show Weather",
-                    subtitle: "Display weather widget on dashboard",
-                    value: _settings.showWeatherWidget,
-                    onChanged: (val) {
-                      _saveSettings(_settings.copyWith(showWeatherWidget: val));
-                    },
+                    title: "Tahajjud",
+                    subtitle: "Last third of the night",
+                    value: _settings.includeTahajjud,
+                    onChanged: (v) => _saveSettings(_settings.copyWith(includeTahajjud: v)),
                   ),
                   _buildDivider(),
-                  _buildSettingTile(
-                    title: "Background Theme",
-                    value: _getThemeDisplayName(_settings.weatherTheme),
-                    icon: Icons.wallpaper_rounded,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Background Theme',
-                      options: WeatherTheme.values.map(_getThemeDisplayName).toList(),
-                      currentValue: _getThemeDisplayName(_settings.weatherTheme),
-                      onSelected: (index) {
-                        _saveSettings(_settings.copyWith(
-                            weatherTheme: WeatherTheme.values[index]
-                        ));
-                      },
-                    ),
+                  _buildSwitchRow(
+                    title: "Ishraq",
+                    subtitle: "15 min after sunrise",
+                    value: _settings.includeIshraq,
+                    onChanged: (v) => _saveSettings(_settings.copyWith(includeIshraq: v)),
+                  ),
+                  _buildDivider(),
+                  _buildSwitchRow(
+                    title: "Duha",
+                    subtitle: "Forenoon prayer",
+                    value: _settings.includeDuha,
+                    onChanged: (v) => _saveSettings(_settings.copyWith(includeDuha: v)),
                   ),
                 ]),
               ),
             ),
 
-            // 5. Alerts
-            _buildSectionHeader("ALERTS"),
+            // ── NOTIFICATIONS ──
+            _buildSectionHeader("NOTIFICATIONS"),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _buildGlassSection([
                   _buildSwitchRow(
-                    title: "Allow Notifications",
+                    title: "Prayer Notifications",
                     value: _settings.notificationsEnabled,
                     onChanged: (val) async {
                       if (val) {
@@ -358,63 +350,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       );
                     }),
                   ],
-
+                  _buildDivider(),
+                  _buildSwitchRow(
+                    title: "Weekly Sunnah Reminder",
+                    subtitle: "Every Monday at 9:00 AM",
+                    value: _settings.sunnahNotificationsEnabled,
+                    onChanged: (v) async {
+                      await _saveSettings(_settings.copyWith(sunnahNotificationsEnabled: v));
+                      if (v && mounted) {
+                        try {
+                          final sunnah = await context.read<SunnahRepository>().getWeeklySunnah();
+                          await _notificationService.scheduleWeeklySunnahReminder(sunnah.title);
+                        } catch (e) {
+                          debugPrint('Error scheduling sunnah reminder: $e');
+                        }
+                      } else {
+                        await _notificationService.cancelSunnahNotifications();
+                      }
+                    },
+                  ),
+                  _buildDivider(),
+                  _buildSwitchRow(
+                    title: "Islamic Events",
+                    subtitle: "Notify on special Islamic days",
+                    value: _settings.islamicEventsEnabled,
+                    onChanged: (v) async {
+                      await _saveSettings(_settings.copyWith(islamicEventsEnabled: v));
+                      if (v) {
+                        await _notificationService.scheduleSpecialDayNotification();
+                      } else {
+                        await _notificationService.cancelEventNotifications();
+                      }
+                    },
+                  ),
                 ]),
               ),
             ),
 
-            // 5. Sunnah Prayers
-            _buildSectionHeader("SUNNAH PRAYERS"),
+            // ── APPEARANCE ──
+            _buildSectionHeader("APPEARANCE"),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _buildGlassSection([
                   _buildSwitchRow(
-                    title: "Tahajjud",
-                    subtitle: "Last third of the night",
-                    value: _settings.includeTahajjud,
-                    onChanged: (v) => _saveSettings(_settings.copyWith(includeTahajjud: v)),
+                    title: "Show Weather",
+                    subtitle: "Display weather widget on dashboard",
+                    value: _settings.showWeatherWidget,
+                    onChanged: (val) {
+                      _saveSettings(_settings.copyWith(showWeatherWidget: val));
+                    },
                   ),
                   _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Ishraq",
-                    subtitle: "15 min after sunrise",
-                    value: _settings.includeIshraq,
-                    onChanged: (v) => _saveSettings(_settings.copyWith(includeIshraq: v)),
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Duha",
-                    subtitle: "Forenoon prayer",
-                    value: _settings.includeDuha,
-                    onChanged: (v) => _saveSettings(_settings.copyWith(includeDuha: v)),
+                  _buildSettingTile(
+                    title: "Background Theme",
+                    value: _getThemeDisplayName(_settings.weatherTheme),
+                    icon: Icons.wallpaper_rounded,
+                    onTap: () => _showSelectionDialog(
+                      title: 'Background Theme',
+                      options: WeatherTheme.values.map(_getThemeDisplayName).toList(),
+                      currentValue: _getThemeDisplayName(_settings.weatherTheme),
+                      onSelected: (index) {
+                        _saveSettings(_settings.copyWith(
+                            weatherTheme: WeatherTheme.values[index]
+                        ));
+                      },
+                    ),
                   ),
                 ]),
               ),
             ),
 
-            // 6. About / Advanced
-            _buildSectionHeader("ABOUT"),
+            // ── SUPPORT ──
+            _buildSectionHeader("SUPPORT"),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _buildGlassSection([
+                  _buildActionTile(
+                    title: "Report an Issue",
+                    icon: Icons.mail_outline_rounded,
+                    onTap: _launchReportEmail,
+                  ),
+                  _buildDivider(),
                   _buildActionTile(
                     title: "Reset Settings",
                     icon: Icons.restore_rounded,
                     isDestructive: true,
                     onTap: _resetSettings,
                   ),
-                  _buildDivider(),
-                  _buildActionTile(
-                    title: "Report Issue",
-                    icon: Icons.bug_report_outlined,
-                    onTap: () {},
-                  ),
                 ]),
               ),
             ),
-            
 
 
             const SliverToBoxAdapter(child: SizedBox(height: 120)),
@@ -422,6 +449,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+  // --- Helper Methods ---
+
+  Future<void> _launchReportEmail() async {
+    final deviceInfo = '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
+    final uri = Uri(
+      scheme: 'mailto',
+      path: 'sayan.kabir.official@gmail.com',
+      queryParameters: {
+        'subject': 'Wird Bug Report',
+        'body': '\n\n--- Device Info ---\n$deviceInfo\n',
+      },
+    );
+    try {
+      await launchUrl(uri);
+    } catch (e) {
+      if (mounted) _showError('Could not open email app');
+    }
   }
 
   // --- Widget Components ---
@@ -470,7 +515,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               if (_isLoadingLocation)
                 const SizedBox(
                     width: 20, height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                    child: PremiumFlowingLoader(size: 20, color: Colors.white)
                 )
               else
                 IconButton(

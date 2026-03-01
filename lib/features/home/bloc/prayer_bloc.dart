@@ -10,6 +10,7 @@ import '../../../core/services/prayer_service.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/widget_service.dart';
+import '../../../core/utils/islamic_day_utils.dart';
 
 // ============================================
 // EVENTS
@@ -382,11 +383,14 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
 
       // Schedule notifications for all prayers (excluding already completed ones)
       final canExact = await _notificationService.canScheduleExactAlarms();
-      debugPrint('[PrayerBloc] Scheduling notifications (exactAlarms=$canExact)');
+      final maghribTime = prayerTimes[Prayer.maghrib]?.startTime;
+      final isRamadan = IslamicDayUtils.isRamadanDate(now, maghribTime: maghribTime);
+      debugPrint('[PrayerBloc] Scheduling notifications (exactAlarms=$canExact, ramadan=$isRamadan)');
       await _notificationService.scheduleAllDailyNotifications(
         prayerTimes: prayerTimes,
         settings: settings,
         completedPrayers: completedPrayers,
+        isRamadan: isRamadan,
       );
 
       // Start countdown timer
@@ -614,21 +618,14 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
   }
 
   /// Handle snooze
+  /// Snooze scheduling is now handled directly by the notification service
+  /// (both foreground and background). This handler is kept for completeness /
+  /// future use but is effectively a no-op.
   Future<void> _onSnoozePrayer(
     SnoozePrayer event,
     Emitter<PrayerState> emit,
   ) async {
-    final currentState = state;
-    if (currentState is PrayerLoaded) {
-      final timeData = currentState.prayerTimes[event.prayer];
-      if (timeData != null) {
-        await _notificationService.scheduleSnooze(
-          prayer: event.prayer,
-          duration: event.duration,
-          prayerEndTime: timeData.endTime,
-        );
-      }
-    }
+    debugPrint('[PrayerBloc] Snooze handled directly by notification service');
   }
 
   // ============================================
@@ -691,6 +688,7 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
         await _notificationService.scheduleStartNotification(
           prayer: prayer,
           time: timeData.startTime,
+          endTime: timeData.endTime,
         );
       }
 

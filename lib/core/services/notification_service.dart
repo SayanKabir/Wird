@@ -12,6 +12,126 @@ import 'prayer_service.dart';
 
 import 'package:flutter_timezone/flutter_timezone.dart';
 
+/// Top-level background handler for notification actions (e.g. snooze) when
+/// the app is terminated or in the background.
+/// Must be a top-level function annotated with @pragma('vm:entry-point').
+/// Runs in its own isolate — must initialise everything from scratch.
+@pragma('vm:entry-point')
+void onBackgroundNotificationResponse(NotificationResponse response) {
+  final actionId = response.actionId;
+  final payload = response.payload;
+
+  if (actionId == 'snooze_10' && payload != null) {
+    _scheduleSnoozeStandalone(payload);
+  }
+  // 'mark_prayed' in background is intentionally a no-op — the BLoC will
+  // reconcile status on next foreground resume.
+}
+
+/// Fully self-contained snooze scheduler that works in any isolate.
+/// Creates its own plugin instance, initialises timezones, and schedules
+/// the notification without depending on the NotificationService singleton.
+Future<void> _scheduleSnoozeStandalone(String payload) async {
+  // ---- Parse payload ----
+  final parts = payload.split(':');
+  if (parts.length < 2) return;
+  final prayerName = parts[1];
+  final endTimeMs = parts.length >= 3 ? int.tryParse(parts[2]) : null;
+
+  final now = DateTime.now();
+
+  // Resolve prayer end time (fallback: now + 30 min)
+  final prayerEndTime = endTimeMs != null
+      ? DateTime.fromMillisecondsSinceEpoch(endTimeMs)
+      : now.add(const Duration(minutes: 30));
+
+  // If prayer already ended, don't snooze.
+  if (now.isAfter(prayerEndTime)) return;
+
+  var snoozeTime = now.add(const Duration(minutes: 10));
+  if (snoozeTime.isAfter(prayerEndTime)) {
+    final cappedTime = prayerEndTime.subtract(const Duration(minutes: 2));
+    snoozeTime = cappedTime.isBefore(now)
+        ? now.add(const Duration(seconds: 30))
+        : cappedTime;
+  }
+
+  // Resolve Prayer enum
+  Prayer? prayer;
+  try {
+    prayer = Prayer.values.byName(prayerName);
+  } catch (_) {
+    return;
+  }
+
+  // ---- Initialise timezone ----
+  tz_data.initializeTimeZones();
+  // Use UTC as fallback; the offset in TZDateTime.from still works correctly
+  // because DateTime.now() already carries the local offset.
+  try {
+    final tzName = (await FlutterTimezone.getLocalTimezone()).identifier;
+    tz.setLocalLocation(tz.getLocation(tzName));
+  } catch (_) {
+    // Fallback — tz.local defaults to UTC which is fine for scheduling
+  }
+
+  // ---- Create & initialise a fresh plugin for this isolate ----
+  final plugin = FlutterLocalNotificationsPlugin();
+  await plugin.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      iOS: DarwinInitializationSettings(),
+    ),
+  );
+
+  // ---- Schedule the snooze notification ----
+  final id = Prayer.values.indexOf(prayer) * 10; // start-notification slot
+  final displayName = prayer.displayNameForDay(snoozeTime);
+  final messages = NotificationService._motivationalMessages[prayer]
+      ?? ['Don\'t forget to pray'];
+  final body = messages[Random().nextInt(messages.length)];
+
+  try {
+    await plugin.zonedSchedule(
+      id,
+      '$displayName — Don\'t forget to pray!',
+      body,
+      tz.TZDateTime.from(snoozeTime, tz.local),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          NotificationService._prayerChannelId,
+          NotificationService._prayerChannelName,
+          channelDescription: NotificationService._prayerChannelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          actions: const [
+            AndroidNotificationAction(
+              'mark_prayed',
+              "I've Prayed",
+              showsUserInterface: true,
+            ),
+            AndroidNotificationAction(
+              'snooze_10',
+              'Snooze 10 min',
+            ),
+          ],
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: 'prayer_snooze:${prayer.name}:${prayerEndTime.millisecondsSinceEpoch}',
+    );
+  } catch (_) {
+    // Best-effort; we can't show UI errors from background
+  }
+}
+
 /// Types of notification actions the user can take
 enum NotificationActionType { snooze, markPrayed, open }
 
@@ -38,6 +158,10 @@ class NotificationService {
   }
   
   NotificationService._internal(this._notificationsPlugin);
+
+  /// Constructor for testing
+  @visibleForTesting
+  NotificationService.withPlugin(this._notificationsPlugin);
 
   /// Stream controller for notification actions (bridge to BLoC)
   final StreamController<NotificationAction> _actionController =
@@ -185,6 +309,8 @@ class NotificationService {
     await _notificationsPlugin.initialize(
       initSettings,
       onDidReceiveNotificationResponse: _onNotificationTapped,
+      onDidReceiveBackgroundNotificationResponse:
+          onBackgroundNotificationResponse,
     );
 
     // Create notification channels (Android 8.0+)
@@ -251,23 +377,30 @@ class NotificationService {
     }
   }
 
-  /// Handle notification tap or action button press
+  /// Parse enriched payload format: "type:prayerName:endTimeEpochMs"
+  /// Returns (prayerName, endTimeEpochMs?) or null if invalid.
+  static (String prayerName, int? endTimeMs)? _parsePayload(String? payload) {
+    if (payload == null || !payload.contains(':')) return null;
+    final parts = payload.split(':');
+    if (parts.length < 2) return null;
+    final prayerName = parts[1];
+    final endTimeMs = parts.length >= 3 ? int.tryParse(parts[2]) : null;
+    return (prayerName, endTimeMs);
+  }
+
+  /// Handle notification tap or action button press (foreground / warm-start)
   void _onNotificationTapped(NotificationResponse response) {
     final actionId = response.actionId;
     final payload = response.payload;
 
     debugPrint('[Notifications] Action received: actionId=$actionId, payload=$payload');
 
-    // Parse prayer name from payload (format: "prayer_start:fajr" or "prayer_warning:fajr")
-    String? prayerName;
-    if (payload != null && payload.contains(':')) {
-      prayerName = payload.split(':').last;
-    }
-
-    if (prayerName == null) {
+    final parsed = _parsePayload(payload);
+    if (parsed == null) {
       debugPrint('[Notifications] Could not parse prayer name from payload');
       return;
     }
+    final (prayerName, _) = parsed;
 
     if (actionId == 'mark_prayed') {
       debugPrint('[Notifications] Mark as prayed: $prayerName');
@@ -276,11 +409,9 @@ class NotificationService {
         prayerName: prayerName,
       ));
     } else if (actionId == 'snooze_10') {
-      debugPrint('[Notifications] Snooze 10 min: $prayerName');
-      _actionController.add(NotificationAction(
-        type: NotificationActionType.snooze,
-        prayerName: prayerName,
-      ));
+      debugPrint('[Notifications] Snooze 10 min (foreground): $prayerName');
+      // Schedule snooze directly using the already-initialised plugin.
+      _handleSnoozeForeground(payload!);
     } else {
       // Default tap (no specific action) — open app
       debugPrint('[Notifications] Open app for: $prayerName');
@@ -289,6 +420,47 @@ class NotificationService {
         prayerName: prayerName,
       ));
     }
+  }
+
+  /// Foreground snooze handler — uses the already-initialised singleton plugin.
+  void _handleSnoozeForeground(String payload) {
+    final parsed = _parsePayload(payload);
+    if (parsed == null) return;
+    final (prayerName, endTimeMs) = parsed;
+
+    final now = DateTime.now();
+    final prayerEndTime = endTimeMs != null
+        ? DateTime.fromMillisecondsSinceEpoch(endTimeMs)
+        : now.add(const Duration(minutes: 30));
+
+    if (now.isAfter(prayerEndTime)) {
+      debugPrint('[Notifications] Snooze skipped — prayer time has ended');
+      return;
+    }
+
+    var snoozeTime = now.add(const Duration(minutes: 10));
+    if (snoozeTime.isAfter(prayerEndTime)) {
+      final cappedTime = prayerEndTime.subtract(const Duration(minutes: 2));
+      snoozeTime = cappedTime.isBefore(now)
+          ? now.add(const Duration(seconds: 30))
+          : cappedTime;
+      debugPrint('[Notifications] Snooze capped to $snoozeTime (prayer ends at $prayerEndTime)');
+    }
+
+    Prayer? prayer;
+    try {
+      prayer = Prayer.values.byName(prayerName);
+    } catch (_) {
+      debugPrint('[Notifications] Unknown prayer name: $prayerName');
+      return;
+    }
+
+    // Use the instance method which has the fully initialised plugin.
+    scheduleSnooze(
+      prayer: prayer,
+      duration: snoozeTime.difference(now),
+      prayerEndTime: prayerEndTime,
+    );
   }
 
   /// Request notification permission
@@ -448,23 +620,32 @@ class NotificationService {
     }
   }
 
-  /// Schedule a prayer start notification
+  /// Schedule a prayer start notification.
+  /// [titleOverride] and [bodyOverride] allow Ramadan-specific customisation.
+  /// [endTime] is embedded in the payload so the snooze handler knows when
+  /// the prayer window closes (for smart capping / skip logic).
   Future<void> scheduleStartNotification({
     required Prayer prayer,
     required DateTime time,
+    DateTime? endTime,
+    String? titleOverride,
+    String? bodyOverride,
   }) async {
     final id = _getNotificationId(prayer, isStart: true);
     final displayName = prayer.displayNameForDay(time);
     final scheduledTime = tz.TZDateTime.from(time, tz.local);
     final timeStr = _formatTime12h(time);
     final motivational = _getMotivationalMessage(prayer);
+
+    final title = titleOverride ?? "It's time to offer $displayName $timeStr";
+    final body = bodyOverride ?? motivational;
     
     debugPrint('[Notifications] Scheduling START ID=$id for $displayName at $scheduledTime');
 
     await _zonedScheduleSafe(
       id: id,
-      title: "It's time to offer $displayName $timeStr",
-      body: motivational,
+      title: title,
+      body: body,
       scheduledDate: scheduledTime,
       details: NotificationDetails(
         android: AndroidNotificationDetails(
@@ -492,7 +673,7 @@ class NotificationService {
           presentSound: true,
         ),
       ),
-      payload: 'prayer_start:${prayer.name}',
+      payload: 'prayer_start:${prayer.name}:${endTime?.millisecondsSinceEpoch ?? ''}',
     );
   }
 
@@ -540,7 +721,7 @@ class NotificationService {
           presentSound: true,
         ),
       ),
-      payload: 'prayer_warning:${prayer.name}',
+      payload: 'prayer_warning:${prayer.name}:${endTime.millisecondsSinceEpoch}',
     );
   }
 
@@ -583,6 +764,7 @@ class NotificationService {
             const AndroidNotificationAction(
               'snooze_10',
               'Snooze 10 min',
+            showsUserInterface: true,
             ),
           ],
         ),
@@ -592,7 +774,7 @@ class NotificationService {
           presentSound: true,
         ),
       ),
-      payload: 'prayer_snooze:${prayer.name}',
+      payload: 'prayer_snooze:${prayer.name}:${prayerEndTime.millisecondsSinceEpoch}',
     );
   }
 
@@ -615,6 +797,11 @@ class NotificationService {
   /// Cancel islamic event notification
   Future<void> cancelEventNotifications() async {
     await _notificationsPlugin.cancel(300);
+  }
+
+  /// Cancel suhoor notification
+  Future<void> cancelSuhoorNotification() async {
+    await _notificationsPlugin.cancel(301);
   }
 
   // ─────────────── Sunnah & Islamic Event Notifications ───────────────
@@ -658,9 +845,14 @@ class NotificationService {
     );
   }
 
-  /// Schedule a daily Islamic event check (8 AM each day).
-  /// If today is a special day, shows a notification; otherwise silent.
+  /// Schedule a daily Islamic event notification at 8 AM.
+  /// If today is a special day and 8 AM hasn't passed, schedules a single
+  /// notification. Cancels any existing event notification first to avoid
+  /// duplicates on repeated app opens.
   Future<void> scheduleSpecialDayNotification() async {
+    // Always cancel the previous one first to avoid duplicates
+    await cancelEventNotifications();
+
     // Check if today is a special day
     final today = DateTime.now();
     final message = IslamicDayUtils.messageForDate(today);
@@ -669,11 +861,18 @@ class NotificationService {
       return;
     }
 
-    // Schedule an immediate-ish notification for today's event
+    // Schedule for 8 AM today; skip if 8 AM has already passed
     final now = tz.TZDateTime.now(tz.local);
-    final scheduled = now.add(const Duration(seconds: 5));
+    final scheduled = tz.TZDateTime(
+      tz.local, now.year, now.month, now.day, 8,
+    );
 
-    debugPrint('[Notifications] Scheduling special day notification: ${message.title}');
+    if (scheduled.isBefore(now)) {
+      debugPrint('[Notifications] 8 AM already passed, skipping special day notification');
+      return;
+    }
+
+    debugPrint('[Notifications] Scheduling special day notification at $scheduled: ${message.title}');
 
     await _zonedScheduleSafe(
       id: 300,
@@ -734,16 +933,79 @@ class NotificationService {
     );
   }
 
+  // ── Ramadan-specific notification helpers ──
+
+  static const _suhoorMessages = [
+    'Time to eat before the fast begins',
+    'Suhoor is blessed — eat and prepare for the day',
+    'The Prophet ﷺ said: "Take suhoor, for in suhoor there is blessing."',
+    'Fuel your body before the fast — suhoor time!',
+  ];
+
+  static const _ramadanFajrMessages = [
+    'Your fast has now begun — may Allah accept it',
+    'Niyyah is set, the fast starts now. Taqabbal Allahu minna.',
+    'Suhoor window is closed — may your fast be easy',
+  ];
+
+  static const _ramadanMaghribMessages = [
+    'Allahumma laka sumtu wa ala rizqika aftartu',
+    'The wait is over — break your fast with gratitude',
+    'Eat, drink and praise Allah who made this possible',
+  ];
+
+  /// Schedule a Suhoor reminder (30 min before Fajr) during Ramadan.
+  Future<void> _scheduleSuhoorReminder(DateTime fajrTime) async {
+    final suhoorTime = fajrTime.subtract(const Duration(minutes: 30));
+    final now = DateTime.now();
+    if (suhoorTime.isBefore(now)) {
+      debugPrint('[Notifications] ⏭️ Suhoor reminder time already passed');
+      return;
+    }
+
+    final scheduledTime = tz.TZDateTime.from(suhoorTime, tz.local);
+    final msg = _suhoorMessages[_random.nextInt(_suhoorMessages.length)];
+
+    debugPrint('[Notifications] ✅ Scheduling SUHOOR reminder at $scheduledTime');
+
+    await _zonedScheduleSafe(
+      id: 301,
+      title: '🍽️ Suhoor — 30 min before Fajr',
+      body: msg,
+      scheduledDate: scheduledTime,
+      details: NotificationDetails(
+        android: AndroidNotificationDetails(
+          _prayerChannelId,
+          _prayerChannelName,
+          channelDescription: _prayerChannelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.reminder,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: 'suhoor_reminder',
+    );
+  }
+
   /// Schedule all notifications for today's prayers
-  /// This is the main method to call when the app starts or settings change
+  /// This is the main method to call when the app starts or settings change.
+  /// When [isRamadan] is true, Fajr/Maghrib get special titles and
+  /// a Suhoor reminder is scheduled 30 min before Fajr.
   Future<void> scheduleAllDailyNotifications({
     required Map<Prayer, PrayerTimeData> prayerTimes,
     required AppSettings settings,
     Set<Prayer>? completedPrayers,
+    bool isRamadan = false,
   }) async {
     debugPrint('[Notifications] ========== SCHEDULING START ==========');
     debugPrint('[Notifications] Global notifications enabled: ${settings.notificationsEnabled}');
     debugPrint('[Notifications] Prayer times count: ${prayerTimes.length}');
+    debugPrint('[Notifications] Ramadan mode: $isRamadan');
     debugPrint('[Notifications] Completed prayers: ${completedPrayers?.map((p) => p.name).join(", ") ?? "none"}');
     
     if (!settings.notificationsEnabled) {
@@ -755,6 +1017,16 @@ class NotificationService {
     final now = DateTime.now();
     debugPrint('[Notifications] Current time: $now');
     final completed = completedPrayers ?? <Prayer>{};
+
+    // ── Ramadan: Suhoor reminder (30 min before Fajr) ──
+    if (isRamadan) {
+      final fajrTime = prayerTimes[Prayer.fajr]?.startTime;
+      if (fajrTime != null) {
+        await _scheduleSuhoorReminder(fajrTime);
+      }
+    } else {
+      await cancelSuhoorNotification();
+    }
 
     for (final entry in prayerTimes.entries) {
       final prayer = entry.key;
@@ -785,12 +1057,29 @@ class NotificationService {
         continue;
       }
 
+      // ── Build Ramadan-aware title/body overrides ──
+      String? titleOverride;
+      String? bodyOverride;
+
+      if (isRamadan) {
+        if (prayer == Prayer.fajr) {
+          titleOverride = '🌅 Suhoor time has ended';
+          bodyOverride = _ramadanFajrMessages[_random.nextInt(_ramadanFajrMessages.length)];
+        } else if (prayer == Prayer.maghrib) {
+          titleOverride = '🌙 Break your fast — Iftar time!';
+          bodyOverride = _ramadanMaghribMessages[_random.nextInt(_ramadanMaghribMessages.length)];
+        }
+      }
+
       // Schedule start notification if prayer time is in the future
       if (timeData.startTime.isAfter(now)) {
         debugPrint('[Notifications]   ✅ Scheduling START notification for ${timeData.startTime}');
         await scheduleStartNotification(
           prayer: prayer,
           time: timeData.startTime,
+          endTime: timeData.endTime,
+          titleOverride: titleOverride,
+          bodyOverride: bodyOverride,
         );
       } else {
         debugPrint('[Notifications]   ⏭️ Start time already passed');
@@ -858,17 +1147,20 @@ class NotificationService {
     required Map<Prayer, PrayerTimeData> prayerTimes,
     required AppSettings settings,
     Set<Prayer>? completedPrayers,
+    bool isRamadan = false,
   }) async {
     // Cancel all existing prayer notifications (except refresh)
     for (final prayer in Prayer.values) {
       await cancelPrayerNotifications(prayer);
     }
+    await cancelSuhoorNotification();
 
     // Schedule fresh notifications
     await scheduleAllDailyNotifications(
       prayerTimes: prayerTimes,
       settings: settings,
       completedPrayers: completedPrayers,
+      isRamadan: isRamadan,
     );
   }
 

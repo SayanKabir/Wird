@@ -18,6 +18,25 @@ class HijriDate {
     return _julianToHijri(jd);
   }
 
+  /// Convert a DateTime to the current Islamic date, accounting for Maghrib.
+  ///
+  /// Islamically, the day begins at Maghrib (sunset). The standard algorithm
+  /// maps Gregorian day D → Hijri day H, but H actually starts at Maghrib of
+  /// day D−1. So before Maghrib, we're still in the previous Islamic day and
+  /// must subtract 1 from the Gregorian date before converting.
+  ///
+  /// If [maghribTime] is null, falls back to standard Gregorian-based conversion.
+  factory HijriDate.fromDateTime(DateTime now, {DateTime? maghribTime}) {
+    DateTime effectiveDate = DateTime(now.year, now.month, now.day);
+    if (maghribTime != null && now.isBefore(maghribTime)) {
+      // Before Maghrib: the Islamic day hasn't advanced yet — still yesterday's
+      effectiveDate = effectiveDate.subtract(const Duration(days: 1));
+    }
+    final jd = _gregorianToJulian(
+        effectiveDate.year, effectiveDate.month, effectiveDate.day);
+    return _julianToHijri(jd);
+  }
+
   /// Get the Hijri month name in Arabic
   String get monthNameArabic {
     const months = [

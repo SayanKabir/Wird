@@ -16,6 +16,7 @@ class CelestialBackground extends StatefulWidget {
   final int cloudCoverage;
   final double latitude;
   final MoonPhase? fixedMoonPhase;
+  final bool showCelestialBody;
 
   const CelestialBackground({
     super.key,
@@ -26,6 +27,7 @@ class CelestialBackground extends StatefulWidget {
     this.cloudCoverage = 0,
     this.latitude = 0.0,
     this.fixedMoonPhase,
+    this.showCelestialBody = true,
   });
 
   @override
@@ -199,17 +201,16 @@ class _CelestialBackgroundState extends State<CelestialBackground>
                 ),
 
               // 2. The Celestial Body (Sun/Moon)
-              // Always visible, Weather Overlay sits on top
-              Align(
-                alignment: _calculateCelestialAlignment(_animation.value),
-                child: _CelestialBody(
-                  // Force night appearance if debug moon is set
-                  prayerPeriod: widget.fixedMoonPhase != null ? PrayerPeriod.isha : widget.prayerPeriod,
-                  reduceMotion: widget.reduceMotion,
-                  latitude: widget.latitude,
-                  fixedMoonPhase: widget.fixedMoonPhase,
+              if (widget.showCelestialBody)
+                Align(
+                  alignment: _calculateCelestialAlignment(_animation.value),
+                  child: _CelestialBody(
+                    prayerPeriod: widget.fixedMoonPhase != null ? PrayerPeriod.isha : widget.prayerPeriod,
+                    reduceMotion: widget.reduceMotion,
+                    latitude: widget.latitude,
+                    fixedMoonPhase: widget.fixedMoonPhase,
+                  ),
                 ),
-              ),
 
               // 3. WEATHER OVERLAY
               WeatherOverlay(

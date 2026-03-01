@@ -37,8 +37,10 @@ class IslamicDayMessage {
 class IslamicDayUtils {
   IslamicDayUtils._();
 
-  static bool isRamadanDate(DateTime date) {
-    final hijri = HijriDate.fromGregorian(date);
+  static bool isRamadanDate(DateTime date, {DateTime? maghribTime}) {
+    final hijri = maghribTime != null
+        ? HijriDate.fromDateTime(date, maghribTime: maghribTime)
+        : HijriDate.fromGregorian(date);
     return hijri.month == 9;
   }
 
@@ -58,8 +60,10 @@ class IslamicDayUtils {
   // Preserved for backward compatibility (home_screen, today card, day cell).
   // =========================================================================
 
-  static IslamicDayMessage? messageForDate(DateTime date) {
-    final hijri = HijriDate.fromGregorian(date);
+  static IslamicDayMessage? messageForDate(DateTime date, {DateTime? maghribTime}) {
+    final hijri = maghribTime != null
+        ? HijriDate.fromDateTime(date, maghribTime: maghribTime)
+        : HijriDate.fromGregorian(date);
     final isFriday = date.weekday == DateTime.friday;
 
     // --- Eid al-Fitr (1 Shawwal) ---

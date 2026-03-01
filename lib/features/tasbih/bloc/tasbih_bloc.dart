@@ -64,9 +64,19 @@ class TasbihBloc extends Bloc<TasbihEvent, TasbihState> {
         final currentList = (state as TasbihLoaded).tasbihs;
         await _repository.saveTasbih(event.tasbih);
         
+        var itemUpdated = false;
         final updatedList = currentList.map((t) {
-          return t.id == event.tasbih.id ? event.tasbih : t;
+          if (t.id == event.tasbih.id) {
+            itemUpdated = true;
+            return event.tasbih;
+          }
+          return t;
         }).toList();
+        
+        // If it's a dynamically generated ephemeral Tasbih, add it to the state
+        if (!itemUpdated) {
+          updatedList.add(event.tasbih);
+        }
         
         emit(TasbihLoaded(updatedList));
       }

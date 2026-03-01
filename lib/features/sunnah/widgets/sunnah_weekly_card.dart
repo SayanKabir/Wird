@@ -41,6 +41,7 @@ class SunnahWeeklyCard extends StatelessWidget {
       borderOpacity: 0.12,
       blur: 12,
       borderRadius: 22,
+      onTap: onReadDetailsTap,
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,12 +114,12 @@ class SunnahWeeklyCard extends StatelessWidget {
           // Action buttons row
           Row(
             children: [
-              _actionBtn(
-                label: 'Details',
-                icon: Icons.info_outline_rounded,
-                onTap: onReadDetailsTap,
-                filled: false,
-              ),
+              // _actionBtn(
+              //   label: 'Details',
+              //   icon: Icons.info_outline_rounded,
+              //   onTap: onReadDetailsTap,
+              //   filled: false,
+              // ),
               const SizedBox(width: 8),
               _actionBtn(
                 label: isPracticedToday ? 'Done' : 'I\'m Practicing this',
@@ -126,8 +127,10 @@ class SunnahWeeklyCard extends StatelessWidget {
                     ? Icons.check_circle_rounded
                     : Icons.check_circle_outline_rounded,
                 onTap: onPracticeTap,
-                filled: !isPracticedToday,
-                color: isPracticedToday ? const Color(0xFF73D38A) : AppColors.activeGlow,
+                filled: isPracticedToday,
+                color: isPracticedToday
+                    ? AppColors.statusOnTime
+                    : Colors.white.withValues(alpha: 0.5),
               ),
               if (isDhikrLinked) ...[
                 const SizedBox(width: 8),
@@ -181,6 +184,8 @@ class SunnahWeeklyCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           child: Ink(
             height: 40,
+            // Added padding here to keep the text/icon away from the edges
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
               color: filled ? c.withValues(alpha: 0.2) : Colors.transparent,
