@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../models/settings.dart';
 
 /// Wird App Typography - Text Styles
 /// 
@@ -155,22 +156,40 @@ class AppTextStyles {
   // ============================================
 
   /// Arabic prayer name
-  static TextStyle arabic({Color? color, double? size}) => TextStyle(
-    fontFamily: 'Amiri',
-    fontSize: size ?? 18,
-    fontWeight: FontWeight.w400,
-    color: color ?? Colors.white.withOpacity(0.8),
-    height: 1.5,
-  );
+  static TextStyle arabic({Color? color, double? size, QuranScript? script}) {
+    if (script == QuranScript.indopak) {
+      return GoogleFonts.lateef(
+        fontSize: size ?? 18,
+        fontWeight: FontWeight.w400,
+        color: color ?? Colors.white.withOpacity(0.8),
+        height: 1.5,
+      );
+    }
+    return GoogleFonts.amiri(
+      fontSize: size ?? 18,
+      fontWeight: FontWeight.w400,
+      color: color ?? Colors.white.withOpacity(0.8),
+      height: 1.5,
+    );
+  }
 
   /// Arabic large (for display)
-  static TextStyle arabicLarge({Color? color}) => TextStyle(
-    fontFamily: 'Amiri',
-    fontSize: 24,
-    fontWeight: FontWeight.w400,
-    color: color ?? Colors.white,
-    height: 1.4,
-  );
+  static TextStyle arabicLarge({Color? color, QuranScript? script}) {
+    if (script == QuranScript.indopak) {
+      return GoogleFonts.lateef(
+        fontSize: 24,
+        fontWeight: FontWeight.w400,
+        color: color ?? Colors.white,
+        height: 1.4,
+      );
+    }
+    return GoogleFonts.amiri(
+      fontSize: 24,
+      fontWeight: FontWeight.w400,
+      color: color ?? Colors.white,
+      height: 1.4,
+    );
+  }
 
   // ============================================
   // LABEL STYLES

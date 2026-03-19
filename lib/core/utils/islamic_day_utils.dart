@@ -133,15 +133,15 @@ class IslamicDayUtils {
       );
     }
 
-    // --- Laylat al-Qadr (27 Ramadan) ---
-    if (hijri.month == 9 && hijri.day == 27) {
-      return const IslamicDayMessage(
+    // --- Laylat al-Qadr (Odd nights of the last 10 days of Ramadan) ---
+    if (hijri.month == 9 && hijri.day >= 21 && hijri.day % 2 != 0) {
+      return IslamicDayMessage(
         type: IslamicEventType.laylatAlQadr,
-        title: 'Laylat al-Qadr',
-        subtitle: 'The Night of Decree — better than a thousand months.',
-        duration: '27 Ramadan',
+        title: 'Laylat al-Qadr (Expected)',
+        subtitle: 'Seek the Night of Decree in the odd nights of the last ten.',
+        duration: '${hijri.day} Ramadan',
         virtue: 'Worship on this night is better than worship of a thousand months.',
-        recommendedSunnahs: [
+        recommendedSunnahs: const [
           'Pray Tahajjud and make abundant dua',
           'Recite: Allahumma innaka afuwwun tuhibbul afwa fa\'fu anni',
           'Increase Quran recitation',

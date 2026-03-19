@@ -92,11 +92,11 @@ class PrayerService {
       endTime: prayerTimes.asr,
     );
     
-    // Asr: Starts at Asr adhan, ends at Maghrib adhan
+    // Asr: Starts at Asr adhan, ends 20 minutes before Maghrib adhan (makruh period)
     result[Prayer.asr] = PrayerTimeData(
       prayer: Prayer.asr,
       startTime: prayerTimes.asr,
-      endTime: prayerTimes.maghrib,
+      endTime: prayerTimes.maghrib.subtract(const Duration(minutes: 20)),
     );
     
     // Maghrib: Starts at Maghrib adhan, ends at Isha adhan
@@ -337,7 +337,9 @@ class PrayerService {
       return PrayerPeriod.dhuhr;
     }
 
-    if (asr != null && now.isAfter(asr.startTime) && now.isBefore(asr.endTime)) {
+    // Retain the Asr background gradient until Maghrib starts, even after Asr officially ends
+    if (asr != null && maghrib != null && 
+        now.isAfter(asr.startTime) && now.isBefore(maghrib.startTime)) {
       return PrayerPeriod.asr;
     }
 

@@ -131,6 +131,47 @@ enum WeatherTheme {
   fog,
 }
 
+/// Quran Arabic Script Preference
+@HiveType(typeId: 11)
+enum QuranScript {
+  @HiveField(0)
+  uthmani,
+
+  @HiveField(1)
+  indopak,
+}
+
+extension QuranScriptExtension on QuranScript {
+  String get displayName {
+    switch (this) {
+      case QuranScript.uthmani:
+        return 'Uthmani';
+      case QuranScript.indopak:
+        return 'Indo-Pak';
+    }
+  }
+
+  /// The API field name for this script
+  String get apiFieldName {
+    switch (this) {
+      case QuranScript.uthmani:
+        return 'text_uthmani';
+      case QuranScript.indopak:
+        return 'text_indopak';
+    }
+  }
+
+  /// Short key for cache naming
+  String get cacheKey {
+    switch (this) {
+      case QuranScript.uthmani:
+        return 'uthmani';
+      case QuranScript.indopak:
+        return 'indopak';
+    }
+  }
+}
+
 /// Extension methods for CalculationMethodType
 extension CalculationMethodTypeExtension on CalculationMethodType {
   String get displayName {
@@ -404,6 +445,10 @@ class AppSettings extends Equatable {
   @HiveField(21, defaultValue: 'Saheeh Intl')
   final String quranSelectedTranslation;
 
+  /// Selected Quran Arabic script
+  @HiveField(22, defaultValue: QuranScript.indopak)
+  final QuranScript quranSelectedScript;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -427,6 +472,7 @@ class AppSettings extends Equatable {
     this.quranArabicFontSize = 28.0,
     this.quranTranslationFontSize = 14.0,
     this.quranSelectedTranslation = 'Saheeh Intl',
+    this.quranSelectedScript = QuranScript.indopak,
   });
 
   /// Default settings
@@ -458,6 +504,7 @@ class AppSettings extends Equatable {
     double? quranArabicFontSize,
     double? quranTranslationFontSize,
     String? quranSelectedTranslation,
+    QuranScript? quranSelectedScript,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -482,6 +529,7 @@ class AppSettings extends Equatable {
       quranArabicFontSize: quranArabicFontSize ?? this.quranArabicFontSize,
       quranTranslationFontSize: quranTranslationFontSize ?? this.quranTranslationFontSize,
       quranSelectedTranslation: quranSelectedTranslation ?? this.quranSelectedTranslation,
+      quranSelectedScript: quranSelectedScript ?? this.quranSelectedScript,
     );
   }
 
@@ -508,6 +556,7 @@ class AppSettings extends Equatable {
     quranArabicFontSize,
     quranTranslationFontSize,
     quranSelectedTranslation,
+    quranSelectedScript,
   ];
 }
 

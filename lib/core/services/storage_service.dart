@@ -77,6 +77,9 @@ class StorageService {
     if (!Hive.isAdapterRegistered(10)) {
       Hive.registerAdapter(WeatherThemeAdapter());
     }
+    if (!Hive.isAdapterRegistered(11)) {
+      Hive.registerAdapter(QuranScriptAdapter());
+    }
   }
 
   // ============================================

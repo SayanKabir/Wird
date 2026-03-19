@@ -51,10 +51,11 @@ class QuranApiService {
   Future<List<Verse>> getAllVersesBySurah(
     int surahId, {
     int translationId = defaultTranslationId,
+    String scriptFieldName = 'text_uthmani',
   }) async {
     try {
       // Start all three fetches in parallel
-      final versesFuture = _fetchAllVersePages(surahId);
+      final versesFuture = _fetchAllVersePages(surahId, scriptFieldName: scriptFieldName);
       final translationsFuture = _fetchTranslationData(surahId, translationId);
       final translitFuture = _fetchTranslationData(surahId, transliterationId);
 
@@ -90,7 +91,7 @@ class QuranApiService {
           vJson['transliteration_text'] = litData['text'] ?? '';
         }
 
-        verses.add(Verse.fromJson(vJson, overrideSurahId: surahId));
+        verses.add(Verse.fromJson(vJson, overrideSurahId: surahId, scriptFieldName: scriptFieldName));
       }
 
       return verses;
@@ -101,7 +102,7 @@ class QuranApiService {
   }
 
   /// Fetch all verse pages (handles pagination)
-  Future<List<Map<String, dynamic>>> _fetchAllVersePages(int surahId) async {
+  Future<List<Map<String, dynamic>>> _fetchAllVersePages(int surahId, {String scriptFieldName = 'text_uthmani'}) async {
     final allVerses = <Map<String, dynamic>>[];
     int page = 1;
     bool hasMore = true;
@@ -110,7 +111,7 @@ class QuranApiService {
       final uri = Uri.parse(
         '$_baseUrl/verses/by_chapter/$surahId'
         '?language=en'
-        '&fields=text_uthmani,verse_key,verse_number,page_number,juz_number'
+        '&fields=$scriptFieldName,verse_key,verse_number,page_number,juz_number'
         '&page=$page'
         '&per_page=50',
       );

@@ -257,7 +257,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ? effectiveWeather
                                     : null,
                             showIslamicEvents: settings.islamicEventsEnabled,
-                            onNavRequest: _navToPage,
                           ),
                           ScheduleView(state: state), // 3
                           const SunnahScreen(), // 4
@@ -330,10 +329,13 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min, // Hug contents
                 children: [
+                  _buildIndicatorIcon(0, Icons.tune_rounded, iconWidth, iconHeight, iconSize), // Settings
                   _buildIndicatorIcon(1, Icons.menu_book_rounded, iconWidth, iconHeight, iconSize), // Quran
                   _buildIndicatorIcon(2, Icons.grid_view_rounded, iconWidth, iconHeight, iconSize), // Home
                   _buildIndicatorIcon(3, Icons.calendar_month_rounded, iconWidth, iconHeight, iconSize), // Schedule
                   _buildIndicatorIcon(4, Icons.auto_stories_rounded, iconWidth, iconHeight, iconSize), // Sunnah
+                  _buildIndicatorIcon(5, Icons.explore_rounded, iconWidth, iconHeight, iconSize), // Qibla
+                  _buildIndicatorIcon(6, Icons.bar_chart_rounded, iconWidth, iconHeight, iconSize), // Stats
                 ],
               ),
             ),
@@ -461,13 +463,11 @@ class _DashboardView extends StatelessWidget {
   final PrayerLoaded state;
   final WeatherData? weather;
   final bool showIslamicEvents;
-  final void Function(int) onNavRequest;
 
   const _DashboardView({
     required this.state,
     this.weather,
     required this.showIslamicEvents,
-    required this.onNavRequest,
   });
 
   @override
@@ -529,20 +529,6 @@ class _DashboardView extends StatelessWidget {
                         // _buildSpecialDayBanner(state.date, textColor, maghribTime),
                         if (showIslamicEvents && !isRamadanMode && nextEvent != null)
                           _buildNextEventCountdown(nextEvent, textColor),
-                        
-                        // NEW MULTI-TOOL QUICK ACTIONS
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              _buildQuickAction(context, icon: Icons.explore_rounded, label: "Qibla", onTap: () => onNavRequest(5), textColor: textColor),
-                              _buildQuickAction(context, icon: Icons.bar_chart_rounded, label: "Statistics", onTap: () => onNavRequest(6), textColor: textColor),
-                              _buildQuickAction(context, icon: Icons.tune_rounded, label: "Settings", onTap: () => onNavRequest(0), textColor: textColor),
-                            ],
-                          ),
-                        ),
-                        
                         Expanded(
                           child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -608,35 +594,6 @@ class _DashboardView extends StatelessWidget {
               );
             },
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickAction(BuildContext context, {required IconData icon, required String label, required VoidCallback onTap, required Color textColor}) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: textColor.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: textColor.withValues(alpha: 0.1)),
-                ),
-                child: Icon(icon, color: textColor.withValues(alpha: 0.8), size: 28),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(label, style: AppTextStyles.tiny(color: textColor.withValues(alpha: 0.7)).copyWith(fontWeight: FontWeight.bold, letterSpacing: 0.5)),
         ],
       ),
     );

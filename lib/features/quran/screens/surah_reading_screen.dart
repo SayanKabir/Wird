@@ -15,6 +15,7 @@ import '../../../core/repositories/surah_info_local_repository.dart';
 import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
 import '../../../core/services/storage_service.dart';
+import '../../../models/settings.dart';
 import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/verse.dart';
 import '../../../models/surah.dart';
@@ -62,6 +63,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
     'Yusuf Ali',
   ];
 
+  QuranScript _selectedScript = QuranScript.indopak;
+
   @override
   void initState() {
     super.initState();
@@ -73,6 +76,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
     _arabicFontSize = settings.quranArabicFontSize;
     _translationFontSize = settings.quranTranslationFontSize;
     _selectedTranslation = settings.quranSelectedTranslation;
+    _selectedScript = settings.quranSelectedScript;
 
     _loadVerses();
   }
@@ -87,6 +91,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
       final verses = await _repository.getVerses(
         widget.surahId,
         translationName: _selectedTranslation,
+        scriptFieldName: _selectedScript.apiFieldName,
       );
 
       if (mounted) {
@@ -208,8 +213,9 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
         translationFontSize: _translationFontSize,
         selectedTranslation: _selectedTranslation,
         availableTranslations: _availableTranslations,
+        selectedScript: _selectedScript,
         isSmallPhone: isSmallPhone,
-        onSettingsChanged: (translation, transliteration, arabicSize, translationSize, selectedTrans) {
+        onSettingsChanged: (translation, transliteration, arabicSize, translationSize, selectedTrans, script) {
           setState(() {
             _showTranslation = translation;
             _showTransliteration = transliteration;
@@ -221,6 +227,11 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
               _loadVerses();
             }
 
+            if (_selectedScript != script) {
+              _selectedScript = script;
+              _loadVerses();
+            }
+
             final currentSettings = StorageService().getSettings();
             StorageService().saveSettings(
               currentSettings.copyWith(
@@ -229,6 +240,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                 quranArabicFontSize: arabicSize,
                 quranTranslationFontSize: translationSize,
                 quranSelectedTranslation: selectedTrans,
+                quranSelectedScript: script,
               ),
             );
           });
@@ -532,6 +544,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                             translationFontSize: _translationFontSize,
                             isSmallPhone: isSmallPhone,
                             horizontalPadding: hPad,
+                            selectedScript: _selectedScript,
                             onBookmark: () => _onBookmarkVerse(verse),
                           )
                               .animate()
@@ -561,13 +574,14 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
           ),
           SizedBox(width: isSmallPhone ? 12 : 16),
           Text(
-            'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
-            style: TextStyle(
-              fontFamily: 'Amiri',
-              fontSize: isSmallPhone ? 20 : 22,
+            _selectedScript == QuranScript.indopak 
+                ? 'بِسۡمِ اللهِ الرَّحۡمٰنِ الرَّحِيۡمِ' 
+                : 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ',
+            style: AppTextStyles.arabic(
+              size: isSmallPhone ? 20 : 22,
               color: AppColors.spiritualGold.withValues(alpha: 0.9),
-              height: 1.5,
-            ),
+              script: _selectedScript,
+            ).copyWith(height: 1.5),
             textAlign: TextAlign.center,
             textDirection: TextDirection.rtl,
           ),
@@ -599,6 +613,7 @@ class _VerseCard extends StatelessWidget {
   final double translationFontSize;
   final bool isSmallPhone;
   final double horizontalPadding;
+  final QuranScript selectedScript;
   final VoidCallback onBookmark;
 
   const _VerseCard({
@@ -609,6 +624,7 @@ class _VerseCard extends StatelessWidget {
     required this.translationFontSize,
     required this.isSmallPhone,
     required this.horizontalPadding,
+    required this.selectedScript,
     required this.onBookmark,
   });
 
@@ -664,13 +680,11 @@ class _VerseCard extends StatelessWidget {
             SizedBox(height: isSmallPhone ? 16 : 20),
             Text(
               verse.textUthmani,
-              style: TextStyle(
-                  fontFamily: 'Amiri',
-                  fontSize: isSmallPhone ? arabicFontSize * 0.9 : arabicFontSize,
-                  color: Colors.white,
-                  height: 2.0,
-                  letterSpacing: 0
-              ),
+              style: AppTextStyles.arabic(
+                size: isSmallPhone ? arabicFontSize * 0.9 : arabicFontSize,
+                color: Colors.white,
+                script: selectedScript,
+              ).copyWith(height: 2.0, letterSpacing: 0),
               textAlign: TextAlign.right,
               textDirection: TextDirection.rtl,
             ),
@@ -863,9 +877,10 @@ class _ReadingSettingsSheet extends StatefulWidget {
   final double translationFontSize;
   final String selectedTranslation;
   final List<String> availableTranslations;
+  final QuranScript selectedScript;
   final bool isSmallPhone;
 
-  final void Function(bool translation, bool transliteration, double arabicSize, double translationSize, String selectedTrans) onSettingsChanged;
+  final void Function(bool translation, bool transliteration, double arabicSize, double translationSize, String selectedTrans, QuranScript script) onSettingsChanged;
 
   const _ReadingSettingsSheet({
     required this.showTranslation,
@@ -874,6 +889,7 @@ class _ReadingSettingsSheet extends StatefulWidget {
     required this.translationFontSize,
     required this.selectedTranslation,
     required this.availableTranslations,
+    required this.selectedScript,
     required this.isSmallPhone,
     required this.onSettingsChanged,
   });
@@ -888,6 +904,7 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
   late double _arabicFontSize;
   late double _translationFontSize;
   late String _selectedTranslation;
+  late QuranScript _selectedScript;
 
   @override
   void initState() {
@@ -897,10 +914,11 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
     _arabicFontSize = widget.arabicFontSize;
     _translationFontSize = widget.translationFontSize;
     _selectedTranslation = widget.selectedTranslation;
+    _selectedScript = widget.selectedScript;
   }
 
   void _notify() {
-    widget.onSettingsChanged(_showTranslation, _showTransliteration, _arabicFontSize, _translationFontSize, _selectedTranslation);
+    widget.onSettingsChanged(_showTranslation, _showTransliteration, _arabicFontSize, _translationFontSize, _selectedTranslation, _selectedScript);
   }
 
   @override
@@ -934,6 +952,52 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
                 ],
               ),
               SizedBox(height: widget.isSmallPhone ? 20 : 24),
+
+              // ── Arabic Script Selector ──
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.font_download_rounded, size: widget.isSmallPhone ? 16 : 18, color: Colors.white.withValues(alpha: 0.6)),
+                    const SizedBox(width: 8),
+                    Text('Arabic Script', style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)).copyWith(fontSize: widget.isSmallPhone ? 10 : null)),
+                  ],
+                ),
+              ),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                child: Row(
+                  children: QuranScript.values.map((script) {
+                    final isSelected = _selectedScript == script;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text(script.displayName),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            HapticFeedback.selectionClick();
+                            setState(() => _selectedScript = script);
+                            _notify();
+                          }
+                        },
+                        backgroundColor: Colors.white.withValues(alpha: 0.05),
+                        selectedColor: AppColors.spiritualGold.withValues(alpha: 0.2),
+                        labelStyle: AppTextStyles.small(color: isSelected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.7), weight: isSelected ? FontWeight.w600 : FontWeight.normal).copyWith(fontSize: widget.isSmallPhone ? 12 : null),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        showCheckmark: false,
+                        padding: EdgeInsets.symmetric(horizontal: widget.isSmallPhone ? 10 : 12, vertical: widget.isSmallPhone ? 6 : 8),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              SizedBox(height: widget.isSmallPhone ? 16 : 20),
+
+              // ── Toggles ──
               _SettingsToggle(
                 icon: Icons.translate_rounded,
                 label: 'Show Translation',
@@ -1001,8 +1065,12 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
               SizedBox(height: widget.isSmallPhone ? 20 : 24),
               _FontSizeSlider(
                 label: 'Arabic Font Size',
-                sampleText: 'بِسْمِ ٱللَّهِ',
-                sampleStyle: TextStyle(fontFamily: 'Amiri', fontSize: _arabicFontSize, color: Colors.white, height: 1.6),
+                sampleText: _selectedScript == QuranScript.indopak ? 'بِسۡمِ اللهِ' : 'بِسْمِ ٱللَّهِ',
+                sampleStyle: AppTextStyles.arabic(
+                  size: _arabicFontSize,
+                  color: Colors.white,
+                  script: _selectedScript,
+                ).copyWith(height: 1.6),
                 sampleDirection: TextDirection.rtl,
                 value: _arabicFontSize,
                 min: 24, max: 48,

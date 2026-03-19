@@ -63,9 +63,9 @@ class QuranRepository {
 
   /// Get verses for a surah (cache-first, API fallback)
   /// Re-fetches if cached data lacks translations.
-  Future<List<Verse>> getVerses(int surahId, {String? translationName}) async {
+  Future<List<Verse>> getVerses(int surahId, {String? translationName, String scriptFieldName = 'text_uthmani'}) async {
     final translationId = _getTranslationId(translationName);
-    final boxName = '$_verseBoxPrefix${surahId}_$translationId';
+    final boxName = '${_verseBoxPrefix}${surahId}_${translationId}_$scriptFieldName';
     final box = await Hive.openBox<Verse>(boxName);
 
     // Return cache if available AND has translations
@@ -100,6 +100,7 @@ class QuranRepository {
       final verses = await _apiService.getAllVersesBySurah(
         surahId,
         translationId: translationId,
+        scriptFieldName: scriptFieldName,
       );
       await _cacheVerses(box, verses);
       return verses;
@@ -111,13 +112,14 @@ class QuranRepository {
   }
 
   /// Force refresh verses from API
-  Future<List<Verse>> refreshVerses(int surahId, {String? translationName}) async {
+  Future<List<Verse>> refreshVerses(int surahId, {String? translationName, String scriptFieldName = 'text_uthmani'}) async {
     final translationId = _getTranslationId(translationName);
-    final boxName = '$_verseBoxPrefix${surahId}_$translationId';
+    final boxName = '${_verseBoxPrefix}${surahId}_${translationId}_$scriptFieldName';
     final box = await Hive.openBox<Verse>(boxName);
     final verses = await _apiService.getAllVersesBySurah(
       surahId,
       translationId: translationId,
+      scriptFieldName: scriptFieldName,
     );
     await _cacheVerses(box, verses);
     return verses;

@@ -43,7 +43,7 @@ class Verse extends HiveObject {
     this.transliterationText,
   });
 
-  factory Verse.fromJson(Map<String, dynamic> json, {int? overrideSurahId}) {
+  factory Verse.fromJson(Map<String, dynamic> json, {int? overrideSurahId, String scriptFieldName = 'text_uthmani'}) {
     final verseKey = json['verse_key'] as String? ?? '';
     final parts = verseKey.split(':');
     final surahId = overrideSurahId ?? (parts.isNotEmpty ? int.tryParse(parts[0]) ?? 0 : 0);
@@ -70,7 +70,7 @@ class Verse extends HiveObject {
       surahId: surahId,
       verseNumber: json['verse_number'] as int? ?? 0,
       verseKey: verseKey,
-      textUthmani: json['text_uthmani'] as String? ?? '',
+      textUthmani: json[scriptFieldName] as String? ?? '',
       page: json['page_number'] as int? ?? 0,
       juz: json['juz_number'] as int? ?? 0,
       translationText: translationText,

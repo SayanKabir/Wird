@@ -128,13 +128,15 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
           fields[20] == null ? 14.0 : fields[20] as double,
       quranSelectedTranslation:
           fields[21] == null ? 'Saheeh Intl' : fields[21] as String,
+      quranSelectedScript:
+          fields[22] == null ? QuranScript.indopak : fields[22] as QuranScript,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(22)
+      ..writeByte(23)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -178,7 +180,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(20)
       ..write(obj.quranTranslationFontSize)
       ..writeByte(21)
-      ..write(obj.quranSelectedTranslation);
+      ..write(obj.quranSelectedTranslation)
+      ..writeByte(22)
+      ..write(obj.quranSelectedScript);
   }
 
   @override
@@ -379,6 +383,45 @@ class WeatherThemeAdapter extends TypeAdapter<WeatherTheme> {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is WeatherThemeAdapter &&
+          runtimeType == other.runtimeType &&
+          typeId == other.typeId;
+}
+
+class QuranScriptAdapter extends TypeAdapter<QuranScript> {
+  @override
+  final int typeId = 11;
+
+  @override
+  QuranScript read(BinaryReader reader) {
+    switch (reader.readByte()) {
+      case 0:
+        return QuranScript.uthmani;
+      case 1:
+        return QuranScript.indopak;
+      default:
+        return QuranScript.uthmani;
+    }
+  }
+
+  @override
+  void write(BinaryWriter writer, QuranScript obj) {
+    switch (obj) {
+      case QuranScript.uthmani:
+        writer.writeByte(0);
+        break;
+      case QuranScript.indopak:
+        writer.writeByte(1);
+        break;
+    }
+  }
+
+  @override
+  int get hashCode => typeId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is QuranScriptAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }
