@@ -14,7 +14,9 @@ import '../../../models/tasbih.dart';
 import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../models/quran_progress.dart';
 import '../../../widgets/common/page_header.dart';
+import '../../../widgets/common/pressable.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/prayer_service.dart';
 
 // -----------------------------------------------------------------------------
 // MAIN STATISTICS SCREEN
@@ -1112,30 +1114,36 @@ class AchievementsScreen extends StatelessWidget {
     final unlocked = achievements.where((a) => a.isUnlocked).toList();
     final locked = achievements.where((a) => !a.isUnlocked).toList();
 
-    return Scaffold(
-      backgroundColor: Colors.transparent, // Background handled by parent/stack
-      // Using CelestialBackground in Home, but here we likely rely on parent Scaffold's background
-      // If navigated to directly, ensure root scaffold has background.
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFF0F172A), Colors.black], // Fallback background
-          ),
+    // This is a pushed route, so it sits above the celestial background rather
+    // than inside it and has to paint its own. It previously used a one-off
+    // navy-to-black gradient that appeared nowhere else in the app, which is
+    // why arriving here felt like leaving it. Use the same palette the other
+    // pushed full-screen route (the surah reader) uses.
+    final gradientColors = AppColors.getGradientForPeriod(PrayerPeriod.tahajjud);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: gradientColors,
         ),
-        child: SafeArea(
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               // 1. Header
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                  // Matches the Statistics tab this screen is opened from.
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      GestureDetector(
+                      Pressable(
                         onTap: () => Navigator.pop(context),
                         child: Container(
                           padding: const EdgeInsets.all(10),
@@ -1147,15 +1155,12 @@ class AchievementsScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      Text(
-                        "MILESTONES",
-                        style: AppTextStyles.tiny(color: AppColors.spiritualGold)
-                            .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Achievements",
-                        style: AppTextStyles.h1(),
+                      // Was hand-rolled here with its own spacing; PageHeader
+                      // exists precisely to stop these copies drifting apart.
+                      const PageHeader(
+                        overline: "MILESTONES",
+                        title: "Achievements",
+                        overlineColor: AppColors.spiritualGold,
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -1238,29 +1243,18 @@ class _AchievementCard extends StatelessWidget {
           color: AppColors.spiritualGold.withOpacity(0.1),
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: AppColors.spiritualGold.withOpacity(0.3)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.spiritualGold.withOpacity(0.05),
-              blurRadius: 20,
-              spreadRadius: 0,
-            )
-          ],
+          // No glow: these were the only two boxShadows in the app, which is
+          // part of why this screen read as foreign. The gold fill and border
+          // already mark a badge as unlocked without them.
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                  color: AppColors.spiritualGold,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.spiritualGold.withOpacity(0.4),
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                    )
-                  ]
+              decoration: const BoxDecoration(
+                color: AppColors.spiritualGold,
+                shape: BoxShape.circle,
               ),
               child: Icon(item.icon, color: Colors.black, size: 20),
             ),
