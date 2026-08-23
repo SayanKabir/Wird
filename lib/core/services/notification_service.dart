@@ -4,7 +4,11 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
-import 'package:timezone/data/latest.dart' as tz_data;
+// latest_10y instead of latest: the full IANA blob is 383KB and is parsed
+// synchronously on the main isolate before the first frame; the 10-year cut
+// is 86KB and ~7x faster to load, with identical behaviour for scheduling
+// notifications in the near future.
+import 'package:timezone/data/latest_10y.dart' as tz_data;
 import '../../models/prayer.dart';
 import '../../models/settings.dart';
 import '../utils/islamic_day_utils.dart';

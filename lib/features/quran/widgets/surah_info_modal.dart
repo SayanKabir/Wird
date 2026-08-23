@@ -84,9 +84,13 @@ class SurahInfoModal extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
+                          // The underlying data says 'Mecca'/'Medina'; map it at
+                          // display time so this badge reads the same as the
+                          // surah list and reading screens (Makki/Madani)
+                          // without rewriting all 114 data rows.
                           _Badge(
-                            icon: info.revelation.toLowerCase() == 'mecca' ? '🕋' : '🕌',
-                            text: info.revelation,
+                            icon: _isMakki(info.revelation) ? '🕋' : '🕌',
+                            text: _isMakki(info.revelation) ? 'Makki' : 'Madani',
                           ),
                           const SizedBox(width: 8),
                           _Badge(
@@ -137,6 +141,10 @@ class SurahInfoModal extends StatelessWidget {
       ),
     );
   }
+
+  /// The local surah data stores revelation place as 'Mecca' / 'Medina'.
+  static bool _isMakki(String revelation) =>
+      revelation.trim().toLowerCase().startsWith('mecca');
 }
 
 class _Badge extends StatelessWidget {

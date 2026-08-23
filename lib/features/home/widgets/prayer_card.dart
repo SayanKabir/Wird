@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/utils/formatters.dart';
@@ -9,6 +8,7 @@ import '../../../models/prayer_status.dart';
 import '../../../models/prayer_log.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../tasbih/screens/tasbih_screen.dart';
+import '../../../core/services/haptic_service.dart';
 
 class PrayerCard extends StatefulWidget {
   final Prayer prayer;
@@ -51,7 +51,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
   }
 
   void _toggleExpand() {
-    HapticFeedback.selectionClick();
+    HapticService().selection();
     setState(() {
       _isExpanded = !_isExpanded;
     });
@@ -420,7 +420,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
             icon: buttonIcon,
             color: buttonColor,
             onTap: isCompleted ? () {
-              HapticFeedback.selectionClick();
+              HapticService().selection();
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -428,7 +428,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
                 ),
               );
             } : canMarkComplete ? () {
-              HapticFeedback.mediumImpact();
+              HapticService().medium();
               widget.onMarkComplete?.call();
             } : null,
             isFilled: isFilled && (canMarkComplete || isCompleted),
@@ -449,7 +449,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
 
     return GestureDetector(
       onTap: enabled ? () {
-        HapticFeedback.lightImpact();
+        HapticService().light();
         widget.onToggleJamaah?.call();
       } : null,
       child: AnimatedContainer(

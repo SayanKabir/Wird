@@ -1,6 +1,4 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:wird2/widgets/common/premium_flowing_loader.dart';
 import '../../../core/constants/colors.dart';
@@ -10,6 +8,9 @@ import '../../../features/home/bloc/prayer_bloc.dart';
 import '../../../models/surah.dart';
 import '../bloc/quran_bloc.dart';
 import 'surah_reading_screen.dart';
+import '../../../widgets/common/page_header.dart';
+import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/pressable.dart';
 
 /// Main Quran tab – shows list of 114 surahs with search and last-read position
 class QuranScreen extends StatefulWidget {
@@ -82,14 +83,12 @@ class _QuranScreenState extends State<QuranScreen> {
               padding: EdgeInsets.fromLTRB(hPad, (size.height * 0.03).clamp(16.0, 24.0), hPad, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'THE NOBLE',
-                    style: AppTextStyles.tiny(color: AppColors.spiritualGold)
-                        .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
+                children: const [
+                  PageHeader(
+                    overline: 'THE NOBLE',
+                    title: 'Quran',
+                    overlineColor: AppColors.spiritualGold,
                   ),
-                  const SizedBox(height: 4),
-                  Text('Quran', style: AppTextStyles.h1()),
                 ],
               ),
             ),
@@ -99,10 +98,16 @@ class _QuranScreenState extends State<QuranScreen> {
             // Search Bar
             Padding(
               padding: EdgeInsets.symmetric(horizontal: hPad),
+              // Flat translucent fill rather than a BackdropFilter. What sits
+              // behind this is the celestial gradient — a smooth, low-frequency
+              // wash — and blurring something already smooth is close to a
+              // visual no-op, while a BackdropFilter costs a full offscreen
+              // gaussian pass on every frame the page paints, i.e. every frame
+              // of a scroll. The fill below reproduces the look at no cost.
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(
+                  color: Colors.white.withValues(alpha: 0.04),
                   child: TextField(
                     controller: _searchController,
                     onChanged: (val) => setState(() => _searchQuery = val),
@@ -224,7 +229,7 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   void _openSurah(BuildContext context, int surahId) {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     final bloc = context.read<QuranBloc>();
     final state = bloc.state;
     String? surahName;
@@ -295,11 +300,12 @@ class _ContinueReadingCard extends StatelessWidget {
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
       child: GestureDetector(
         onTap: onTap,
+        // See the search bar above: blurring the smooth celestial gradient
+        // behind this card buys nothing visually and costs an offscreen
+        // gaussian pass per frame. The gradient fill below carries the look.
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-            child: Container(
+          child: Container(
               padding: EdgeInsets.all(isSmallPhone ? 14.0 : 16.0), // Responsive padding
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -371,7 +377,6 @@ class _ContinueReadingCard extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
           ),
         ),
       ),
@@ -398,9 +403,9 @@ class _SurahListTile extends StatelessWidget {
     final bool isSmallPhone = size.width < 360;
     final isMakki = surah.revelationPlace.toLowerCase() == 'makkah';
 
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+      pressedScale: 0.975,
       child: Container(
         margin: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 10),
         padding: EdgeInsets.symmetric(

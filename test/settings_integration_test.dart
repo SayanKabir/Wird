@@ -124,15 +124,20 @@ void main() {
        
        await tester.pumpAndSettle();
 
-       // Verify Top Section Title (to confirm render)
-       expect(find.text('Show Weather'), findsOneWidget);
+       // Verify Top Section Title (to confirm render).
+       // Must be something genuinely at the top of the list: sections below the
+       // fold are not built yet, so asserting on them here would fail. Weather
+       // controls now live in their own section further down.
+       expect(find.text('PRAYER TIMES'), findsOneWidget);
 
-       // Scroll to the bottom to ensure visibility (multiple drags if needed)
-       await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
-       await tester.pumpAndSettle();
-       await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
-       await tester.pumpAndSettle();
-       await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+       // Scroll until the section is on screen. Scrolling by a fixed number of
+       // drags is brittle — it breaks whenever a section above grows or the
+       // order changes — so keep scrolling until the target actually appears.
+       await tester.scrollUntilVisible(
+         find.text('SUNNAH & INSIGHTS'),
+         400,
+         scrollable: find.byType(Scrollable).first,
+       );
        await tester.pumpAndSettle();
 
        // Verify Section Title

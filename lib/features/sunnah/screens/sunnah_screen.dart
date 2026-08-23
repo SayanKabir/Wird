@@ -1,9 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/constants/colors.dart';
@@ -14,10 +12,11 @@ import '../../tasbih/screens/tasbih_screen.dart';
 import '../bloc/sunnah_bloc.dart';
 import '../widgets/sunnah_category_block.dart';
 import '../widgets/sunnah_other_header.dart';
-import '../widgets/sunnah_page_header.dart'; // Kept for imports, but using inline custom header
 import '../widgets/sunnah_tile.dart';
 import '../widgets/sunnah_weekly_card.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../../widgets/common/page_header.dart';
+import '../../../core/services/haptic_service.dart';
 
 class SunnahScreen extends StatefulWidget {
   const SunnahScreen({super.key});
@@ -154,18 +153,11 @@ class _SunnahScreenState extends State<SunnahScreen> {
         SliverToBoxAdapter(
           child: Padding(
             padding: EdgeInsets.fromLTRB(hPad, (size.height * 0.03).clamp(16.0, 24.0), hPad, 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'THE PROPHETIC PATH',
-                  style: AppTextStyles.tiny(color: AppColors.spiritualGold)
-                      .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text('Sunnah', style: AppTextStyles.h1()),
-              ],
-            ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.1, curve: Curves.easeOutCubic),
+            child: const PageHeader(
+              overline: 'THE PROPHETIC PATH',
+              title: 'Sunnah',
+              overlineColor: AppColors.spiritualGold,
+            ),
           ),
         ),
 
@@ -186,7 +178,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                 onReadDetailsTap: () => _openSunnahSheet(context, weeklySunnah),
                 onOpenTasbihTap: () => _openTasbih(context, sunnah: weeklySunnah),
                 onSkipTap: () => context.read<SunnahBloc>().add(SkipWeeklySunnah()),
-              ).animate().fadeIn(delay: 100.ms, duration: 400.ms).slideY(begin: 0.05, curve: Curves.easeOutCubic),
+              ),
             ),
           ),
 
@@ -202,7 +194,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
               onToggleExpandAll: () => _toggleExpandAll(grouped),
               onOpenFilters: () => _openFilterSheet(context, viewCache, isSmallPhone),
               onRemoveTag: _handleRemoveTag,
-            ).animate().fadeIn(delay: 200.ms, duration: 400.ms),
+            ),
           ),
         ),
 
@@ -236,7 +228,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                     )
                   ],
                 ),
-              ).animate().fadeIn(duration: 300.ms),
+              ),
             ),
           )
         else
@@ -274,7 +266,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                       },
                     ),
                   ),
-                ).animate().fadeIn(delay: Duration(milliseconds: 250 + (index * 50)), duration: 400.ms);
+                );
               }, childCount: groupedEntries.length),
             ),
           ),
@@ -376,7 +368,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
   }
 
   void _markSunnahPracticed(BuildContext context, Sunnah sunnah) {
-    HapticFeedback.mediumImpact();
+    HapticService().medium();
     final currentState = context.read<SunnahBloc>().state;
     var alreadyPracticed = false;
     if (currentState is SunnahLoaded) {
@@ -411,7 +403,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
   // --- UI: Filter Sheet ---
 
   Future<void> _openFilterSheet(BuildContext context, _SunnahViewCache viewCache, bool isSmallPhone) async {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     final tempFrequencies = Set<SunnahFrequency>.from(_selectedFrequencies);
     final tempDifficulties = Set<SunnahDifficulty>.from(_selectedDifficulties);
     final tempCategories = Set<String>.from(_selectedCategories);
@@ -455,7 +447,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                               if (tempFrequencies.isNotEmpty || tempDifficulties.isNotEmpty || tempCategories.isNotEmpty || tempTasbihOnly)
                                 TextButton(
                                   onPressed: () {
-                                    HapticFeedback.lightImpact();
+                                    HapticService().light();
                                     setModalState(() {
                                       tempFrequencies.clear();
                                       tempDifficulties.clear();
@@ -477,7 +469,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                               label: _frequencyLabel(f),
                               selected: tempFrequencies.contains(f),
                               onSelected: (s) {
-                                HapticFeedback.selectionClick();
+                                HapticService().selection();
                                 setModalState(() => s ? tempFrequencies.add(f) : tempFrequencies.remove(f));
                               },
                             )).toList(),
@@ -491,7 +483,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                               label: _difficultyLabel(d),
                               selected: tempDifficulties.contains(d),
                               onSelected: (s) {
-                                HapticFeedback.selectionClick();
+                                HapticService().selection();
                                 setModalState(() => s ? tempDifficulties.add(d) : tempDifficulties.remove(d));
                               },
                             )).toList(),
@@ -505,7 +497,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                               label: c,
                               selected: tempCategories.contains(c),
                               onSelected: (s) {
-                                HapticFeedback.selectionClick();
+                                HapticService().selection();
                                 setModalState(() => s ? tempCategories.add(c) : tempCategories.remove(c));
                               },
                             )).toList(),
@@ -517,7 +509,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                             label: 'Tasbih-linked only',
                             selected: tempTasbihOnly,
                             onSelected: (s) {
-                              HapticFeedback.selectionClick();
+                              HapticService().selection();
                               setModalState(() => tempTasbihOnly = s);
                             },
                           ),
@@ -528,7 +520,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                             width: double.infinity,
                             child: ElevatedButton(
                               onPressed: () {
-                                HapticFeedback.lightImpact();
+                                HapticService().light();
                                 setState(() {
                                   _selectedFrequencies..clear()..addAll(tempFrequencies);
                                   _selectedDifficulties..clear()..addAll(tempDifficulties);
@@ -566,7 +558,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
   // --- UI: Details Sheet ---
 
   void _openSunnahSheet(BuildContext context, Sunnah sunnah) {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     final isDhikrLinked = _tasbihLaunchForSunnah(sunnah) != null;
     final detailText = _detailDescription(sunnah);
     final currentState = context.read<SunnahBloc>().state;

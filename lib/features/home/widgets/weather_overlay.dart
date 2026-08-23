@@ -23,29 +23,37 @@ class WeatherOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
+      // Each animated layer gets its own RepaintBoundary so its repaints stay
+      // in a separate compositing layer. Without these, a cloud or raindrop
+      // moving invalidated the layer shared with everything drawn above it,
+      // forcing the dashboard's BackdropFilters to re-blur on every tick.
       child: Stack(
         fit: StackFit.expand,
         children: [
           // Cloud layer
           if (_shouldShowClouds())
-            _CloudOverlay(
-              cloudCoverage: cloudCoverage,
-              reduceMotion: reduceMotion,
+            RepaintBoundary(
+              child: _CloudOverlay(
+                cloudCoverage: cloudCoverage,
+                reduceMotion: reduceMotion,
+              ),
             ),
 
           // Rain particles
           if (condition == WeatherCondition.rain ||
               condition == WeatherCondition.drizzle ||
               condition == WeatherCondition.thunderstorm)
-            _RainOverlay(
-              intensity: condition == WeatherCondition.drizzle ? 0.3 : 1.0,
-              reduceMotion: reduceMotion,
-              hasLightning: condition == WeatherCondition.thunderstorm,
+            RepaintBoundary(
+              child: _RainOverlay(
+                intensity: condition == WeatherCondition.drizzle ? 0.3 : 1.0,
+                reduceMotion: reduceMotion,
+                hasLightning: condition == WeatherCondition.thunderstorm,
+              ),
             ),
 
           // Snow particles
           if (condition == WeatherCondition.snow)
-            _SnowOverlay(reduceMotion: reduceMotion),
+            RepaintBoundary(child: _SnowOverlay(reduceMotion: reduceMotion)),
 
           // Fog overlay
           if (condition == WeatherCondition.fog)
@@ -87,16 +95,40 @@ class _CloudOverlayState extends State<_CloudOverlay>
   late Ticker _ticker;
   double _time = 0.0;
 
+  /// The clouds drift at `time * speed * 0.1`, so one traverse of the screen
+  /// takes roughly 47 seconds — about 0.27 logical pixels per frame at 120Hz.
+  /// Repainting for that is pure waste: each paint issues up to 16 oval draws,
+  /// every one carrying a `MaskFilter.blur`, across the full screen. Because
+  /// this sits underneath the dashboard's BackdropFilters, every one of those
+  /// repaints also forced the blurs above it to re-rasterise, which is what
+  /// stopped the app from ever going idle.
+  ///
+  /// Stepping at ~20fps moves a cloud ~1.6px per update — still perfectly
+  /// smooth for a soft-edged blurred shape — while cutting the paint rate by 6x.
+  static const double _stepSeconds = 1 / 20;
+
   @override
   void initState() {
     super.initState();
     _ticker = createTicker((elapsed) {
-      setState(() {
-        _time = elapsed.inMilliseconds / 1000.0; // Time in seconds
-      });
+      final next = elapsed.inMilliseconds / 1000.0;
+      if (next - _time < _stepSeconds) return;
+      setState(() => _time = next);
     });
 
     if (!widget.reduceMotion) {
+      _ticker.start();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _CloudOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Previously the ticker state was decided once in initState, so toggling
+    // Reduce Motion left the clouds animating until the widget was recreated.
+    if (widget.reduceMotion && _ticker.isActive) {
+      _ticker.stop();
+    } else if (!widget.reduceMotion && !_ticker.isActive) {
       _ticker.start();
     }
   }

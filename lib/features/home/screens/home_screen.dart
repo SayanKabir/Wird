@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:ui';
 import '../../../core/constants/colors.dart';
+import '../../../core/constants/durations.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/utils/hijri_date.dart';
 import '../../../core/utils/islamic_day_utils.dart';
@@ -29,7 +29,9 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../../widgets/common/pressable.dart';
 import '../../tasbih/screens/tasbih_screen.dart';
+import '../../../core/services/haptic_service.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -39,7 +41,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final PageController _pageController = PageController(initialPage: 2);
   final NotificationService _notificationService = NotificationService();
   final WeatherService _weatherService = WeatherService();
@@ -47,7 +49,20 @@ class _HomeScreenState extends State<HomeScreen> {
   final DebugService _debugService = DebugService();
   final StorageService _storageService = StorageService();
 
-  int _currentPage = 2;
+  /// Index of [SettingsScreen] within the PageView below.
+  static const int _settingsPageIndex = 0;
+
+  /// Lets the dashboard ask the settings page to scroll to a given section.
+  final GlobalKey<SettingsScreenState> _settingsKey =
+      GlobalKey<SettingsScreenState>();
+
+  /// Which page the PageView is on. A ValueNotifier rather than plain state:
+  /// its only consumer is the nav capsule's selected-icon styling, and calling
+  /// setState for it rebuilt the whole home tree — CelestialBackground, the
+  /// Scaffold, the PageView and the live page — in the middle of the swipe
+  /// animation, which is precisely when a hitch is most visible.
+  final ValueNotifier<int> _currentPage = ValueNotifier<int>(2);
+
   bool _showPermissionWarning = false;
   WeatherData? _weather;
   Timer? _weatherTimer;
@@ -56,14 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
     _fetchWeather();
     _scheduleSunnahAndEventNotifications();
 
-    // Refresh weather every 15 minutes
-    _weatherTimer = Timer.periodic(const Duration(minutes: 15), (_) {
-      _fetchWeather();
-    });
+    _startWeatherTimer();
 
     // Listen to debug overrides
     _debugService.overriddenWeather.addListener(_onDebugChanged);
@@ -72,6 +85,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onDebugChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _startWeatherTimer() {
+    _weatherTimer?.cancel();
+    // Refresh weather every 15 minutes
+    _weatherTimer = Timer.periodic(const Duration(minutes: 15), (_) {
+      _fetchWeather();
+    });
+  }
+
+  /// Nothing on this screen needs to keep working once the app is off-screen.
+  ///
+  /// Previously the app observed no lifecycle at all, so locking the phone left
+  /// PrayerBloc's one-second timer and the weather poll running indefinitely,
+  /// burning battery to update a UI that was not on screen. Notifications are
+  /// unaffected — those are scheduled with the OS alarm manager and fire
+  /// whether or not this app has any timers alive.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (!mounted) return;
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+        context.read<PrayerBloc>().resumeCountdown();
+        _startWeatherTimer();
+        // Catch up on anything that changed while we were away — the weather
+        // may be stale and the date may even have rolled over.
+        _fetchWeather();
+        break;
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        context.read<PrayerBloc>().pauseCountdown();
+        _weatherTimer?.cancel();
+        _weatherTimer = null;
+        break;
+    }
   }
 
   Future<void> _fetchWeather() async {
@@ -124,7 +176,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
+    _currentPage.dispose();
     _weatherTimer?.cancel();
     _debugService.overriddenWeather.removeListener(_onDebugChanged);
     _debugService.overriddenMoonPhase.removeListener(_onDebugChanged);
@@ -132,10 +186,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onPageChanged(int index) {
-    setState(() {
-      _currentPage = index;
-    });
-    HapticFeedback.lightImpact();
+    _currentPage.value = index;
+    HapticService().light();
   }
 
   void _navToPage(int index) {
@@ -144,6 +196,20 @@ class _HomeScreenState extends State<HomeScreen> {
       duration: const Duration(milliseconds: 500),
       curve: Curves.easeOutQuart,
     );
+  }
+
+  /// Tapping the dashboard weather widget slides over to Settings (page 0) and
+  /// scrolls straight to the Weather & Background section, rather than dropping
+  /// the user at the top of a long settings list to hunt for it.
+  Future<void> _openWeatherSettings() async {
+    HapticService().light();
+    await _pageController.animateToPage(
+      _settingsPageIndex,
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutQuart,
+    );
+    if (!mounted) return;
+    await _settingsKey.currentState?.revealWeatherSection();
   }
 
   int _getDebugCloudCoverage(WeatherCondition condition) {
@@ -173,12 +239,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // 2. Static Theme (Medium Priority)
+    // An explicitly chosen background theme is a deliberate decision, so it is
+    // honoured even when the live weather widget is switched off below.
     if (settings.weatherTheme != WeatherTheme.auto) {
       final condition = _mapThemeToCondition(settings.weatherTheme);
       return _createFakeWeather(condition);
     }
 
     // 3. Live Weather (Lowest Priority)
+    // Turning the weather off means no live conditions anywhere — the sky
+    // animation falls back to clear rather than continuing to rain overhead.
+    if (!settings.showWeatherWidget) {
+      return _createFakeWeather(WeatherCondition.clear);
+    }
     return _weather;
   }
 
@@ -221,6 +294,28 @@ class _HomeScreenState extends State<HomeScreen> {
         final effectiveWeather = _getEffectiveWeather(settings);
 
         return BlocBuilder<PrayerBloc, PrayerState>(
+          // PrayerBloc re-emits every second to drive the countdown, and
+          // `countdown` is microsecond-precision so Equatable never dedupes it.
+          // This builder sits above CelestialBackground, the Scaffold and the
+          // whole PageView, so without this guard one clock tick rebuilt the
+          // entire home tree — and re-blurred every visible BackdropFilter —
+          // once a second, forever. HeroCountdown now ticks itself, so the
+          // countdown field no longer needs to reach this far up the tree.
+          buildWhen: (previous, current) {
+            if (previous is! PrayerLoaded || current is! PrayerLoaded) {
+              return true;
+            }
+            // Rebuild only for changes that actually alter this subtree.
+            return previous.prayerPeriod != current.prayerPeriod ||
+                previous.currentPrayer != current.currentPrayer ||
+                previous.nextPrayer != current.nextPrayer ||
+                previous.statuses != current.statuses ||
+                previous.prayerTimes != current.prayerTimes ||
+                previous.enabledPrayers != current.enabledPrayers ||
+                previous.date != current.date ||
+                previous.allComplete != current.allComplete ||
+                previous.currentStreak != current.currentStreak;
+          },
           builder: (context, state) {
             if (state is PrayerLoading) return const _LoadingView();
             if (state is PrayerError) return _ErrorView(message: state.message);
@@ -234,6 +329,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     effectiveWeather != null
                         ? effectiveWeather.cloudCoverage
                         : 0,
+                // The background widgets have always supported this, but nothing
+                // ever supplied it, so the setting had no effect.
+                reduceMotion: settings.reduceMotion,
                 latitude: _latitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
                 child: Scaffold(
@@ -247,16 +345,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPageChanged: _onPageChanged,
                         physics: const BouncingScrollPhysics(),
                         children: [
-                          const SettingsScreen(), // 0
+                          SettingsScreen(key: _settingsKey), // 0
                           const QuranScreen(), // 1
                           _DashboardView(
                             // 2 (Home)
                             state: state,
-                            weather:
-                                settings.showWeatherWidget
-                                    ? effectiveWeather
-                                    : null,
+                            weather: effectiveWeather,
+                            showWeather: settings.showWeatherWidget,
                             showIslamicEvents: settings.islamicEventsEnabled,
+                            onWeatherTap: _openWeatherSettings,
                           ),
                           ScheduleView(state: state), // 3
                           const SunnahScreen(), // 4
@@ -269,7 +366,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         left: 0,
                         right: 0,
                         bottom: MediaQuery.of(context).padding.bottom + 16,
-                        child: Center(child: _buildMinimalIndicator(MediaQuery.sizeOf(context).width)),
+                        child: Center(
+                          child: ValueListenableBuilder<int>(
+                            valueListenable: _currentPage,
+                            builder: (context, page, _) => _buildMinimalIndicator(
+                              MediaQuery.sizeOf(context).width,
+                              page,
+                            ),
+                          ),
+                        ),
                       ),
 
                       // Permission Warning Overlay
@@ -293,7 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMinimalIndicator(double screenWidth) {
+  Widget _buildMinimalIndicator(double screenWidth, int currentPage) {
     // Determine responsive sizing based on screen width
     final isSmallScreen = screenWidth < 380;
     final containerHeight = isSmallScreen ? 48.0 : 56.0;
@@ -329,13 +434,13 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min, // Hug contents
                 children: [
-                  _buildIndicatorIcon(0, Icons.tune_rounded, iconWidth, iconHeight, iconSize), // Settings
-                  _buildIndicatorIcon(1, Icons.menu_book_rounded, iconWidth, iconHeight, iconSize), // Quran
-                  _buildIndicatorIcon(2, Icons.grid_view_rounded, iconWidth, iconHeight, iconSize), // Home
-                  _buildIndicatorIcon(3, Icons.calendar_month_rounded, iconWidth, iconHeight, iconSize), // Schedule
-                  _buildIndicatorIcon(4, Icons.auto_stories_rounded, iconWidth, iconHeight, iconSize), // Sunnah
-                  _buildIndicatorIcon(5, Icons.explore_rounded, iconWidth, iconHeight, iconSize), // Qibla
-                  _buildIndicatorIcon(6, Icons.bar_chart_rounded, iconWidth, iconHeight, iconSize), // Stats
+                  _buildIndicatorIcon(0, Icons.tune_rounded, iconWidth, iconHeight, iconSize, currentPage), // Settings
+                  _buildIndicatorIcon(1, Icons.menu_book_rounded, iconWidth, iconHeight, iconSize, currentPage), // Quran
+                  _buildIndicatorIcon(2, Icons.grid_view_rounded, iconWidth, iconHeight, iconSize, currentPage), // Home
+                  _buildIndicatorIcon(3, Icons.calendar_month_rounded, iconWidth, iconHeight, iconSize, currentPage), // Schedule
+                  _buildIndicatorIcon(4, Icons.auto_stories_rounded, iconWidth, iconHeight, iconSize, currentPage), // Sunnah
+                  _buildIndicatorIcon(5, Icons.explore_rounded, iconWidth, iconHeight, iconSize, currentPage), // Qibla
+                  _buildIndicatorIcon(6, Icons.bar_chart_rounded, iconWidth, iconHeight, iconSize, currentPage), // Stats
                 ],
               ),
             ),
@@ -344,14 +449,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildIndicatorIcon(int index, IconData icon, double width, double height, double size) {
-    final isSelected = _currentPage == index;
+  Widget _buildIndicatorIcon(int index, IconData icon, double width,
+      double height, double size, int currentPage) {
+    final isSelected = currentPage == index;
+    final color =
+        isSelected ? Colors.white : Colors.white.withValues(alpha: 0.3);
 
-    return GestureDetector(
+    return Pressable(
       onTap: () => _navToPage(index),
-      behavior: HitTestBehavior.opaque,
+      // Navigation is a frequent, low-stakes tap — the lightest feedback.
+      haptic: PressableHaptic.selection,
+      pressedScale: 0.86,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: AppDurations.normal,
         curve: Curves.easeOutBack,
         width: width,
         height: height,
@@ -361,19 +471,17 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Icon(
           icon,
           size: size,
-          color:
-              isSelected ? Colors.white : Colors.white.withValues(alpha: 0.3),
+          color: color,
           // Add a subtle glow only to the active icon
-          shadows:
-              isSelected
-                  ? [
-                    BoxShadow(
-                      color: Colors.white.withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                  : null,
+          shadows: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ]
+              : null,
         ),
       ),
     );
@@ -461,13 +569,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _DashboardView extends StatelessWidget {
   final PrayerLoaded state;
+
+  /// Null until the first reading arrives; the widget shows a placeholder and
+  /// cross-fades once it does.
   final WeatherData? weather;
+
+  /// Whether the user wants the weather widget on the dashboard at all.
+  final bool showWeather;
   final bool showIslamicEvents;
+
+  /// Invoked when the weather widget is tapped; opens the weather controls.
+  final VoidCallback? onWeatherTap;
 
   const _DashboardView({
     required this.state,
     this.weather,
+    required this.showWeather,
     required this.showIslamicEvents,
+    this.onWeatherTap,
   });
 
   @override
@@ -527,15 +646,30 @@ class _DashboardView extends StatelessWidget {
                       children: [
                         _buildHeader(context, state.date, textColor, state.currentStreak, maghribTime),
                         // _buildSpecialDayBanner(state.date, textColor, maghribTime),
-                        if (showIslamicEvents && !isRamadanMode && nextEvent != null)
+                        // Only surface the countdown once the event is actually
+                        // near, so the dashboard stays uncluttered the rest of
+                        // the year. Window varies per event — see
+                        // IslamicDayUtils.countdownLeadDays.
+                        if (showIslamicEvents &&
+                            !isRamadanMode &&
+                            nextEvent != null &&
+                            nextEvent.isNear)
                           _buildNextEventCountdown(nextEvent, textColor),
                         Expanded(
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                            // The nav-bar clearance is applied here rather than
+                            // as a trailing SizedBox inside the centred column.
+                            // Inside, it counted as content and dragged the
+                            // "centred" block ~48px above the true centre.
+                            padding: EdgeInsets.fromLTRB(
+                              24.0,
+                              0,
+                              24.0,
+                              MediaQuery.of(context).padding.bottom + 100,
+                            ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const SizedBox(height: 24),
 
                                 // SCENARIO A: Active Prayer Window
                                 if (hasActivePrayer) ...[
@@ -580,9 +714,6 @@ class _DashboardView extends StatelessWidget {
                                     streak: state.currentStreak,
                                   ),
                                 ],
-
-                                // Bottom padding to clear the floating nav bar
-                                SizedBox(height: MediaQuery.of(context).padding.bottom + 100),
                               ],
                             ),
                           ),
@@ -619,10 +750,13 @@ class _DashboardView extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Flexible(
-            child: GestureDetector(
+          // Expanded rather than Flexible so the card always fills the width
+          // left over by the weather/streak cluster. With Flexible it shrank to
+          // its content, which left an odd gap when both of those were hidden.
+          Expanded(
+            child: Pressable(
               onTap: () => _openIslamicCalendar(context, date),
-              behavior: HitTestBehavior.opaque,
+              pressedScale: 0.97,
               // Start Glassmorphism implementation
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -630,8 +764,8 @@ class _DashboardView extends StatelessWidget {
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
+                      horizontal: 16,
+                      vertical: 14,
                     ),
                     decoration: BoxDecoration(
                       // Made the gradient more subtle and translucent for glass effect
@@ -651,7 +785,14 @@ class _DashboardView extends StatelessWidget {
                       ),
                     ),
                     child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                      // mainAxisSize.min made this Row hug its own content, so
+                      // the chevron sat wherever the date text happened to
+                      // end instead of at the card's trailing edge — the
+                      // Expanded on the card above only controlled the card's
+                      // own width, not how this Row laid out inside it.
+                      // Default (max) lets it fill the card, and Expanded on
+                      // the text column below claims that space so the date
+                      // takes the room and the chevron is pinned to the end.
                       children: [
                         Container(
                           padding: const EdgeInsets.all(6),
@@ -668,8 +809,13 @@ class _DashboardView extends StatelessWidget {
                             color: accentColor.withValues(alpha: 0.9),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Flexible( // Added Flexible here to prevent overflow on small screens
+                        const SizedBox(width: 12),
+                        // Expanded (not Flexible) so the date/event text claims
+                        // all the room the card has to offer. Longer Hijri
+                        // month names (e.g. "Dhu al-Qi'dah", "Rabi' al-Thani")
+                        // now get that full width to lay out in before ever
+                        // needing to ellipsize.
+                        Expanded(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -699,7 +845,7 @@ class _DashboardView extends StatelessWidget {
                             ],
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 10),
                         Icon(
                           Icons.chevron_right_rounded,
                           size: 16,
@@ -713,12 +859,19 @@ class _DashboardView extends StatelessWidget {
               // End Glassmorphism implementation
             ),
           ),
-          // ... (Rest of the Row remains unchanged: Weather and Streak widgets)
+          // Breathing room between the calendar card and the weather cluster.
+          // The card is Expanded so it eats every spare pixel — without this it
+          // butts right up against the weather icon.
+          const SizedBox(width: 16),
           Row(
             children: [
-              // Weather Widget
-              if (weather != null) ...[
-                _buildWeatherWidget(weather!, textColor),
+              // Weather widget. Rendered whether or not the reading has landed
+              // yet — it shows a neutral placeholder first and cross-fades to
+              // the real values, instead of popping into existence and shoving
+              // the streak sideways. `showWeather` is false only when the user
+              // has turned the widget off, in which case nothing is reserved.
+              if (showWeather) ...[
+                _buildWeatherWidget(weather, textColor),
                 if (streak > 0)
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -904,43 +1057,83 @@ class _DashboardView extends StatelessWidget {
 
 
 
-  Widget _buildWeatherWidget(WeatherData data, Color textColor) {
-    IconData icon;
-    switch (data.condition) {
+  static IconData _iconForCondition(WeatherCondition condition) {
+    switch (condition) {
       case WeatherCondition.clear:
-        icon = Icons.wb_sunny_rounded;
-        break;
+        return Icons.wb_sunny_rounded;
       case WeatherCondition.cloudy:
-        icon = Icons.cloud_rounded;
-        break;
+        return Icons.cloud_rounded;
       case WeatherCondition.rain:
-        icon = Icons.water_drop_rounded;
-        break;
+        return Icons.water_drop_rounded;
       case WeatherCondition.drizzle:
-        icon = Icons.grain_rounded;
-        break;
+        return Icons.grain_rounded;
       case WeatherCondition.thunderstorm:
-        icon = Icons.thunderstorm_rounded;
-        break;
+        return Icons.thunderstorm_rounded;
       case WeatherCondition.snow:
-        icon = Icons.ac_unit_rounded;
-        break;
+        return Icons.ac_unit_rounded;
       case WeatherCondition.fog:
-        icon = Icons.foggy;
-        break;
+        return Icons.foggy;
     }
+  }
 
-    return Row(
+  /// [data] is null until the first reading arrives. Rather than rendering
+  /// nothing and popping in, we show a default clear-sky icon with a placeholder
+  /// temperature and cross-fade each part independently as the real values land.
+  Widget _buildWeatherWidget(WeatherData? data, Color textColor) {
+    final icon = _iconForCondition(data?.condition ?? WeatherCondition.clear);
+    final temperature = data == null ? '--°' : '${data.temperature.round()}°';
+
+    final content = Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: textColor.withValues(alpha: 0.9), size: 20),
+        // Keyed so the switcher treats a changed condition as new content and
+        // cross-fades the icon rather than swapping it instantly.
+        AnimatedSwitcher(
+          duration: AppDurations.weatherFade,
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
+              child: child,
+            ),
+          ),
+          child: Icon(
+            icon,
+            key: ValueKey(icon.codePoint),
+            color: textColor.withValues(
+              alpha: data == null ? 0.45 : 0.9,
+            ),
+            size: 20,
+          ),
+        ),
         const SizedBox(width: 6),
-        Text(
-          '${data.temperature.round()}°',
-          style: AppTextStyles.body(
-            color: textColor.withValues(alpha: 0.9),
-          ).copyWith(fontWeight: FontWeight.w600),
+        AnimatedSwitcher(
+          duration: AppDurations.weatherFade,
+          switchInCurve: Curves.easeOut,
+          switchOutCurve: Curves.easeIn,
+          child: Text(
+            temperature,
+            key: ValueKey(temperature),
+            style: AppTextStyles.body(
+              color: textColor.withValues(alpha: data == null ? 0.45 : 0.9),
+            ).copyWith(fontWeight: FontWeight.w600),
+          ),
         ),
       ],
+    );
+
+    if (onWeatherTap == null) return content;
+
+    // HitTestBehavior.opaque makes the whole icon+temperature area tappable,
+    // including the gap between them. Deliberately no extra padding here: this
+    // sits in a fixed-height row beside the streak divider, and growing it
+    // would push that row's layout around.
+    return Pressable(
+      onTap: onWeatherTap,
+      pressedScale: 0.88,
+      child: content,
     );
   }
 }
@@ -964,19 +1157,12 @@ class _CurrentPrayerSection extends StatelessWidget {
     final isJamaah = entry?.isJamaah ?? false;
     final timeData = state.prayerTimes[prayer];
 
-    // Calculate time remaining for CURRENT prayer window
-    final now = DateTime.now();
-    Duration timeRemaining = Duration.zero;
-    if (timeData != null) {
-      timeRemaining = timeData.endTime.difference(now);
-      if (timeRemaining.isNegative) timeRemaining = Duration.zero;
-    }
 
     return GestureDetector(
       onTap:
           !isCompleted
               ? () {
-                HapticFeedback.mediumImpact();
+                HapticService().medium();
                 context.read<PrayerBloc>().add(
                   MarkPrayerComplete(prayer: prayer, isOnTime: true),
                 );
@@ -985,7 +1171,7 @@ class _CurrentPrayerSection extends StatelessWidget {
       onLongPress:
           !isCompleted
               ? () {
-                HapticFeedback.heavyImpact();
+                HapticService().heavy();
                 context.read<PrayerBloc>().add(
                   MarkPrayerComplete(
                     prayer: prayer,
@@ -1067,7 +1253,7 @@ class _CurrentPrayerSection extends StatelessWidget {
                       const SizedBox(width: 12),
                       GestureDetector(
                         onTap: () {
-                          HapticFeedback.selectionClick();
+                          HapticService().selection();
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -1112,7 +1298,7 @@ class _CurrentPrayerSection extends StatelessWidget {
                   // Jamaah toggle pill
                   GestureDetector(
                     onTap: () {
-                      HapticFeedback.selectionClick();
+                      HapticService().selection();
                       context.read<PrayerBloc>().add(
                         ToggleJamaah(prayer: prayer),
                       );
@@ -1167,7 +1353,9 @@ class _CurrentPrayerSection extends StatelessWidget {
                 children: [
                   // Countdown Timer
                   HeroCountdown(
-                    duration: timeRemaining,
+                    // Self-ticking: it derives the remaining time itself, so
+                    // the clock no longer needs a whole-tree rebuild to advance.
+                    targetTime: timeData?.endTime ?? DateTime.now(),
                     prayerName: "Time Remaining",
                     isPrayerActive: true,
                   ),
@@ -1268,14 +1456,6 @@ class _WaitingForNextSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    Duration timeToNext = Duration.zero;
-
-    if (nextPrayer != null) {
-      final nextTime = state.prayerTimes[nextPrayer]!.startTime;
-      timeToNext = nextTime.difference(now);
-      if (timeToNext.isNegative) timeToNext = Duration.zero;
-    }
 
     return Column(
       children: [
@@ -1296,7 +1476,7 @@ class _WaitingForNextSection extends StatelessWidget {
           const SizedBox(height: 16),
           // Countdown to NEXT prayer start
           HeroCountdown(
-            duration: timeToNext,
+            targetTime: state.prayerTimes[nextPrayer]!.startTime,
             prayerName: "Starts in",
             isPrayerActive: false,
           ),

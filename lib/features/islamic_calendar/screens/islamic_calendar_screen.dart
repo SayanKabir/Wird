@@ -1,7 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -11,6 +10,8 @@ import '../../../core/services/prayer_service.dart' show PrayerPeriod;
 import '../../../core/utils/hijri_date.dart';
 import '../../../core/utils/islamic_day_utils.dart';
 import '../../../widgets/common/string_lights_overlay.dart';
+import '../../../widgets/common/page_header.dart';
+import '../../../core/services/haptic_service.dart';
 
 class IslamicCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -160,7 +161,7 @@ class _Header extends StatelessWidget {
         children: [
           GestureDetector(
             onTap: () {
-              HapticFeedback.lightImpact();
+              HapticService().light();
               Navigator.of(context).pop();
             },
             child: Container(
@@ -176,22 +177,15 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          Text(
-            'ISLAMIC CALENDAR',
-            style: AppTextStyles.tiny(
-              color: AppColors.kaabaGold.withValues(alpha: 0.8),
-            ).copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
+          // The title had been commented out, leaving the overline floating on
+          // its own. Restored via the shared PageHeader so this screen matches
+          // the other top-level pages. The focused month itself is not repeated
+          // here — it already sits with the month pagination in the grid below.
+          PageHeader(
+            overline: 'ISLAMIC CALENDAR',
+            title: 'Calendar',
+            overlineColor: AppColors.kaabaGold.withValues(alpha: 0.8),
           ),
-          // const SizedBox(height: 8),
-          // Text(
-          //   hijriFocused.monthNameEnglish,
-          //   style: AppTextStyles.h1(color: Colors.white),
-          // ),
-          // const SizedBox(height: 4),
-          // Text(
-          //   'Hijri ${hijriFocused.year}  •  ${DateFormat('MMMM yyyy').format(focusedMonth)}',
-          //   style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.5)),
-          // ),
         ],
       ),
     );
@@ -314,7 +308,7 @@ class _MaghribInfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
-        HapticFeedback.lightImpact();
+        HapticService().light();
         _showInfoSnackBar(context);
       },
       child: Container(
@@ -507,7 +501,7 @@ class _CalendarSection extends StatelessWidget {
           Expanded(
             child: GestureDetector(
               onTap: () {
-                HapticFeedback.selectionClick();
+                HapticService().selection();
                 onDateSelected(date);
               },
               child: _DayCell(
@@ -563,7 +557,7 @@ class _MonthNavigator extends StatelessWidget {
         _NavButton(
           icon: Icons.chevron_left_rounded,
           onTap: () {
-            HapticFeedback.selectionClick();
+            HapticService().selection();
             onChanged(DateTime(focusedMonth.year, focusedMonth.month - 1, 1));
           },
         ),
@@ -579,7 +573,7 @@ class _MonthNavigator extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   DateFormat('MMMM yyyy').format(focusedMonth),
-                  style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.45)),
+                  style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.7)),
                 ),
               ],
             ),
@@ -588,7 +582,7 @@ class _MonthNavigator extends StatelessWidget {
         _NavButton(
           icon: Icons.chevron_right_rounded,
           onTap: () {
-            HapticFeedback.selectionClick();
+            HapticService().selection();
             onChanged(DateTime(focusedMonth.year, focusedMonth.month + 1, 1));
           },
         ),
@@ -639,7 +633,7 @@ class _WeekdayHeader extends StatelessWidget {
             style: AppTextStyles.tiny(
               color: isFriday
                   ? AppColors.activeGlow
-                  : Colors.white.withValues(alpha: 0.35),
+                  : Colors.white.withValues(alpha: 0.6),
             ).copyWith(
               fontWeight: isFriday ? FontWeight.bold : FontWeight.w500,
               letterSpacing: isFriday ? 1 : 0,
@@ -676,7 +670,10 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contentOpacity = isCurrentMonth ? 1.0 : 0.25;
+    // Adjacent-month days stay clearly de-emphasised but must remain readable;
+    // at the old 0.25 they were effectively invisible once combined with the
+    // per-text alpha below.
+    final contentOpacity = isCurrentMonth ? 1.0 : 0.45;
 
     Color bgColor = Colors.transparent;
     if (isSelected && !isToday) {
@@ -722,17 +719,20 @@ class _DayCell extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 2),
-                  // Gregorian day — dimmed below
+                  // Gregorian day — secondary to the Hijri date, but legible.
+                  // Previously dimmed twice (opacity * 0.55 AND alpha 0.5),
+                  // landing at an effective 0.275 on 10px text. The hierarchy
+                  // is now carried by size and weight, with a single dim.
                   Opacity(
-                    opacity: contentOpacity * 0.55,
+                    opacity: contentOpacity,
                     child: Text(
                       '$gregorianDay',
                       style: TextStyle(
                         color: isToday
-                            ? AppColors.kaabaGold.withValues(alpha: 0.7)
-                            : Colors.white.withValues(alpha: 0.5),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w400,
+                            ? AppColors.kaabaGold.withValues(alpha: 0.85)
+                            : Colors.white.withValues(alpha: 0.72),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
                         height: 1.0,
                       ),
                     ),
@@ -813,7 +813,7 @@ class _SpecialDaysListState extends State<_SpecialDaysList> {
               entry: events[index],
               isExpanded: isExpanded,
               onToggle: () {
-                HapticFeedback.selectionClick();
+                HapticService().selection();
                 setState(() {
                   isExpanded
                       ? _expandedIndices.remove(index)
@@ -1069,7 +1069,7 @@ class _EmptyEventState extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'A month of quiet reflection',
-              style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.4)),
+              style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.65)),
             ),
             const SizedBox(height: 6),
             Text(

@@ -46,3 +46,11 @@ app.*.map.json
 
 # Local configuration
 config.json
+
+# Product/planning docs — kept locally, not part of the shipped app
+wird_prd_complete.md
+wird_phase2_sunnah_revival_prd.md
+wird_phase3_quran_reading_prd.md
+
+# One-off migration scripts (already applied)
+update_loaders.py

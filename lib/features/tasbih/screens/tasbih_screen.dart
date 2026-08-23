@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:percent_indicator/circular_percent_indicator.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -24,6 +23,8 @@ import '../../../core/repositories/azkar_repository.dart';
 import '../../../core/utils/azkar_to_tasbih_mapper.dart';
 import '../bloc/tasbih_bloc.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/pressable.dart';
 
 
 class TasbihScreen extends StatefulWidget {
@@ -315,7 +316,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
             _GlassIconButton(
               icon: Icons.arrow_back_rounded,
               onTap: () {
-                HapticFeedback.lightImpact();
+                HapticService().light();
                 Navigator.pop(context);
               },
             )
@@ -328,6 +329,10 @@ class _TasbihScreenState extends State<TasbihScreen> {
                   style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5))
                       .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
                 ),
+                // Matches the 8pt gap PageHeader uses on the other pages. The
+                // title stays h2 rather than h1 because this header is a compact
+                // row that shares its width with the action buttons opposite.
+                const SizedBox(height: 8),
                 Text('Digital Tasbih', style: AppTextStyles.h2()),
               ],
             ),
@@ -640,11 +645,11 @@ class _TasbihScreenState extends State<TasbihScreen> {
 
     // Haptic feedback engine
     if (newCount == selected.targetCount) {
-      HapticFeedback.heavyImpact(); // Target reached
+      HapticService().heavy(); // Target reached
     } else if (newCount % 33 == 0 || newCount % 100 == 0) {
-      HapticFeedback.mediumImpact(); // Milestone reached
+      HapticService().medium(); // Milestone reached
     } else {
-      HapticFeedback.lightImpact(); // Standard tap
+      HapticService().light(); // Standard tap
     }
 
     int displayCount;
@@ -785,7 +790,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                             color: Colors.transparent,
                             child: InkWell(
                               onTap: () {
-                                HapticFeedback.selectionClick();
+                                HapticService().selection();
                                 final mappedCategory = _mapTasbihIdToCategory(t.id);
                                 
                                 if (mappedCategory != null) {
@@ -1115,10 +1120,11 @@ class _GlassIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      // Ensure the button catches taps and doesn't trigger the background counter
-      behavior: HitTestBehavior.opaque,
+    // Pressable keeps HitTestBehavior.opaque by default, so this still catches
+    // taps rather than letting them fall through to the background counter.
+    return Pressable(
       onTap: onTap,
+      pressedScale: 0.88,
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(

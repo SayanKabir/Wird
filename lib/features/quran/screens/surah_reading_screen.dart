@@ -22,6 +22,7 @@ import '../../../models/surah.dart';
 import '../../../models/quran_bookmark.dart';
 import '../widgets/surah_info_modal.dart';
 import '../bloc/quran_bloc.dart';
+import '../../../core/services/haptic_service.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -196,11 +197,11 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
       ),
     );
 
-    HapticFeedback.mediumImpact();
+    HapticService().medium();
   }
 
   void _showSettingsSheet(bool isSmallPhone) {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -250,7 +251,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
   }
 
   void _showSurahInfoModal(SurahInfoData info, bool isSmallPhone) {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -349,7 +350,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     leading: Center(
                       child: GestureDetector(
                         onTap: () {
-                          HapticFeedback.lightImpact();
+                          HapticService().light();
                           Navigator.of(context).pop();
                         },
                         child: Container(
@@ -381,11 +382,20 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                       ),
                       SizedBox(width: hPad),
                     ],
+                    // This bar is PINNED, so it stays on screen while verses
+                    // scroll beneath it — meaning its BackdropFilter re-blurs a
+                    // full-width region on every single scroll frame, and blur
+                    // cost scales with sigma. Unlike the flat surfaces on the
+                    // surah list, real text moves behind this one, so the glass
+                    // effect is actually visible here and worth keeping; sigma
+                    // is dropped from 20 to 8 and the tint is deepened slightly
+                    // to preserve legibility, which keeps the look at a
+                    // fraction of the per-frame cost.
                     flexibleSpace: ClipRect(
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                         child: Container(
-                          color: Colors.black.withValues(alpha: 0.2), // Dark glass tint for readability
+                          color: Colors.black.withValues(alpha: 0.28), // Dark glass tint for readability
                           child: FlexibleSpaceBar(
                             centerTitle: true,
                             titlePadding: const EdgeInsets.only(bottom: 16),
@@ -423,7 +433,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                        isMakki ? 'Meccan' : 'Medinan',
+                                        // Matches the surah list screen's badge.
+                                        isMakki ? 'Makki' : 'Madani',
                                         style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.8)).copyWith(
                                           fontWeight: FontWeight.w600,
                                           fontSize: isSmallPhone ? 10 : 12,
@@ -666,7 +677,7 @@ class _VerseCard extends StatelessWidget {
                 const Spacer(),
                 GestureDetector(
                   onTap: () {
-                    HapticFeedback.lightImpact();
+                    HapticService().light();
                     _showVerseOptions(context, verse, onBookmark, isSmallPhone);
                   },
                   child: Container(
@@ -766,7 +777,7 @@ class _VerseCard extends StatelessWidget {
                   color: AppColors.spiritualGold,
                   isSmallPhone: isSmallPhone,
                   onTap: () {
-                    HapticFeedback.selectionClick();
+                    HapticService().selection();
                     Navigator.pop(sheetCtx);
                     bookmarkCallback();
                   },
@@ -805,7 +816,7 @@ class _VerseCard extends StatelessWidget {
                   color: Colors.white,
                   isSmallPhone: isSmallPhone,
                   onTap: () async {
-                    HapticFeedback.selectionClick();
+                    HapticService().selection();
                     Navigator.pop(sheetCtx);
                     final shareText = '${verse.textUthmani}\n\n${verse.translationText ?? ''}\n— ${verse.translationName ?? 'Quran'} [${verse.surahId}:${verse.verseNumber}]';
                     try { await Share.share(shareText); } catch (e) { debugPrint('Error sharing: $e'); }
@@ -977,7 +988,7 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
                         selected: isSelected,
                         onSelected: (selected) {
                           if (selected) {
-                            HapticFeedback.selectionClick();
+                            HapticService().selection();
                             setState(() => _selectedScript = script);
                             _notify();
                           }
@@ -1031,7 +1042,7 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
                               selected: isSelected,
                               onSelected: (selected) {
                                 if (selected) {
-                                  HapticFeedback.selectionClick();
+                                  HapticService().selection();
                                   setState(() => _selectedTranslation = trans);
                                   _notify();
                                 }
@@ -1132,7 +1143,7 @@ class _SettingsToggle extends StatelessWidget {
           ),
           Switch(
             value: value,
-            onChanged: (val) { HapticFeedback.selectionClick(); onChanged(val); },
+            onChanged: (val) { HapticService().selection(); onChanged(val); },
             activeColor: Colors.white,
             activeTrackColor: AppColors.spiritualGold.withValues(alpha: 0.6),
             inactiveThumbColor: Colors.white.withValues(alpha: 0.5),

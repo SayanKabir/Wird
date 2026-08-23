@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
+import '../../../core/services/haptic_service.dart';
 
 class SunnahOtherHeader extends StatelessWidget {
   final int count;
@@ -85,7 +85,7 @@ class SunnahOtherHeader extends StatelessWidget {
               children: activeFilterTags.map((tag) {
                 return GestureDetector(
                   onTap: () {
-                    HapticFeedback.lightImpact();
+                    HapticService().light();
                     onRemoveTag(tag);
                   },
                   child: Container(
@@ -146,7 +146,7 @@ class SunnahOtherHeader extends StatelessWidget {
   }) {
     return GestureDetector(
       onTap: () {
-        HapticFeedback.lightImpact();
+        HapticService().light();
         onTap();
       },
       child: Container(

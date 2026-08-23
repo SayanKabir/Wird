@@ -449,6 +449,10 @@ class AppSettings extends Equatable {
   @HiveField(22, defaultValue: QuranScript.indopak)
   final QuranScript quranSelectedScript;
 
+  /// Whether tactile feedback fires on taps and selections.
+  @HiveField(23, defaultValue: true)
+  final bool hapticsEnabled;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -473,6 +477,7 @@ class AppSettings extends Equatable {
     this.quranTranslationFontSize = 14.0,
     this.quranSelectedTranslation = 'Saheeh Intl',
     this.quranSelectedScript = QuranScript.indopak,
+    this.hapticsEnabled = true,
   });
 
   /// Default settings
@@ -505,6 +510,7 @@ class AppSettings extends Equatable {
     double? quranTranslationFontSize,
     String? quranSelectedTranslation,
     QuranScript? quranSelectedScript,
+    bool? hapticsEnabled,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -530,6 +536,7 @@ class AppSettings extends Equatable {
       quranTranslationFontSize: quranTranslationFontSize ?? this.quranTranslationFontSize,
       quranSelectedTranslation: quranSelectedTranslation ?? this.quranSelectedTranslation,
       quranSelectedScript: quranSelectedScript ?? this.quranSelectedScript,
+      hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
     );
   }
 
@@ -557,6 +564,7 @@ class AppSettings extends Equatable {
     quranTranslationFontSize,
     quranSelectedTranslation,
     quranSelectedScript,
+    hapticsEnabled,
   ];
 }
 

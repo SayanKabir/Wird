@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/prayer_service.dart';
+import '../../../core/services/haptic_service.dart';
 
 /// Qibla compass screen with Celestial Zen design
 class QiblaScreen extends StatefulWidget {
@@ -23,6 +23,10 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
   double _qiblaDirection = 0;
   bool _hasCompass = true;
   bool _isCalibrating = false;
+
+  /// Tracks the previous alignment state so haptics fire once per alignment,
+  /// not once per compass sample.
+  bool _wasAligned = false;
 
   // Smoothing animation
   late AnimationController _smoothController;
@@ -62,7 +66,11 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
   }
 
   void _startCompass() {
-    FlutterCompass.events?.listen((event) {
+    // Assigned so dispose() can actually cancel it. Previously the
+    // subscription was discarded, so _compassSubscription stayed null and
+    // every visit to this screen leaked another listener keeping the
+    // magnetometer stream waking the UI thread for the app's lifetime.
+    _compassSubscription = FlutterCompass.events?.listen((event) {
       if (event.heading != null && mounted) {
         // 1. Check calibration status
         bool needsCal = false;
@@ -124,7 +132,18 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
 
     final isAligned = offset.abs() < 3; // Stricter alignment (3 degrees)
 
-    if (isAligned) HapticFeedback.selectionClick();
+    // Feedback fires on the alignment EDGE, scheduled off the build phase.
+    // It used to be called directly here, which meant a platform-channel hop
+    // plus a settings read on every compass sample (~50Hz) for as long as the
+    // user held the phone on the qibla — and side effects in build() at that.
+    if (isAligned != _wasAligned) {
+      _wasAligned = isAligned;
+      if (isAligned) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => HapticService().selection(),
+        );
+      }
+    }
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -192,7 +211,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
               const Icon(Icons.location_on, size: 16, color: AppColors.spiritualGold),
               const SizedBox(width: 8),
               Text(
-                "Mecca",
+                "Makkah",
                 style: AppTextStyles.h2(color: Colors.white).copyWith(
                   fontWeight: FontWeight.w300,
                   letterSpacing: 1,

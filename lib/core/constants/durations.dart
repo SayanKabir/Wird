@@ -21,6 +21,14 @@ class AppDurations {
   /// Background gradient transition
   static const Duration gradientTransition = Duration(milliseconds: 5000);
 
+  /// Scale-down/up on press for tappable elements. Deliberately brisk so the
+  /// UI still feels responsive rather than laggy.
+  static const Duration press = Duration(milliseconds: 120);
+
+  /// Cross-fade when the weather reading replaces the placeholder, or when
+  /// conditions change. Slow enough to read as a transition, not a glitch.
+  static const Duration weatherFade = Duration(milliseconds: 600);
+
   /// Active prayer card breathing pulse
   static const Duration breathingPulse = Duration(milliseconds: 2000);
 

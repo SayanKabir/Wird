@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../models/sunnah.dart';
 import '../../../widgets/common/glass_container.dart';
+import '../../../core/services/haptic_service.dart';
 
 class SunnahWeeklyCard extends StatelessWidget {
   final Sunnah sunnah;
@@ -67,7 +67,7 @@ class SunnahWeeklyCard extends StatelessWidget {
               const Spacer(),
               GestureDetector(
                 onTap: () {
-                  HapticFeedback.lightImpact();
+                  HapticService().light();
                   onSkipTap();
                 },
                 child: Container(
@@ -178,7 +178,7 @@ class SunnahWeeklyCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            HapticFeedback.lightImpact();
+            HapticService().light();
             onTap();
           },
           borderRadius: BorderRadius.circular(14),

@@ -1,6 +1,5 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
@@ -8,6 +7,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../../core/services/haptic_service.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -39,7 +39,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _nextPage() {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     if (_currentPage < 3) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 600),
@@ -49,7 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   void _previousPage() {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     if (_currentPage > 0) {
       _pageController.previousPage(
         duration: const Duration(milliseconds: 600),
@@ -59,7 +59,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _getLocation() async {
-    HapticFeedback.mediumImpact();
+    HapticService().medium();
     setState(() {
       _isLoading = true;
       _error = null;
@@ -79,7 +79,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _requestNotificationPermission() async {
-    HapticFeedback.mediumImpact();
+    HapticService().medium();
     setState(() => _isLoading = true);
 
     // Request basic notification permission
@@ -170,7 +170,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _completeOnboarding() async {
-    HapticFeedback.heavyImpact();
+    HapticService().heavy();
     if (_location == null) {
       setState(() => _error = 'Please set your location first');
       return;
@@ -638,7 +638,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }) {
     return GestureDetector(
       onTap: () {
-        HapticFeedback.lightImpact();
+        HapticService().light();
         onTap();
       },
       child: AnimatedContainer(

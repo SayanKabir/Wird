@@ -186,18 +186,21 @@ class IslamicDayUtils {
     }
 
     // --- Isra wal Mi'raj (27 Rajab) ---
+    // Historical note only. The 27 Rajab date is not established by an authentic
+    // narration, and no specific act of worship is legislated for this night, so
+    // `recommendedSunnahs` is intentionally empty — the calendar hides the
+    // "RECOMMENDED SUNNAHS" section when the list is empty.
     if (hijri.month == 7 && hijri.day == 27) {
       return const IslamicDayMessage(
         type: IslamicEventType.isra,
         title: 'Isra\' wal Mi\'raj',
         subtitle: 'The Night Journey and Ascension of the Prophet ﷺ.',
         duration: '27 Rajab',
-        virtue: 'A miraculous night when the five daily prayers were prescribed.',
-        recommendedSunnahs: [
-          'Reflect on the story of the journey',
-          'Pray extra voluntary prayers',
-          'Make abundant dua and dhikr',
-        ],
+        virtue: 'The journey on which the five daily prayers were prescribed. '
+            'The date is commonly given as 27 Rajab, though this is not '
+            'established by an authentic narration, and no particular worship '
+            'is prescribed for this night.',
+        recommendedSunnahs: [],
       );
     }
 
@@ -300,6 +303,36 @@ class IslamicDayUtils {
     }
   }
 
+  /// How many days ahead of an event the dashboard countdown should appear.
+  ///
+  /// The countdown used to show for whatever event came next, however far off,
+  /// which meant it was on screen permanently and stopped registering as news.
+  /// Larger occasions get a longer lead so there is time to prepare; smaller
+  /// ones stay hidden until they are genuinely near.
+  static int countdownLeadDays(IslamicEventType type) {
+    switch (type) {
+      // A month's notice — enough to plan fasting, travel and time off.
+      case IslamicEventType.ramadan:
+        return 30;
+      // The ten blessed days and the two Eids: about a fortnight.
+      case IslamicEventType.dhulHijjah:
+      case IslamicEventType.eidAlAdha:
+      case IslamicEventType.eidAlFitr:
+      case IslamicEventType.arafah:
+        return 14;
+      // Single days of worship — a week is ample warning to intend a fast.
+      case IslamicEventType.ashura:
+      case IslamicEventType.laylatAlQadr:
+        return 7;
+      // Recurring or non-countdown events; these never reach the dashboard
+      // countdown (see _countdownTypes) but the switch must stay exhaustive.
+      case IslamicEventType.jummah:
+      case IslamicEventType.isra:
+      case IslamicEventType.ayyamAlBeed:
+        return 0;
+    }
+  }
+
   static Color accentColor(IslamicEventType type) {
     switch (type) {
       case IslamicEventType.eidAlFitr:
@@ -331,19 +364,40 @@ class IslamicDayUtils {
   // (e.g. mid-Ramadan). Returns null if nothing found within ~400 days.
   // =========================================================================
 
+  // Note: `isra` is deliberately excluded. It remains visible in the calendar as
+  // a historical note, but counting down to it on the home screen would present
+  // it as an anticipated occasion of worship, which is not intended.
   static const _countdownTypes = {
     IslamicEventType.eidAlFitr,
     IslamicEventType.eidAlAdha,
     IslamicEventType.ramadan,
     IslamicEventType.arafah,
     IslamicEventType.ashura,
-    IslamicEventType.isra,
     IslamicEventType.laylatAlQadr,
     IslamicEventType.dhulHijjah,
   };
 
+  // Memo for [nextImportantEvent]. The scan below walks up to 400 days and
+  // performs a Hijri conversion for each one, and it is called from
+  // _DashboardView.build(). Since PrayerBloc emits a new state every second for
+  // the countdown, that rebuild ran the whole scan once per second — several
+  // hundred conversions per second, purely to recompute an answer that only
+  // changes at midnight. The result depends solely on the calendar day, so one
+  // cached entry is enough.
+  static DateTime? _nextEventCacheKey;
+  static NextEventInfo? _nextEventCacheValue;
+
   static NextEventInfo? nextImportantEvent(DateTime date) {
     final start = DateTime(date.year, date.month, date.day);
+
+    if (_nextEventCacheKey == start) return _nextEventCacheValue;
+    final computed = _computeNextImportantEvent(start);
+    _nextEventCacheKey = start;
+    _nextEventCacheValue = computed;
+    return computed;
+  }
+
+  static NextEventInfo? _computeNextImportantEvent(DateTime start) {
 
     // If currently in a multi-day event (Ramadan, Dhul Hijjah), skip past it
     // by checking today's event and advancing past it.
@@ -388,4 +442,8 @@ class NextEventInfo {
     required this.date,
     required this.daysUntil,
   });
+
+  /// Whether this event is near enough to be worth surfacing on the dashboard.
+  /// See [IslamicDayUtils.countdownLeadDays] for the per-event windows.
+  bool get isNear => daysUntil <= IslamicDayUtils.countdownLeadDays(event.type);
 }

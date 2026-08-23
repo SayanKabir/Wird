@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:wird2/widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/glass_snackbar.dart';
@@ -18,16 +17,32 @@ import '../../../core/services/debug_service.dart';
 import '../../../core/services/weather_service.dart';
 import '../../../core/utils/moon_phase_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../widgets/common/page_header.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../../core/constants/durations.dart';
+import '../../../core/services/haptic_service.dart';
 
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  SettingsScreenState createState() => SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+/// Public so the dashboard can hold a [GlobalKey] to it and jump straight to a
+/// section — tapping the weather widget on the home screen calls
+/// [revealWeatherSection].
+class SettingsScreenState extends State<SettingsScreen> {
+  /// Anchor for [revealWeatherSection].
+  final GlobalKey _weatherSectionKey = GlobalKey();
+
+  /// Kept in step with the list in the Quran reader's settings sheet.
+  static const List<String> _quranTranslations = [
+    'Mustafa Khattab',
+    'Saheeh Intl',
+    'Yusuf Ali',
+  ];
   final StorageService _storageService = StorageService();
   final NotificationService _notificationService = NotificationService();
   final LocationService _locationService = LocationService();
@@ -44,6 +59,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _checkExactAlarmPermission();
   }
 
+  /// Scrolls the Weather & Background section into view and flashes it, so the
+  /// user can see which controls the tap brought them to.
+  Future<void> revealWeatherSection() async {
+    final target = _weatherSectionKey.currentContext;
+    if (target == null) return;
+    await Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 450),
+      curve: Curves.easeOutCubic,
+      // Sits the controls a little way down the viewport so the
+      // "WEATHER & BACKGROUND" header above them stays visible too.
+      alignment: 0.18,
+    );
+    if (!mounted) return;
+    setState(() => _highlightWeatherSection = true);
+    await Future.delayed(const Duration(milliseconds: 1400));
+    if (!mounted) return;
+    setState(() => _highlightWeatherSection = false);
+  }
+
+  bool _highlightWeatherSection = false;
+
   Future<void> _checkExactAlarmPermission() async {
     final canSchedule = await _notificationService.canScheduleExactAlarms();
     if (mounted) {
@@ -52,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveSettings(AppSettings settings) async {
-    HapticFeedback.lightImpact();
+    HapticService().light();
     await _storageService.saveSettings(settings);
     setState(() {
       _settings = settings;
@@ -69,7 +106,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (result.isSuccess && result.data != null) {
         final newSettings = _settings.copyWith(location: result.data);
         await _saveSettings(newSettings);
-        HapticFeedback.mediumImpact();
+        HapticService().medium();
       } else {
         if (mounted) _showError(result.error ?? 'Failed to update location');
       }
@@ -152,7 +189,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
 
     if (confirmed == true) {
-      HapticFeedback.mediumImpact();
+      HapticService().medium();
       // Logic to reset to defaults
     }
   }
@@ -182,16 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "PREFERENCES",
-                      style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.5))
-                          .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "Settings",
-                      style: AppTextStyles.h1(),
-                    ),
+                    const PageHeader(overline: "PREFERENCES", title: "Settings"),
                   ],
                 ),
               ),
@@ -205,8 +233,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            // ── PRAYER SETTINGS ──
-            _buildSectionHeader("PRAYER SETTINGS"),
+            // ── PRAYER TIMES ──
+            // Sections are ordered by how central they are to the app: how the
+            // times are calculated, then how you are told about them, then the
+            // optional prayers, then per-feature preferences, then support.
+            _buildSectionHeader("PRAYER TIMES"),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -242,7 +273,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       },
                     ),
                   ),
-                  _buildDivider(),
+                ]),
+              ),
+            ),
+
+            // ── OPTIONAL PRAYERS ──
+            // Split out of "Prayer Settings": these choose which voluntary
+            // prayers appear in your schedule, which is a different decision
+            // from how the obligatory times are calculated.
+            _buildSectionHeader("OPTIONAL PRAYERS"),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _buildGlassSection([
                   _buildSwitchRow(
                     title: "Tahajjud",
                     subtitle: "Last third of the night",
@@ -350,7 +393,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       );
                     }),
                   ],
-                  _buildDivider(),
+                ]),
+              ),
+            ),
+
+            // ── SUNNAH & INSIGHTS ──
+            // These two were previously appended to the end of NOTIFICATIONS,
+            // where they read as stray prayer-alert settings. They are their own
+            // concern — reminders about sunnahs and Islamic occasions — so they
+            // get their own section.
+            _buildSectionHeader("SUNNAH & INSIGHTS"),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _buildGlassSection([
                   _buildSwitchRow(
                     title: "Weekly Sunnah Reminder",
                     subtitle: "Every Monday at 9:00 AM",
@@ -387,35 +443,138 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
 
-            // ── APPEARANCE ──
-            _buildSectionHeader("APPEARANCE"),
+            // ── QURAN ──
+            // Mirrors the in-reader settings sheet so the same preferences are
+            // reachable without opening a surah first. Both write to the same
+            // AppSettings fields, so the two stay in sync.
+            _buildSectionHeader("QURAN"),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: _buildGlassSection([
+                  _buildSettingTile(
+                    title: "Arabic Script",
+                    value: _settings.quranSelectedScript.displayName,
+                    icon: Icons.font_download_rounded,
+                    onTap: () => _showSelectionDialog(
+                      title: 'Arabic Script',
+                      options: QuranScript.values.map((s) => s.displayName).toList(),
+                      currentValue: _settings.quranSelectedScript.displayName,
+                      onSelected: (index) {
+                        _saveSettings(_settings.copyWith(
+                          quranSelectedScript: QuranScript.values[index],
+                        ));
+                      },
+                    ),
+                  ),
+                  _buildDivider(),
+                  _buildSettingTile(
+                    title: "Translation",
+                    value: _settings.quranSelectedTranslation,
+                    icon: Icons.translate_rounded,
+                    onTap: () => _showSelectionDialog(
+                      title: 'Translation',
+                      options: _quranTranslations,
+                      currentValue: _settings.quranSelectedTranslation,
+                      onSelected: (index) {
+                        _saveSettings(_settings.copyWith(
+                          quranSelectedTranslation: _quranTranslations[index],
+                        ));
+                      },
+                    ),
+                  ),
+                  _buildDivider(),
+                  _buildSwitchRow(
+                    title: "Show Translation",
+                    subtitle: "Display meanings beneath each verse",
+                    value: _settings.quranShowTranslation,
+                    onChanged: (v) =>
+                        _saveSettings(_settings.copyWith(quranShowTranslation: v)),
+                  ),
+                  _buildDivider(),
+                  _buildSwitchRow(
+                    title: "Show Transliteration",
+                    subtitle: "Display pronunciation in Latin script",
+                    value: _settings.quranShowTransliteration,
+                    onChanged: (v) =>
+                        _saveSettings(_settings.copyWith(quranShowTransliteration: v)),
+                  ),
+                ]),
+              ),
+            ),
+
+            // ── WEATHER & BACKGROUND ──
+            // Tapping the weather widget on the dashboard scrolls here; see
+            // revealWeatherSection().
+            _buildSectionHeader("WEATHER & BACKGROUND"),
+            SliverToBoxAdapter(
+              child: Padding(
+                // Key sits on this box child, not on the SliverToBoxAdapter:
+                // Scrollable.ensureVisible resolves a box render object, and a
+                // sliver's context would not give it one.
+                key: _weatherSectionKey,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 350),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: _highlightWeatherSection
+                          ? AppColors.spiritualGold.withOpacity(0.55)
+                          : Colors.transparent,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: _buildGlassSection([
+                    _buildSwitchRow(
+                      title: "Show Weather",
+                      subtitle: "Display weather widget on dashboard",
+                      value: _settings.showWeatherWidget,
+                      onChanged: (val) {
+                        _saveSettings(_settings.copyWith(showWeatherWidget: val));
+                      },
+                    ),
+                    _buildDivider(),
+                    _buildSettingTile(
+                      title: "Background Theme",
+                      value: _getThemeDisplayName(_settings.weatherTheme),
+                      icon: Icons.wallpaper_rounded,
+                      onTap: () => _showSelectionDialog(
+                        title: 'Background Theme',
+                        options: WeatherTheme.values.map(_getThemeDisplayName).toList(),
+                        currentValue: _getThemeDisplayName(_settings.weatherTheme),
+                        onSelected: (index) {
+                          _saveSettings(_settings.copyWith(
+                              weatherTheme: WeatherTheme.values[index]
+                          ));
+                        },
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+
+            // ── FEEDBACK & MOTION ──
+            _buildSectionHeader("FEEDBACK & MOTION"),
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _buildGlassSection([
                   _buildSwitchRow(
-                    title: "Show Weather",
-                    subtitle: "Display weather widget on dashboard",
-                    value: _settings.showWeatherWidget,
-                    onChanged: (val) {
-                      _saveSettings(_settings.copyWith(showWeatherWidget: val));
-                    },
+                    title: "Haptic Feedback",
+                    subtitle: "Subtle vibration on taps and selections",
+                    value: _settings.hapticsEnabled,
+                    onChanged: (v) =>
+                        _saveSettings(_settings.copyWith(hapticsEnabled: v)),
                   ),
                   _buildDivider(),
-                  _buildSettingTile(
-                    title: "Background Theme",
-                    value: _getThemeDisplayName(_settings.weatherTheme),
-                    icon: Icons.wallpaper_rounded,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Background Theme',
-                      options: WeatherTheme.values.map(_getThemeDisplayName).toList(),
-                      currentValue: _getThemeDisplayName(_settings.weatherTheme),
-                      onSelected: (index) {
-                        _saveSettings(_settings.copyWith(
-                            weatherTheme: WeatherTheme.values[index]
-                        ));
-                      },
-                    ),
+                  _buildSwitchRow(
+                    title: "Reduce Motion",
+                    subtitle: "Minimise animation across the app",
+                    value: _settings.reduceMotion,
+                    onChanged: (v) =>
+                        _saveSettings(_settings.copyWith(reduceMotion: v)),
                   ),
                 ]),
               ),
@@ -566,38 +725,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required IconData icon,
     required VoidCallback onTap,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(
-            children: [
-              Icon(icon, color: Colors.white70, size: 22),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTextStyles.bodyLarge(),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
+    return Pressable(
+      onTap: onTap,
+      // Full-width rows only need a hint of movement; a deep press on something
+      // this large reads as the whole screen lurching.
+      pressedScale: 0.985,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, color: Colors.white70, size: 22),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.bodyLarge(),
+                  ),
+                  const SizedBox(height: 4),
+                  // The value animates when it changes, so picking a new option
+                  // in the dialog visibly lands on the row you came from.
+                  AnimatedSwitcher(
+                    duration: AppDurations.normal,
+                    child: Text(
                       value,
+                      key: ValueKey(value),
                       style: AppTextStyles.small(color: Colors.white54),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
+          ],
         ),
       ),
     );
@@ -646,24 +811,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     final color = isDestructive ? AppColors.statusMissed : Colors.white70;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: AppTextStyles.bodyLarge(color: color),
-                ),
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.985,
+      // Destructive actions get a firmer confirmation than an ordinary tap.
+      haptic: isDestructive ? PressableHaptic.medium : PressableHaptic.light,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: AppTextStyles.bodyLarge(color: color),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -741,7 +906,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: Colors.transparent,
                           child: InkWell(
                             onTap: () {
-                              HapticFeedback.selectionClick();
+                              HapticService().selection();
                               onSelected(index);
                               Navigator.pop(context);
                             },

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../models/sunnah.dart';
 import '../../../widgets/common/glass_container.dart';
+import '../../../core/services/haptic_service.dart';
 
 class SunnahCategoryBlock extends StatelessWidget {
   final String category;
@@ -52,7 +52,7 @@ class SunnahCategoryBlock extends StatelessWidget {
             blur: 0,
             borderRadius: 16,
             onTap: () {
-              HapticFeedback.selectionClick();
+              HapticService().selection();
               onToggle();
             },
             padding: const EdgeInsets.fromLTRB(12, 11, 10, 11),

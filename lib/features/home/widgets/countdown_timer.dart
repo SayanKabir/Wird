@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
@@ -70,22 +71,87 @@ class CountdownTimer extends StatelessWidget {
 
 /// Large, typography-based countdown for Home Screen
 /// No containers, just clean, large text.
-class HeroCountdown extends StatelessWidget {
-  final Duration duration;
+/// The seconds display drives itself.
+///
+/// It used to be a StatelessWidget fed a pre-computed [Duration], which meant
+/// the only way to advance it was to rebuild whatever built it. PrayerBloc did
+/// that by emitting a fresh state every second, and because the BlocBuilder
+/// consuming that state sits above CelestialBackground, the Scaffold and the
+/// whole PageView, one clock tick rebuilt the entire home tree — and forced
+/// every visible BackdropFilter to re-blur — once a second, forever.
+///
+/// Owning a [Timer] here keeps that per-second rebuild scoped to these few Text
+/// widgets. Pass [targetTime]; the remaining duration is derived internally.
+class HeroCountdown extends StatefulWidget {
+  /// The moment being counted down to.
+  final DateTime targetTime;
   final String prayerName;
   final bool isPrayerActive;
   final bool reduceMotion;
 
   const HeroCountdown({
     super.key,
-    required this.duration,
+    required this.targetTime,
     required this.prayerName,
     required this.isPrayerActive,
     this.reduceMotion = false,
   });
 
   @override
+  State<HeroCountdown> createState() => _HeroCountdownState();
+}
+
+class _HeroCountdownState extends State<HeroCountdown>
+    with WidgetsBindingObserver {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startTicker();
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  /// The clock only needs to tick while it is on screen. Left running, it kept
+  /// waking once a second behind a locked screen to re-render digits nobody
+  /// could see. The displayed value is derived from [HeroCountdown.targetTime]
+  /// at build time, so it is correct immediately on resume with no catch-up.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (!mounted) return;
+    if (state == AppLifecycleState.resumed) {
+      _startTicker();
+      setState(() {}); // redraw at once rather than after the next tick
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  Duration get _remaining {
+    final left = widget.targetTime.difference(DateTime.now());
+    return left.isNegative ? Duration.zero : left;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final duration = _remaining;
+    final isPrayerActive = widget.isPrayerActive;
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
     final seconds = duration.inSeconds.remainder(60);

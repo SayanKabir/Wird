@@ -721,11 +721,32 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
 
   void _startCountdownTimer() {
     _countdownTimer?.cancel();
-    
+
     _countdownTimer = Timer.periodic(
       const Duration(seconds: 1),
       (_) => add(UpdateCountdown()),
     );
+  }
+
+  /// Stops the per-second countdown work.
+  ///
+  /// Called when the app leaves the foreground (screen lock, app switch).
+  /// Without this the timer kept firing once a second forever while the phone
+  /// was locked — recomputing prayer statuses and periodically writing the
+  /// prayer log to Hive — for a UI nobody could see. Nothing here needs to run
+  /// in the background: scheduled notifications are handled by the OS alarm
+  /// manager, not by this timer.
+  void pauseCountdown() {
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+  }
+
+  /// Restarts the countdown and immediately recomputes, so the UI is correct
+  /// the instant the app is visible again rather than up to a second stale.
+  void resumeCountdown() {
+    if (_countdownTimer != null) return; // already running
+    _startCountdownTimer();
+    add(UpdateCountdown());
   }
 
   Future<void> _updateStreakData(

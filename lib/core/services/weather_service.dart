@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-/// Weather conditions mapped from OpenWeatherMap
+/// Weather conditions mapped from WMO weather codes
 enum WeatherCondition {
   clear,
   cloudy,
@@ -18,7 +18,7 @@ class WeatherData {
   final WeatherCondition condition;
   final double temperature; // Celsius
   final int cloudCoverage; // 0-100%
-  final double windSpeed; // m/s
+  final double windSpeed; // km/h
   final DateTime fetchedAt;
 
   const WeatherData({
@@ -34,7 +34,8 @@ class WeatherData {
 }
 
 /// Service to fetch current weather conditions
-/// Uses OpenWeatherMap free tier (1000 calls/day)
+/// Uses Open-Meteo free API (no API key required)
+/// https://open-meteo.com/en/docs
 class WeatherService {
   static WeatherService? _instance;
   factory WeatherService() {
@@ -43,10 +44,7 @@ class WeatherService {
   }
   WeatherService._internal();
 
-  // OpenWeatherMap free API key — register at openweathermap.org
-  // Pass via --dart-define=OPENWEATHER_API_KEY=your_key
-  static const String _apiKey = String.fromEnvironment('OPENWEATHER_API_KEY');
-  static const String _baseUrl = 'https://api.openweathermap.org/data/2.5/weather';
+  static const String _baseUrl = 'https://api.open-meteo.com/v1/forecast';
 
   WeatherData? _cachedWeather;
 
@@ -60,19 +58,13 @@ class WeatherService {
       return _cachedWeather!;
     }
 
-    // If no API key configured, return clear weather
-    if (_apiKey.isEmpty) {
-      debugPrint('[Weather] No API key configured, defaulting to clear');
-      return _fallbackWeather();
-    }
-
     try {
       final url = Uri.parse(
-        '$_baseUrl?lat=$latitude&lon=$longitude&units=metric&appid=$_apiKey',
+        '$_baseUrl?latitude=$latitude&longitude=$longitude'
+        '&current=temperature_2m,weather_code,cloud_cover,wind_speed_10m',
       );
-      
-      // Log URL with masked key for debugging
-      debugPrint('[Weather] Requesting: $_baseUrl?lat=$latitude&lon=$longitude&...&appid=${_apiKey.substring(0, 4)}...');
+
+      debugPrint('[Weather] Requesting: $url');
 
       final response = await http.get(url).timeout(
         const Duration(seconds: 10),
@@ -96,16 +88,25 @@ class WeatherService {
     }
   }
 
-  /// Parse OpenWeatherMap response (API 2.5)
+  /// Parse Open-Meteo response
+  /// Response format:
+  /// {
+  ///   "current": {
+  ///     "temperature_2m": 25.9,
+  ///     "weather_code": 2,
+  ///     "cloud_cover": 66,
+  ///     "wind_speed_10m": 3.6
+  ///   }
+  /// }
   WeatherData _parseWeather(Map<String, dynamic> data) {
-    // API 2.5 structure: { weather: [...], main: { temp: ... }, clouds: { all: ... }, wind: { speed: ... } }
-    final weatherId = data['weather']?[0]?['id'] as int? ?? 800;
-    final temp = (data['main']?['temp'] as num?)?.toDouble() ?? 20.0;
-    final clouds = data['clouds']?['all'] as int? ?? 0;
-    final wind = (data['wind']?['speed'] as num?)?.toDouble() ?? 0.0;
+    final current = data['current'] as Map<String, dynamic>? ?? {};
+    final weatherCode = (current['weather_code'] as num?)?.toInt() ?? 0;
+    final temp = (current['temperature_2m'] as num?)?.toDouble() ?? 20.0;
+    final clouds = (current['cloud_cover'] as num?)?.toInt() ?? 0;
+    final wind = (current['wind_speed_10m'] as num?)?.toDouble() ?? 0.0;
 
     return WeatherData(
-      condition: _mapCondition(weatherId),
+      condition: _mapWmoCodeToCondition(weatherCode),
       temperature: temp,
       cloudCoverage: clouds,
       windSpeed: wind,
@@ -113,16 +114,32 @@ class WeatherService {
     );
   }
 
-  /// Map OWM weather ID to our condition enum
-  /// See: https://openweathermap.org/weather-conditions
-  WeatherCondition _mapCondition(int id) {
-    if (id >= 200 && id < 300) return WeatherCondition.thunderstorm;
-    if (id >= 300 && id < 400) return WeatherCondition.drizzle;
-    if (id >= 500 && id < 600) return WeatherCondition.rain;
-    if (id >= 600 && id < 700) return WeatherCondition.snow;
-    if (id >= 700 && id < 800) return WeatherCondition.fog;
-    if (id == 800) return WeatherCondition.clear;
-    if (id > 800) return WeatherCondition.cloudy;
+  /// Map WMO Weather interpretation codes to our condition enum
+  /// See: https://open-meteo.com/en/docs
+  /// WMO Code | Description
+  /// 0        | Clear sky
+  /// 1, 2, 3  | Mainly clear, partly cloudy, overcast
+  /// 45, 48   | Fog, depositing rime fog
+  /// 51, 53, 55 | Drizzle: light, moderate, dense
+  /// 56, 57   | Freezing drizzle
+  /// 61, 63, 65 | Rain: slight, moderate, heavy
+  /// 66, 67   | Freezing rain
+  /// 71, 73, 75 | Snow fall: slight, moderate, heavy
+  /// 77       | Snow grains
+  /// 80, 81, 82 | Rain showers
+  /// 85, 86   | Snow showers
+  /// 95       | Thunderstorm
+  /// 96, 99   | Thunderstorm with hail
+  WeatherCondition _mapWmoCodeToCondition(int code) {
+    if (code == 0 || code == 1) return WeatherCondition.clear;
+    if (code == 2 || code == 3) return WeatherCondition.cloudy;
+    if (code == 45 || code == 48) return WeatherCondition.fog;
+    if (code >= 51 && code <= 57) return WeatherCondition.drizzle;
+    if (code >= 61 && code <= 67) return WeatherCondition.rain;
+    if (code >= 71 && code <= 77) return WeatherCondition.snow;
+    if (code >= 80 && code <= 82) return WeatherCondition.rain;
+    if (code >= 85 && code <= 86) return WeatherCondition.snow;
+    if (code >= 95) return WeatherCondition.thunderstorm;
     return WeatherCondition.clear;
   }
 
