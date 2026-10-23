@@ -43,12 +43,13 @@ class AppTextStyles {
       );
 
   static TextStyle? _amiriBase;
-  static TextStyle? _amiriQuranBase;
-  static TextStyle? _lateefBase;
 
   static TextStyle _amiri() => _amiriBase ??= GoogleFonts.amiri();
-  static TextStyle _amiriQuran() => _amiriQuranBase ??= GoogleFonts.amiriQuran();
-  static TextStyle _lateef() => _lateefBase ??= GoogleFonts.lateef();
+
+  // Bundled mushaf fonts (see pubspec.yaml). Each is drawn for the matching
+  // Quran.com text, so waqf marks and ligatures render as in a printed mushaf.
+  static const TextStyle _uthmanicHafs = TextStyle(fontFamily: 'UthmanicHafs');
+  static const TextStyle _indoPakNastaleeq = TextStyle(fontFamily: 'IndoPakNastaleeq');
 
   // ============================================
   // HEADING STYLES
@@ -179,25 +180,24 @@ class AppTextStyles {
 
   /// Arabic text.
   ///
-  /// Pass [script] when rendering Quran verses so the correct mushaf face is
-  /// used: Lateef for Indo-Pak (its letterforms and diacritic placement follow
-  /// the Indo-Pak convention) and Amiri Quran for Uthmani. Amiri Quran is the
-  /// Quran-specific cut of Amiri — it carries the Uthmani orthography marks
-  /// (small alif, waqf signs, hamzat al-wasl) that plain Amiri renders poorly.
+  /// Pass [script] when rendering Quran verses so the matching mushaf font is
+  /// used: IndoPak Nastaleeq for Indo-Pak (the South Asian mushaf hand, with
+  /// its own waqf marks) and KFGQPC Uthmanic Hafs for Uthmani (the Madinah
+  /// mushaf). Both are bundled and drawn for Quran.com's text of that script.
   ///
   /// Leave [script] null for ordinary Arabic UI text — prayer names, dhikr,
   /// duas — which keeps using plain Amiri.
   static TextStyle arabic({Color? color, double? size, QuranScript? script}) {
     switch (script) {
       case QuranScript.indopak:
-        return _lateef().copyWith(
+        return _indoPakNastaleeq.copyWith(
           fontSize: size ?? 18,
           fontWeight: FontWeight.w400,
           color: color ?? Colors.white.withOpacity(0.8),
           height: 1.5,
         );
       case QuranScript.uthmani:
-        return _amiriQuran().copyWith(
+        return _uthmanicHafs.copyWith(
           fontSize: size ?? 18,
           fontWeight: FontWeight.w400,
           color: color ?? Colors.white.withOpacity(0.8),
@@ -217,14 +217,14 @@ class AppTextStyles {
   static TextStyle arabicLarge({Color? color, QuranScript? script}) {
     switch (script) {
       case QuranScript.indopak:
-        return _lateef().copyWith(
+        return _indoPakNastaleeq.copyWith(
           fontSize: 24,
           fontWeight: FontWeight.w400,
           color: color ?? Colors.white,
           height: 1.4,
         );
       case QuranScript.uthmani:
-        return _amiriQuran().copyWith(
+        return _uthmanicHafs.copyWith(
           fontSize: 24,
           fontWeight: FontWeight.w400,
           color: color ?? Colors.white,

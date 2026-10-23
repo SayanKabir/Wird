@@ -77,6 +77,16 @@ flutter:
     - assets/
     - assets/quran/
 
+  # Mushaf fonts for the Quran reader, each drawn for the matching Quran.com
+  # text (text_uthmani / text_indopak), including its waqf marks.
+  fonts:
+    - family: UthmanicHafs
+      fonts:
+        - asset: assets/fonts/UthmanicHafs.ttf
+    - family: IndoPakNastaleeq
+      fonts:
+        - asset: assets/fonts/IndoPakNastaleeq.ttf
+
 # -----------------------------------------------------------------------------
 # APP ICON CONFIGURATION
 # -----------------------------------------------------------------------------

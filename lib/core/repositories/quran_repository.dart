@@ -131,7 +131,7 @@ class QuranRepository {
           surahId: surahId,
           verseNumber: i + 1,
           verseKey: '$surahId:${i + 1}',
-          textUthmani: arabic[i],
+          textUthmani: _displayableArabic(arabic[i]),
           page: 0,
           juz: QuranMeta.juzOf(surahId, i + 1),
           translationText: translation != null && i < translation.length ? translation[i] : null,
@@ -151,6 +151,14 @@ class QuranRepository {
       translationAvailable: translationId == null || translation != null,
     );
   }
+
+  /// Drops stray byte-order marks and collapses runs of spaces. The Indo-Pak
+  /// text's waqf marks live in the Private Use Area and are kept: the
+  /// bundled IndoPak Nastaleeq font draws them.
+  static String _displayableArabic(String text) => text
+      .replaceAll('\uFEFF', '')
+      .replaceAll(RegExp(r'[ \u2002\u2003]{2,}'), ' ')
+      .trim();
 
   Future<List<String>> _arabicFor(int surahId, QuranScript script) async {
     final full = await _loadFull(_arabicKey(script));
