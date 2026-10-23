@@ -131,13 +131,15 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       quranSelectedScript:
           fields[22] == null ? QuranScript.indopak : fields[22] as QuranScript,
       hapticsEnabled: fields[23] == null ? true : fields[23] as bool,
+      quranTransliterationScript:
+          fields[24] == null ? 'latin' : fields[24] as String,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(24)
+      ..writeByte(25)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -185,7 +187,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(22)
       ..write(obj.quranSelectedScript)
       ..writeByte(23)
-      ..write(obj.hapticsEnabled);
+      ..write(obj.hapticsEnabled)
+      ..writeByte(24)
+      ..write(obj.quranTransliterationScript);
   }
 
   @override

@@ -21,6 +21,12 @@ import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/location_off_prompt.dart';
+import '../../../core/quran/quran_translations.dart';
+import '../../../core/quran/transliterator.dart';
+import '../../../core/repositories/quran_repository.dart';
+import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 
 class SettingsScreen extends StatefulWidget {
@@ -37,12 +43,6 @@ class SettingsScreenState extends State<SettingsScreen> {
   /// Anchor for [revealWeatherSection].
   final GlobalKey _weatherSectionKey = GlobalKey();
 
-  /// Kept in step with the list in the Quran reader's settings sheet.
-  static const List<String> _quranTranslations = [
-    'Mustafa Khattab',
-    'Saheeh Intl',
-    'Yusuf Ali',
-  ];
   final StorageService _storageService = StorageService();
   final NotificationService _notificationService = NotificationService();
   final LocationService _locationService = LocationService();
@@ -57,6 +57,22 @@ class SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _settings = _storageService.getSettings();
     _checkExactAlarmPermission();
+    // Location can be updated in the background (auto-detect on resume).
+    // Without this, the copy held here would go stale and the next toggle
+    // would save the old location back over the new one.
+    _settingsListenable = _storageService.getSettingsListenable()..addListener(_onStoredSettingsChanged);
+  }
+
+  late final ValueListenable<Box<AppSettings>> _settingsListenable;
+
+  void _onStoredSettingsChanged() {
+    if (mounted) setState(() => _settings = _storageService.getSettings());
+  }
+
+  @override
+  void dispose() {
+    _settingsListenable.removeListener(_onStoredSettingsChanged);
+    super.dispose();
   }
 
   /// Scrolls the Weather & Background section into view and flashes it, so the
@@ -107,13 +123,15 @@ class SettingsScreenState extends State<SettingsScreen> {
         final newSettings = _settings.copyWith(location: result.data);
         await _saveSettings(newSettings);
         HapticService().medium();
+      } else if (result.serviceDisabled) {
+        if (mounted) await showLocationOffPrompt(context);
       } else {
         if (mounted) _showError(result.error ?? 'Failed to update location');
       }
     } catch (e) {
       if (mounted) _showError('Error updating location: $e');
     } finally {
-      setState(() => _isLoadingLocation = false);
+      if (mounted) setState(() => _isLoadingLocation = false);
     }
   }
 
@@ -470,15 +488,35 @@ class SettingsScreenState extends State<SettingsScreen> {
                   _buildDivider(),
                   _buildSettingTile(
                     title: "Translation",
-                    value: _settings.quranSelectedTranslation,
+                    value: QuranTranslations.resolve(_settings.quranSelectedTranslation).name,
                     icon: Icons.translate_rounded,
                     onTap: () => _showSelectionDialog(
                       title: 'Translation',
-                      options: _quranTranslations,
-                      currentValue: _settings.quranSelectedTranslation,
+                      options: [for (final t in QuranTranslations.all) '${t.language} · ${t.name}'],
+                      currentValue: () {
+                        final t = QuranTranslations.resolve(_settings.quranSelectedTranslation);
+                        return '${t.language} · ${t.name}';
+                      }(),
+                      onSelected: (index) {
+                        final t = QuranTranslations.all[index];
+                        _saveSettings(_settings.copyWith(quranSelectedTranslation: '${t.id}'));
+                        // Save the whole translation for offline reading.
+                        context.read<QuranRepository>().downloadTranslation(t.id).catchError((_) {});
+                      },
+                    ),
+                  ),
+                  _buildDivider(),
+                  _buildSettingTile(
+                    title: "Transliteration",
+                    value: TransliterationScript.fromKey(_settings.quranTransliterationScript).label,
+                    icon: Icons.text_fields_rounded,
+                    onTap: () => _showSelectionDialog(
+                      title: 'Transliteration',
+                      options: [for (final t in TransliterationScript.values) t.label],
+                      currentValue: TransliterationScript.fromKey(_settings.quranTransliterationScript).label,
                       onSelected: (index) {
                         _saveSettings(_settings.copyWith(
-                          quranSelectedTranslation: _quranTranslations[index],
+                          quranTransliterationScript: TransliterationScript.values[index].key,
                         ));
                       },
                     ),
@@ -494,7 +532,7 @@ class SettingsScreenState extends State<SettingsScreen> {
                   _buildDivider(),
                   _buildSwitchRow(
                     title: "Show Transliteration",
-                    subtitle: "Display pronunciation in Latin script",
+                    subtitle: "Pronunciation guide beneath each verse",
                     value: _settings.quranShowTransliteration,
                     onChanged: (v) =>
                         _saveSettings(_settings.copyWith(quranShowTransliteration: v)),

@@ -75,6 +75,7 @@ flutter:
   # Ensure your assets folder is declared so the app can use the image internally too
   assets:
     - assets/
+    - assets/quran/
 
 # -----------------------------------------------------------------------------
 # APP ICON CONFIGURATION

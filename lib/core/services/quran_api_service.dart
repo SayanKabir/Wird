@@ -1,190 +1,155 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../../models/surah.dart';
-import '../../models/verse.dart';
+import '../../models/settings.dart';
+import '../quran/quran_translations.dart';
 
-/// Service for interacting with the Quran.com API (v4)
+/// One verse match from Quran.com's full-text search.
+class QuranSearchHit {
+  final String verseKey;
+  final String arabic;
+
+  /// Matched translation text with `<em>` highlights stripped.
+  final String? translation;
+
+  const QuranSearchHit({required this.verseKey, required this.arabic, this.translation});
+
+  int get surah => int.parse(verseKey.split(':')[0]);
+  int get verse => int.parse(verseKey.split(':')[1]);
+}
+
+class QuranSearchPage {
+  final int totalResults;
+  final int totalPages;
+  final List<QuranSearchHit> results;
+
+  const QuranSearchPage({required this.totalResults, required this.totalPages, required this.results});
+}
+
+/// Thin client for the Quran.com API (v4).
+///
+/// Every call retries with backoff, so a flaky connection usually still gets
+/// through; callers persist what comes back so each piece is fetched once.
 class QuranApiService {
   static const String _baseUrl = 'https://api.quran.com/api/v4';
-
-  // Saheeh International (default translation)
-  static const int defaultTranslationId = 20;
-  // English transliteration resource
-  static const int transliterationId = 57;
+  static const String _cdnUrl = 'https://cdn.jsdelivr.net/gh/fawazahmed0/quran-api@1/editions';
 
   final http.Client _client;
 
   QuranApiService({http.Client? client}) : _client = client ?? http.Client();
 
-  /// Fetch all 114 surahs
-  Future<List<Surah>> getAllSurahs() async {
-    try {
-      final response = await _client.get(
-        Uri.parse('$_baseUrl/chapters?language=en'),
-      );
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed to load surahs: ${response.statusCode}');
-      }
-
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final chapters = data['chapters'] as List<dynamic>;
-
-      return chapters
-          .map((ch) => Surah.fromJson(ch as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      debugPrint('[QuranApiService] getAllSurahs error: $e');
-      rethrow;
-    }
+  /// Arabic text of every ayah in a surah, in verse order.
+  Future<List<String>> fetchChapterArabic(int surahId, QuranScript script) async {
+    final data = await _getJson('/quran/verses/${script.cacheKey}?chapter_number=$surahId');
+    return _arabicList(data, script);
   }
 
-  /// Fetch ALL verses for a surah with translations + transliteration merged in.
-  ///
-  /// The v4 API requires separate calls:
-  /// 1. `/verses/by_chapter/{id}` for Arabic text
-  /// 2. `/quran/translations/{translationId}?chapter_number={id}` for English
-  /// 3. `/quran/translations/{transliterationId}?chapter_number={id}` for transliteration
-  ///
-  /// We merge them by verse order (all return in verse_number order).
-  Future<List<Verse>> getAllVersesBySurah(
-    int surahId, {
-    int translationId = defaultTranslationId,
-    String scriptFieldName = 'text_uthmani',
+  /// Arabic text of the whole Quran (6236 ayahs), in Mushaf order.
+  Future<List<String>> fetchAllArabic(QuranScript script) async {
+    final data = await _getJson('/quran/verses/${script.cacheKey}', timeout: const Duration(seconds: 90));
+    return _arabicList(data, script);
+  }
+
+  /// One translation for a surah, in verse order, with footnote markup removed.
+  Future<List<String>> fetchChapterTranslation(int surahId, int translationId) async {
+    final edition = QuranTranslations.byId(translationId).cdnEdition;
+    if (edition != null) {
+      final data = await _getJson('/$edition/$surahId.min.json', baseUrl: _cdnUrl);
+      return _cdnList(data['chapter']);
+    }
+    final data = await _getJson('/quran/translations/$translationId?chapter_number=$surahId');
+    return _translationList(data);
+  }
+
+  /// One translation for the whole Quran (6236 ayahs), in Mushaf order.
+  Future<List<String>> fetchAllTranslation(int translationId) async {
+    final edition = QuranTranslations.byId(translationId).cdnEdition;
+    if (edition != null) {
+      final data = await _getJson('/$edition.min.json', baseUrl: _cdnUrl, timeout: const Duration(seconds: 90));
+      return _cdnList(data['quran']);
+    }
+    final data = await _getJson('/quran/translations/$translationId', timeout: const Duration(seconds: 90));
+    return _translationList(data);
+  }
+
+  /// Full-text search across the Arabic and translations.
+  Future<QuranSearchPage> search(String query, {int page = 1, int size = 20}) async {
+    final q = Uri.encodeQueryComponent(query);
+    final data = await _getJson('/search?q=$q&size=$size&page=$page', retries: 1);
+    final search = data['search'] as Map<String, dynamic>? ?? const {};
+    final results = (search['results'] as List<dynamic>? ?? const []).map((r) {
+      final map = r as Map<String, dynamic>;
+      final translations = map['translations'] as List<dynamic>? ?? const [];
+      return QuranSearchHit(
+        verseKey: map['verse_key'] as String,
+        arabic: (map['text'] as String? ?? '').trim(),
+        translation: translations.isEmpty
+            ? null
+            : cleanTranslation((translations.first as Map<String, dynamic>)['text'] as String? ?? ''),
+      );
+    }).toList();
+    return QuranSearchPage(
+      totalResults: search['total_results'] as int? ?? results.length,
+      totalPages: search['total_pages'] as int? ?? 1,
+      results: results,
+    );
+  }
+
+  /// Strips the HTML Quran.com puts in translations: footnote markers
+  /// (`<sup foot_note=…>1</sup>`), search highlights and any other tags.
+  static String cleanTranslation(String html) {
+    return html
+        .replaceAll(RegExp(r'<sup[^>]*>.*?</sup>'), '')
+        .replaceAll(RegExp(r'<[^>]*>'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  List<String> _arabicList(Map<String, dynamic> data, QuranScript script) {
+    final verses = data['verses'] as List<dynamic>? ?? const [];
+    if (verses.isEmpty) throw Exception('No verses returned');
+    return verses.map((v) => ((v as Map<String, dynamic>)[script.apiFieldName] as String? ?? '').trim()).toList();
+  }
+
+  /// fawazahmed0 editions: `[{chapter, verse, text}, …]` in Mushaf order.
+  List<String> _cdnList(Object? list) {
+    final verses = list as List<dynamic>? ?? const [];
+    if (verses.isEmpty) throw Exception('No translation returned');
+    return verses.map((v) => ((v as Map<String, dynamic>)['text'] as String? ?? '').trim()).toList();
+  }
+
+  List<String> _translationList(Map<String, dynamic> data) {
+    final list = data['translations'] as List<dynamic>? ?? const [];
+    if (list.isEmpty) throw Exception('No translation returned');
+    return list.map((t) => cleanTranslation((t as Map<String, dynamic>)['text'] as String? ?? '')).toList();
+  }
+
+  Future<Map<String, dynamic>> _getJson(
+    String path, {
+    String baseUrl = _baseUrl,
+    Duration timeout = const Duration(seconds: 20),
+    int retries = 3,
   }) async {
-    try {
-      // Start all three fetches in parallel
-      final versesFuture = _fetchAllVersePages(surahId, scriptFieldName: scriptFieldName);
-      final translationsFuture = _fetchTranslationData(surahId, translationId);
-      final translitFuture = _fetchTranslationData(surahId, transliterationId);
-
-      final verseJsonList = await versesFuture;
-      final translationsList = await translationsFuture;
-      final translitList = await translitFuture;
-
-      // Get translation resource name
-      String? translationName;
-      if (translationsList.isNotEmpty) {
-        translationName = translationsList[0]['resource_name'] as String?;
+    Object? lastError;
+    for (var attempt = 0; attempt < retries; attempt++) {
+      if (attempt > 0) {
+        await Future.delayed(Duration(milliseconds: 600 * attempt * attempt));
       }
-
-      // Merge: pair each verse with its translation + transliteration by index
-      final verses = <Verse>[];
-      for (var i = 0; i < verseJsonList.length; i++) {
-        final vJson = verseJsonList[i];
-
-        // Add translation data
-        if (i < translationsList.length) {
-          final tData = translationsList[i];
-          vJson['translations'] = [
-            {
-              'text': tData['text'] ?? '',
-              'resource_name': translationName ?? 'Translation',
-            }
-          ];
-        }
-
-        // Add transliteration data
-        if (i < translitList.length) {
-          final litData = translitList[i];
-          vJson['transliteration_text'] = litData['text'] ?? '';
-        }
-
-        verses.add(Verse.fromJson(vJson, overrideSurahId: surahId, scriptFieldName: scriptFieldName));
-      }
-
-      return verses;
-    } catch (e) {
-      debugPrint('[QuranApiService] getAllVersesBySurah($surahId) error: $e');
-      rethrow;
-    }
-  }
-
-  /// Fetch all verse pages (handles pagination)
-  Future<List<Map<String, dynamic>>> _fetchAllVersePages(int surahId, {String scriptFieldName = 'text_uthmani'}) async {
-    final allVerses = <Map<String, dynamic>>[];
-    int page = 1;
-    bool hasMore = true;
-
-    while (hasMore) {
-      final uri = Uri.parse(
-        '$_baseUrl/verses/by_chapter/$surahId'
-        '?language=en'
-        '&fields=$scriptFieldName,verse_key,verse_number,page_number,juz_number'
-        '&page=$page'
-        '&per_page=50',
-      );
-
-      final response = await _client.get(uri);
-
-      if (response.statusCode != 200) {
-        throw Exception('Failed to load verses page $page: ${response.statusCode}');
-      }
-
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final verses = data['verses'] as List<dynamic>;
-      final pagination = data['pagination'] as Map<String, dynamic>?;
-
-      allVerses.addAll(
-        verses.map((v) => v as Map<String, dynamic>),
-      );
-
-      final totalPages = pagination?['total_pages'] as int? ?? 1;
-      hasMore = page < totalPages;
-      page++;
-    }
-
-    return allVerses;
-  }
-
-  /// Fetch translation/transliteration data for a chapter
-  Future<List<Map<String, dynamic>>> _fetchTranslationData(
-    int surahId,
-    int resourceId,
-  ) async {
-    try {
-      // Get resource name
-      String? resourceName;
       try {
-        final infoUri = Uri.parse('$_baseUrl/resources/translations/$resourceId');
-        final infoResponse = await _client.get(infoUri);
-        if (infoResponse.statusCode == 200) {
-          final infoData = json.decode(infoResponse.body) as Map<String, dynamic>;
-          final translation = infoData['translation'] as Map<String, dynamic>?;
-          resourceName = translation?['name'] as String? ??
-              translation?['author_name'] as String?;
+        final response = await _client.get(Uri.parse('$baseUrl$path')).timeout(timeout);
+        if (response.statusCode == 200) {
+          return json.decode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         }
-      } catch (_) {
-        // Non-critical
+        lastError = Exception('HTTP ${response.statusCode}');
+        // Client errors won't fix themselves on retry.
+        if (response.statusCode >= 400 && response.statusCode < 500) break;
+      } catch (e) {
+        lastError = e;
       }
-
-      final uri = Uri.parse(
-        '$_baseUrl/quran/translations/$resourceId'
-        '?chapter_number=$surahId',
-      );
-
-      final response = await _client.get(uri);
-
-      if (response.statusCode != 200) {
-        debugPrint('[QuranApiService] resource $resourceId fetch failed: ${response.statusCode}');
-        return [];
-      }
-
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final translations = data['translations'] as List<dynamic>? ?? [];
-
-      return translations.map((t) {
-        final map = t as Map<String, dynamic>;
-        if (resourceName != null) {
-          map['resource_name'] = resourceName;
-        }
-        return map;
-      }).toList();
-    } catch (e) {
-      debugPrint('[QuranApiService] _fetchTranslationData($resourceId) error: $e');
-      return []; // Non-fatal: return empty so verses still load
     }
+    debugPrint('[QuranApiService] $path failed: $lastError');
+    throw lastError ?? Exception('Request failed');
   }
 
   void dispose() {

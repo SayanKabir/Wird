@@ -453,6 +453,10 @@ class AppSettings extends Equatable {
   @HiveField(23, defaultValue: true)
   final bool hapticsEnabled;
 
+  /// Script for Quran transliteration: 'latin', 'devanagari' or 'bengali'.
+  @HiveField(24, defaultValue: 'latin')
+  final String quranTransliterationScript;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -478,6 +482,7 @@ class AppSettings extends Equatable {
     this.quranSelectedTranslation = 'Saheeh Intl',
     this.quranSelectedScript = QuranScript.indopak,
     this.hapticsEnabled = true,
+    this.quranTransliterationScript = 'latin',
   });
 
   /// Default settings
@@ -511,6 +516,7 @@ class AppSettings extends Equatable {
     String? quranSelectedTranslation,
     QuranScript? quranSelectedScript,
     bool? hapticsEnabled,
+    String? quranTransliterationScript,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -537,6 +543,7 @@ class AppSettings extends Equatable {
       quranSelectedTranslation: quranSelectedTranslation ?? this.quranSelectedTranslation,
       quranSelectedScript: quranSelectedScript ?? this.quranSelectedScript,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
+      quranTransliterationScript: quranTransliterationScript ?? this.quranTransliterationScript,
     );
   }
 
@@ -565,6 +572,7 @@ class AppSettings extends Equatable {
     quranSelectedTranslation,
     quranSelectedScript,
     hapticsEnabled,
+    quranTransliterationScript,
   ];
 }
 
