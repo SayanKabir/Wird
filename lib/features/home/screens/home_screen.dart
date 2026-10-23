@@ -30,7 +30,7 @@ import '../../../core/repositories/sunnah_repository.dart';
 import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/pressable.dart';
-import '../../tasbih/screens/tasbih_screen.dart';
+import '../../tasbih/screens/session_screen.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 
@@ -1273,7 +1273,7 @@ class _CurrentPrayerSection extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => const TasbihScreen(initialFlow: 'after_prayer'),
+                              builder: (_) => const SessionScreen(sessionId: 'after_prayer'),
                             ),
                           );
                         },

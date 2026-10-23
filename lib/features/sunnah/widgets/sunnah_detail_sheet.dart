@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
+import '../../../core/dhikr/dhikr_catalog.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../models/sunnah.dart';
 import '../../../widgets/common/pressable.dart';
@@ -197,7 +198,7 @@ class _ArabicBlock extends StatelessWidget {
   }
 }
 
-/// "In my practice", "Done today" and, for dhikr, "Count in Tasbih" — read
+/// "In my practice", "Done today" and, for dhikr, a link into Dhikr — read
 /// live from the bloc so they reflect taps immediately.
 class _Controls extends StatelessWidget {
   final Sunnah sunnah;
@@ -252,7 +253,9 @@ class _Controls extends StatelessWidget {
             ),
             if (SunnahFormat.hasTasbih(sunnah))
               _ControlRow(
-                label: 'Count in Tasbih',
+                label: DhikrCatalog.sessionForSunnah(tasbihId: sunnah.tasbihId, title: sunnah.title) != null
+                    ? 'Recite with the guide'
+                    : 'Count in Tasbih',
                 onTap: () {
                   Navigator.of(context).pop();
                   SunnahFormat.openTasbih(context, sunnah);

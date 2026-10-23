@@ -3,11 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
+import '../../../core/dhikr/dhikr_catalog.dart';
 import '../../../models/sunnah.dart';
 import '../../../models/sunnah_progress.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../home/bloc/prayer_bloc.dart';
+import '../../tasbih/dhikr_nav.dart';
 import '../bloc/sunnah_bloc.dart';
 import '../widgets/sunnah_check.dart';
 import '../widgets/sunnah_detail_sheet.dart';
@@ -85,6 +88,13 @@ class _SunnahScreenState extends State<SunnahScreen> {
               title: 'Sunnah',
               overlineColor: AppColors.spiritualGold,
             ),
+          ),
+        ),
+
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 12),
+            child: const _DhikrCard(),
           ),
         ),
 
@@ -182,6 +192,84 @@ class _SunnahScreenState extends State<SunnahScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────── Dhikr ───────────────────
+
+/// Compact way into the dhikr section: tapping the card opens the hub, the
+/// play button starts the session that suits the time of day.
+class _DhikrCard extends StatefulWidget {
+  const _DhikrCard();
+
+  @override
+  State<_DhikrCard> createState() => _DhikrCardState();
+}
+
+class _DhikrCardState extends State<_DhikrCard> {
+  // Which session is "now" can change after one is finished; refresh on return.
+  Future<void> _open(Future<void> Function() push) async {
+    await push();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PrayerBloc, PrayerState>(
+      buildWhen: (a, b) => a.runtimeType != b.runtimeType || (a is PrayerLoaded && b is PrayerLoaded && a.prayerPeriod != b.prayerPeriod),
+      builder: (context, _) {
+        final now = DhikrCatalog.session(DhikrNav.nowSessionId(context))!;
+        return Pressable(
+          onTap: () => _open(() => DhikrNav.openHub(context)),
+          pressedScale: 0.98,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Dhikr', style: AppTextStyles.body(color: Colors.white, weight: FontWeight.w600)),
+                      Text(
+                        'Now · ${now.name}',
+                        style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.6)),
+                      ),
+                    ],
+                  ),
+                ),
+                Semantics(
+                  button: true,
+                  label: 'Start ${now.name}',
+                  child: Pressable(
+                    onTap: () => _open(() => DhikrNav.openSession(context, now.id)),
+                    pressedScale: 0.88,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.spiritualGold.withValues(alpha: 0.16),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.play_arrow_rounded, size: 20, color: AppColors.spiritualGold),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

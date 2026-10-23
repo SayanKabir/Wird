@@ -11,6 +11,7 @@ import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/prayer.dart';
 import '../../../models/sunnah_progress.dart';
 import '../../../models/tasbih.dart';
+import '../../tasbih/bloc/tasbih_bloc.dart';
 import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../models/quran_progress.dart';
 import '../../../widgets/common/page_header.dart';
@@ -361,11 +362,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   // ─── Tasbih section slivers ───
   List<Widget> _tasbihSlivers() {
-    final tasbihs = _tasbihs;
+    // Prefer the live counters so counting elsewhere shows up here at once.
+    final live = context.watch<TasbihBloc>().state;
+    final tasbihs = live is TasbihLoaded ? live.tasbihs : _tasbihs;
     if (tasbihs == null || tasbihs.isEmpty) return [];
 
     final totalLifetime = tasbihs.fold<int>(0, (sum, t) => sum + t.totalCount);
-    final mostRecited = tasbihs.reduce((a, b) => a.totalCount > b.totalCount ? a : b);
+    final totalToday = tasbihs.fold<int>(0, (sum, t) => sum + t.todayCount());
+    final visible = TasbihRepository.visibleCounters(tasbihs);
+    final mostRecited = (visible.isEmpty ? tasbihs : visible).reduce((a, b) => a.totalCount > b.totalCount ? a : b);
 
     return [
       SliverToBoxAdapter(child: _sectionHeader("TASBIH & DHIKR", AppColors.activeGlow)),
@@ -387,10 +392,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               color: AppColors.activeGlow,
             ),
             _buildGlassMetricCard(
-              title: "Active Counters",
-              value: "${tasbihs.length}",
-              unit: "TASBIHS",
-              icon: Icons.grid_view_rounded,
+              title: "Today",
+              value: _formatCount(totalToday),
+              unit: "DHIKR",
+              icon: Icons.today_rounded,
               color: const Color(0xFF73D38A),
             ),
           ],

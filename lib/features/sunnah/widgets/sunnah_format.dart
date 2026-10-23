@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/sunnah.dart';
-import '../../tasbih/screens/tasbih_screen.dart';
+import '../../../core/dhikr/dhikr_catalog.dart';
+import '../../tasbih/dhikr_nav.dart';
 
 /// Display helpers shared by the Sunnah screen and its detail sheet.
 ///
@@ -94,28 +95,14 @@ class SunnahFormat {
 
   static bool hasTasbih(Sunnah sunnah) => sunnah.tasbihId != null;
 
-  /// Opens the Tasbih counter set up for a dhikr sunnah.
-  ///
-  /// The "33 times after prayer" sunnahs each have their own counter, so they
-  /// open it directly rather than the after-prayer flow, which starts on
-  /// Astaghfirullah.
+  /// Opens the dhikr a sunnah links to: a guided session for the azkar and
+  /// Tasbih of Fatimah, otherwise its counter.
   static void openTasbih(BuildContext context, Sunnah sunnah) {
-    final title = sunnah.title.toLowerCase();
-    String? flow;
-    if (title.contains('fatimah')) {
-      flow = 'fatimah';
-    } else if (title.contains('before sleep') || title.contains('before-sleep')) {
-      flow = 'before_sleep';
+    final session = DhikrCatalog.sessionForSunnah(tasbihId: sunnah.tasbihId, title: sunnah.title);
+    if (session != null) {
+      DhikrNav.openSession(context, session);
+    } else if (sunnah.tasbihId != null) {
+      DhikrNav.openCounter(context, sunnah.tasbihId!);
     }
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TasbihScreen(
-          initialTasbihId: sunnah.tasbihId,
-          initialQuery: sunnah.title,
-          initialFlow: flow,
-          sourceSunnah: sunnah,
-        ),
-      ),
-    );
   }
 }

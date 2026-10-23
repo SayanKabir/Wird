@@ -2,7 +2,7 @@ import 'package:hive/hive.dart';
 import '../../models/sunnah.dart';
 
 /// Unified repository for all Sunnah data including dhikr/azkar entries.
-/// Replaces the old SunnahRepository + AzkarRepository with one enriched source.
+/// One enriched source for every sunnah, dhikr ones included.
 class SunnahRepository {
   late final List<Sunnah> _sunnahs = _seeds.map((s) => s.toSunnah()).toList(growable: false);
   Box? _prefsBox;

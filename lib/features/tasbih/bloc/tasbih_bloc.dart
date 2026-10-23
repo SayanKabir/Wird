@@ -1,104 +1,89 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:uuid/uuid.dart';
 import '../../../core/repositories/tasbih_repository.dart';
 import '../../../models/tasbih.dart';
 import 'tasbih_event_state.dart';
 
 export 'tasbih_event_state.dart';
 
+/// Holds every dhikr counter. Handlers emit the new state before awaiting the
+/// write, so rapid taps (which bloc runs concurrently) each build on the
+/// previous tap rather than racing it.
 class TasbihBloc extends Bloc<TasbihEvent, TasbihState> {
   final TasbihRepository _repository;
-  final _uuid = const Uuid();
 
-  TasbihBloc({required TasbihRepository repository}) 
-      : _repository = repository, 
+  TasbihBloc({required TasbihRepository repository})
+      : _repository = repository,
         super(TasbihInitial()) {
-    on<LoadTasbihs>(_onLoadTasbihs);
-    on<AddTasbih>(_onAddTasbih);
-    on<UpdateTasbih>(_onUpdateTasbih);
-    on<DeleteTasbih>(_onDeleteTasbih);
+    on<LoadTasbihs>(_onLoad);
+    on<CounterTapped>((e, emit) => _update(e.id, emit, (t) => t.tapped()));
+    on<CounterUndone>((e, emit) => _update(e.id, emit, (t) => t.undone()));
+    on<CounterReset>((e, emit) => _update(e.id, emit, (t) => t.reset()));
+    on<CounterTallied>((e, emit) => _update(e.id, emit, (t) => t.tallied(e.delta)));
+    on<EditTasbih>((e, emit) => _update(
+          e.id,
+          emit,
+          (t) => t.copyWith(
+            name: e.name,
+            targetCount: e.target,
+            // A smaller target can leave the round overfull; cap it.
+            currentCount: t.currentCount > e.target ? e.target : t.currentCount,
+          ),
+        ));
+    on<AddTasbih>(_onAdd);
+    on<DeleteTasbih>(_onDelete);
   }
 
-  Future<void> _onLoadTasbihs(
-    LoadTasbihs event,
-    Emitter<TasbihState> emit,
-  ) async {
+  Future<void> _onLoad(LoadTasbihs event, Emitter<TasbihState> emit) async {
     try {
-      emit(TasbihLoading());
-      await _repository.init(); // Ensure box is open
-      final tasbihs = await _repository.getAllTasbihs();
-      emit(TasbihLoaded(tasbihs));
+      if (state is! TasbihLoaded) emit(TasbihLoading());
+      await _repository.init();
+      emit(TasbihLoaded(await _repository.getAllTasbihs()));
     } catch (e) {
       emit(TasbihError(e.toString()));
     }
   }
 
-  Future<void> _onAddTasbih(
-    AddTasbih event,
-    Emitter<TasbihState> emit,
-  ) async {
+  Future<void> _update(String id, Emitter<TasbihState> emit, Tasbih Function(Tasbih) change) async {
+    final current = state;
+    if (current is! TasbihLoaded) return;
+    final existing = current.byId(id);
+    if (existing == null) return;
+    final updated = change(existing);
+    if (updated == existing) return;
+    emit(TasbihLoaded([for (final t in current.tasbihs) t.id == id ? updated : t]));
     try {
-      if (state is TasbihLoaded) {
-        final currentList = (state as TasbihLoaded).tasbihs;
-        final newTasbih = Tasbih(
-          id: _uuid.v4(),
-          name: event.name,
-          targetCount: event.target,
-          lastUpdated: DateTime.now(),
-        );
-        
-        await _repository.saveTasbih(newTasbih);
-        emit(TasbihLoaded([...currentList, newTasbih]));
-      }
+      await _repository.saveTasbih(updated);
     } catch (e) {
-      emit(TasbihError(e.toString()));
+      debugPrint('[TasbihBloc] save failed for $id: $e');
     }
   }
 
-  Future<void> _onUpdateTasbih(
-    UpdateTasbih event,
-    Emitter<TasbihState> emit,
-  ) async {
+  Future<void> _onAdd(AddTasbih event, Emitter<TasbihState> emit) async {
+    final current = state;
+    if (current is! TasbihLoaded) return;
+    final created = Tasbih(
+      id: 'custom_${DateTime.now().microsecondsSinceEpoch}',
+      name: event.name,
+      targetCount: event.target,
+      lastUpdated: DateTime.now(),
+    );
+    emit(TasbihLoaded([...current.tasbihs, created]));
     try {
-      if (state is TasbihLoaded) {
-        final currentList = (state as TasbihLoaded).tasbihs;
-        await _repository.saveTasbih(event.tasbih);
-        
-        var itemUpdated = false;
-        final updatedList = currentList.map((t) {
-          if (t.id == event.tasbih.id) {
-            itemUpdated = true;
-            return event.tasbih;
-          }
-          return t;
-        }).toList();
-        
-        // If it's a dynamically generated ephemeral Tasbih, add it to the state
-        if (!itemUpdated) {
-          updatedList.add(event.tasbih);
-        }
-        
-        emit(TasbihLoaded(updatedList));
-      }
+      await _repository.saveTasbih(created);
     } catch (e) {
-      emit(TasbihError(e.toString()));
+      debugPrint('[TasbihBloc] add failed: $e');
     }
   }
 
-  Future<void> _onDeleteTasbih(
-    DeleteTasbih event,
-    Emitter<TasbihState> emit,
-  ) async {
+  Future<void> _onDelete(DeleteTasbih event, Emitter<TasbihState> emit) async {
+    final current = state;
+    if (current is! TasbihLoaded) return;
+    emit(TasbihLoaded(current.tasbihs.where((t) => t.id != event.id).toList()));
     try {
-      if (state is TasbihLoaded) {
-        final currentList = (state as TasbihLoaded).tasbihs;
-        await _repository.deleteTasbih(event.id);
-        
-        final updatedList = currentList.where((t) => t.id != event.id).toList();
-        emit(TasbihLoaded(updatedList));
-      }
+      await _repository.deleteTasbih(event.id);
     } catch (e) {
-      emit(TasbihError(e.toString()));
+      debugPrint('[TasbihBloc] delete failed: $e');
     }
   }
 }

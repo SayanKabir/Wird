@@ -7,7 +7,7 @@ import '../../../models/prayer.dart';
 import '../../../models/prayer_status.dart';
 import '../../../models/prayer_log.dart';
 import '../../../core/services/prayer_service.dart';
-import '../../tasbih/screens/tasbih_screen.dart';
+import '../../tasbih/screens/session_screen.dart';
 import '../../../core/services/haptic_service.dart';
 
 class PrayerCard extends StatefulWidget {
@@ -424,7 +424,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const TasbihScreen(initialFlow: 'after_prayer'),
+                  builder: (_) => const SessionScreen(sessionId: 'after_prayer'),
                 ),
               );
             } : canMarkComplete ? () {
