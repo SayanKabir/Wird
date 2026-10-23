@@ -23,6 +23,7 @@ import '../../../models/surah.dart';
 import '../../../models/quran_bookmark.dart';
 import '../sharing/verse_share.dart';
 import '../sharing/verse_share_sheet.dart';
+import '../widgets/jump_to_verse_sheet.dart';
 import '../widgets/surah_info_modal.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../bloc/quran_bloc.dart';
@@ -71,6 +72,10 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
   final Map<int, GlobalKey> _verseKeys = {};
   int? _highlightVerse;
   bool _jumping = false;
+
+  /// Cache extent of the verse list; grows until the whole surah is laid out.
+  double _layoutExtent = 1500;
+  bool _fullyLaidOut = false;
 
   bool get _openedMidSurah => (widget.initialVerse ?? 1) > 1;
 
@@ -130,7 +135,13 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
         _translationUnavailable = !content.translationAvailable;
         _isLoading = false;
       });
-      if (scrollTo != null && (scrollTo > 1 || widget.initialVerseEnd != null)) _scrollToVerse(scrollTo);
+      _fullyLaidOut = false;
+      _growLayout();
+      if (scrollTo != null && (scrollTo > 1 || widget.initialVerseEnd != null)) {
+        _scrollToVerse(scrollTo);
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _updateReadPosition());
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -152,9 +163,9 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
 
   /// Brings an ayah into view below the pinned header.
   ///
-  /// Verse cards vary in height and the list builds lazily, so the target
-  /// may not exist yet: jump by an estimate from the cards that are built,
-  /// repeat until it's laid out, then align it exactly.
+  /// Every ayah is laid out once loaded (see [_buildScrollView]), so this
+  /// normally lands on the first try; the estimate fallback below only
+  /// matters in the frames before that first layout.
   Future<void> _scrollToVerse(int verse) async {
     if (verse < 1 || verse > _verses.length) return;
     _jumping = true;
@@ -162,7 +173,87 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
       await _jumpToVerse(verse);
     } finally {
       _jumping = false;
-      if (verse > _lastReadVerse) _lastReadVerse = verse;
+      _updateReadPosition();
+    }
+  }
+
+  /// Extends the laid-out region by a few screens per frame until the last
+  /// ayah has been built, spreading the layout of a long surah over frames.
+  void _growLayout() {
+    if (_fullyLaidOut) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _verses.isEmpty) return;
+      if (_verseKeys[_verses.length]?.currentContext != null) {
+        _fullyLaidOut = true;
+        return;
+      }
+      setState(() => _layoutExtent += 4000);
+      _growLayout();
+    });
+  }
+
+  /// Ayah numbers currently on screen below the pinned header.
+  (int, int)? _visibleRange() {
+    if (!mounted || _verses.isEmpty) return null;
+    final top = MediaQuery.paddingOf(context).top + kToolbarHeight;
+    final bottom = MediaQuery.sizeOf(context).height;
+    int? first;
+    int? last;
+    for (final v in _verses) {
+      final box = _verseKeys[v.verseNumber]?.currentContext?.findRenderObject();
+      if (box is! RenderBox || !box.hasSize || !box.attached) continue;
+      final y = box.localToGlobal(Offset.zero).dy;
+      if (y > bottom) break;
+      if (y + box.size.height > top) {
+        first ??= v.verseNumber;
+        last = v.verseNumber;
+      }
+    }
+    return first == null ? null : (first, last!);
+  }
+
+  /// Records how far the reader has got: the last ayah that has come on
+  /// screen. Called when scrolling settles rather than as cards build,
+  /// since the whole surah is built up front.
+  void _updateReadPosition() {
+    if (_jumping) return;
+    final range = _visibleRange();
+    if (range != null && range.$2 > _lastReadVerse) _lastReadVerse = range.$2;
+  }
+
+  Future<void> _openJumpSheet() async {
+    final surah = _repository.surahById(widget.surahId);
+    if (surah == null || _verses.isEmpty) return;
+    final state = _quranBloc.state;
+    final lastRead = state is QuranLoaded && state.lastRead?.surahId == widget.surahId
+        ? state.lastRead!.verseNumber
+        : null;
+    final bookmarks = state is QuranLoaded
+        ? (state.bookmarks.where((b) => b.surahId == widget.surahId).map((b) => b.verseNumber).toSet().toList()..sort())
+        : <int>[];
+
+    final target = await showJumpToVerseSheet(
+      context,
+      surah: surah,
+      surahs: _repository.surahs,
+      verses: _verses,
+      currentVerse: _visibleRange()?.$1 ?? 1,
+      lastReadVerse: lastRead,
+      bookmarkedVerses: bookmarks,
+    );
+    if (!mounted || target == null) return;
+    switch (target) {
+      case JumpToAyah(:final verse):
+        _scrollToVerse(verse);
+      case JumpToSurah(:final surah, :final verse):
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => SurahReadingScreen(
+            surahId: surah,
+            surahName: _repository.surahById(surah)?.nameTransliteration,
+            prayerPeriod: widget.prayerPeriod,
+            initialVerse: verse,
+          ),
+        ));
     }
   }
 
@@ -654,9 +745,21 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
   }
 
   Widget _buildScrollView(bool isSmallPhone, double hPad, bool isMakki, Surah? surahDetails) {
-    return CustomScrollView(
+    // The surah is already on the device, so every ayah gets laid out, not
+    // just those near the screen: the scroll length is then exact, so
+    // dragging the scrollbar and jumping to an ayah land precisely instead of
+    // the list building, and resizing, as it goes. The cache extent grows a
+    // few screens per frame after the first paint (see [_growLayout]); doing
+    // it in one frame took ~300ms for Al-Baqarah on a mid-range phone.
+    return NotificationListener<ScrollEndNotification>(
+      onNotification: (_) {
+        _updateReadPosition();
+        return false;
+      },
+      child: CustomScrollView(
       controller: _scrollController,
       physics: const BouncingScrollPhysics(),
+      cacheExtent: _isLoading ? null : _layoutExtent,
       slivers: [
 
         // 1. DYNAMIC SLIVER APP BAR
@@ -724,12 +827,26 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                             centerTitle: true,
                             titlePadding: const EdgeInsets.only(bottom: 16),
                             // Pinned Title (Only prominently visible when collapsed)
-                            title: Text(
-                                widget.surahName ?? surahDetails?.nameTransliteration ?? 'Surah ${widget.surahId}',
-                                style: AppTextStyles.h2(color: Colors.white).copyWith(
-                                  fontSize: isSmallPhone ? 16 : 18,
-                                  fontWeight: FontWeight.w600,
-                                )
+                            // Tapping the title opens Go to. The faint chevron
+                            // is the only hint, so it's there for the curious
+                            // without adding another button to the bar.
+                            title: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: _isLoading ? null : _openJumpSheet,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                      widget.surahName ?? surahDetails?.nameTransliteration ?? 'Surah ${widget.surahId}',
+                                      style: AppTextStyles.h2(color: Colors.white).copyWith(
+                                        fontSize: isSmallPhone ? 16 : 18,
+                                        fontWeight: FontWeight.w600,
+                                      )
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Icon(Icons.expand_more_rounded, size: isSmallPhone ? 16 : 18, color: Colors.white.withValues(alpha: 0.4)),
+                                ],
+                              ),
                             ),
                             // Expanded Background Details
                             background: Column(
@@ -877,9 +994,6 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate((context, index) {
                           final verse = _verses[index];
-                          if (!_jumping && verse.verseNumber > _lastReadVerse) {
-                            _lastReadVerse = verse.verseNumber;
-                          }
                           final card = _VerseCard(
                             key: _keyFor(verse.verseNumber),
                             verse: verse,
@@ -899,9 +1013,12 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                             onToggleSelect: () => _toggleSelect(verse.verseNumber),
                             onShare: () => _share([verse]),
                           );
-                          // Opening mid-surah jumps straight to the ayah;
-                          // the entrance stagger only plays from the top.
-                          if (_openedMidSurah) return card;
+                          // The entrance stagger plays once, for the first
+                          // screenful when a surah opens from the top. Cards
+                          // further down are already laid out and simply
+                          // there when scrolled to; fading them in made a
+                          // saved surah look like it was still loading.
+                          if (_openedMidSurah || index > 5) return card;
                           return card
                               .animate()
                               .fadeIn(delay: Duration(milliseconds: 50 + (index.clamp(0, 10) * 30)), duration: 400.ms)
@@ -911,7 +1028,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     ),
                   ],
                 ],
-              );
+              ),
+    );
   }
 
   Widget _buildTranslationOfflineNotice(double hPad) {

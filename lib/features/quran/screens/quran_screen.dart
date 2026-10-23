@@ -7,6 +7,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/quran/quran_meta.dart';
 import '../../../core/quran/quran_translations.dart';
+import '../../../core/quran/surah_search.dart';
 import '../../../core/repositories/quran_repository.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
 import '../../../core/services/quran_api_service.dart';
@@ -169,30 +170,6 @@ class _QuranScreenState extends State<QuranScreen> {
     _searchController.clear();
     _onQueryChanged('');
     FocusScope.of(context).unfocus();
-  }
-
-  /// Surahs matching by number, name or meaning. Names are compared with
-  /// punctuation and the "Al-" prefix folded away, so "baqara",
-  /// "al baqarah" and "Al-Baqarah" all match.
-  List<Surah> _matchSurahs(List<Surah> surahs, String query) {
-    final q = query.trim().toLowerCase();
-    if (q.isEmpty) return surahs;
-    final number = int.tryParse(q);
-    if (number != null) return surahs.where((s) => s.id == number).toList();
-    final folded = _fold(q);
-    return surahs.where((s) {
-      return _fold(s.nameTransliteration).contains(folded) ||
-          s.nameTranslation.toLowerCase().contains(q) ||
-          s.nameArabic.contains(query.trim());
-    }).toList();
-  }
-
-  static String _fold(String s) {
-    var out = s.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
-    if (out.startsWith('al') && out.length > 4) out = out.substring(2);
-    if (out.startsWith('an') && out.length > 5) out = out.substring(2);
-    if (out.startsWith('at') && out.length > 5) out = out.substring(2);
-    return out.replaceAll('aa', 'a').replaceAll('ee', 'i').replaceAll('oo', 'u').replaceAll(RegExp(r'h$'), '');
   }
 
   // ─────────────────── Build ───────────────────
@@ -459,7 +436,7 @@ class _QuranScreenState extends State<QuranScreen> {
         case _SurahSort.shortest:
           surahs.sort((a, b) => a.versesCount.compareTo(b.versesCount));
         case _SurahSort.name:
-          surahs.sort((a, b) => _fold(a.nameTransliteration).compareTo(_fold(b.nameTransliteration)));
+          surahs.sort((a, b) => SurahSearch.fold(a.nameTransliteration).compareTo(SurahSearch.fold(b.nameTransliteration)));
       }
     }
 
@@ -601,7 +578,7 @@ class _QuranScreenState extends State<QuranScreen> {
     final q = _searchQuery.trim();
     final ref = QuranMeta.parseReference(q);
     final juz = QuranMeta.parseJuz(q);
-    final surahMatches = ref == null && juz == null ? _matchSurahs(state.surahs, q) : const <Surah>[];
+    final surahMatches = ref == null && juz == null ? SurahSearch.match(state.surahs, q) : const <Surah>[];
     final verseHits = _localHits.length + _onlineHits.length;
 
     final children = <Widget>[];

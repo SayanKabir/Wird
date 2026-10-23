@@ -310,12 +310,12 @@ class QuranRepository {
     final isArabic = RegExp(r'[؀-ۿ]').hasMatch(q);
 
     if (isArabic) {
-      final needle = _normalizeArabic(q);
+      final needle = normalizeArabic(q);
       if (script != null) {
         final full = await _loadFull(_arabicKey(script));
         if (full != null) {
           for (var i = 0; i < full.length; i++) {
-            if (_normalizeArabic(full[i]).contains(needle)) add(i, full[i], SearchMatchSource.arabic);
+            if (normalizeArabic(full[i]).contains(needle)) add(i, full[i], SearchMatchSource.arabic);
           }
         } else {
           for (final s in (await downloadedSurahs(script)).toList()..sort()) {
@@ -323,7 +323,7 @@ class QuranRepository {
             if (verses == null) continue;
             final (start, _) = QuranMeta.surahRange(s);
             for (var i = 0; i < verses.length; i++) {
-              if (_normalizeArabic(verses[i]).contains(needle)) add(start + i, verses[i], SearchMatchSource.arabic);
+              if (normalizeArabic(verses[i]).contains(needle)) add(start + i, verses[i], SearchMatchSource.arabic);
             }
           }
         }
@@ -343,17 +343,17 @@ class QuranRepository {
     }
 
     final en = await _englishTransliteration();
-    final needle = _normalizeLatin(q);
+    final needle = normalizeLatin(q);
     if (needle.length >= 3) {
       for (var i = 0; i < en.length; i++) {
-        if (_normalizeLatin(en[i]).contains(needle)) add(i, en[i], SearchMatchSource.transliteration);
+        if (normalizeLatin(en[i]).contains(needle)) add(i, en[i], SearchMatchSource.transliteration);
       }
     }
     return hits;
   }
 
   /// Folds spelling variants so "rahman", "Rahmaan" and "ar-rahmaan" match.
-  static String _normalizeLatin(String s) => s
+  static String normalizeLatin(String s) => s
       .toLowerCase()
       .replaceAll(RegExp(r"[^a-z]"), '')
       .replaceAll('ee', 'i')
@@ -363,7 +363,7 @@ class QuranRepository {
       .replaceAllMapped(RegExp(r'(.)\1+'), (m) => m.group(1)!);
 
   /// Strips harakat and folds letter variants so plain typed Arabic matches.
-  static String _normalizeArabic(String s) => s
+  static String normalizeArabic(String s) => s
       .replaceAll(RegExp(r'[ؐ-ًؚ-ٰٟۖ-ۭـ‏]'), '')
       .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
       .replaceAll('ى', 'ي')
