@@ -32,6 +32,7 @@ import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../tasbih/screens/tasbih_screen.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/glass_snackbar.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -74,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _checkPermissions();
     _fetchWeather();
+    _autoDetectLocation();
     _scheduleSunnahAndEventNotifications();
 
     _startWeatherTimer();
@@ -114,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         // Catch up on anything that changed while we were away — the weather
         // may be stale and the date may even have rolled over.
         _fetchWeather();
+        _autoDetectLocation();
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -140,6 +143,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         setState(() => _weather = weather);
       }
     }
+  }
+
+  /// If the user has travelled, switch prayer times to the new city.
+  Future<void> _autoDetectLocation() async {
+    final moved = await _locationService.autoDetectIfMoved();
+    if (moved == null || !mounted) return;
+    context.read<PrayerBloc>().add(RefreshPrayerTimes());
+    _fetchWeather();
+    GlassSnackBar.show(
+      context,
+      message: 'Location updated to ${moved.displayName}',
+      icon: Icons.location_on_rounded,
+    );
   }
 
   Future<void> _checkPermissions() async {

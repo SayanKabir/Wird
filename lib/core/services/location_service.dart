@@ -1,3 +1,7 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../../models/settings.dart';
@@ -9,10 +13,15 @@ class LocationResult {
   final String? error;
   final bool permissionDenied;
 
+  /// Device location (GPS) is switched off and the user didn't turn it on
+  /// from the system prompt. The UI offers to open location settings.
+  final bool serviceDisabled;
+
   const LocationResult({
     this.data,
     this.error,
     this.permissionDenied = false,
+    this.serviceDisabled = false,
   });
 
   bool get isSuccess => data != null && error == null;
@@ -20,6 +29,8 @@ class LocationResult {
 
 /// Service for handling location operations
 class LocationService {
+  static const MethodChannel _channel = MethodChannel('com.SayanKabir.wird2/location');
+
   final StorageService _storageService;
 
   /// Singleton instance
@@ -39,6 +50,29 @@ class LocationService {
     return await Geolocator.isLocationServiceEnabled();
   }
 
+  /// Ask the user to switch device location on.
+  ///
+  /// On Android this shows the system "Turn on location" dialog in-app and
+  /// returns true once location is on. iOS has no equivalent prompt, so this
+  /// returns false there and the caller offers to open Settings instead.
+  Future<bool> requestLocationService() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      final accepted = await _channel.invokeMethod<bool>('requestLocationService') ?? false;
+      if (!accepted) return false;
+      // The provider can take a moment to report enabled after the dialog closes.
+      for (var i = 0; i < 10; i++) {
+        if (await Geolocator.isLocationServiceEnabled()) return true;
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+      return Geolocator.isLocationServiceEnabled();
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   /// Check current permission status
   Future<LocationPermission> checkPermission() async {
     return await Geolocator.checkPermission();
@@ -53,10 +87,12 @@ class LocationService {
   Future<LocationResult> getCurrentLocation() async {
     try {
       // Check if service is enabled
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled() ||
+          await requestLocationService();
       if (!serviceEnabled) {
         return const LocationResult(
-          error: 'Location services are disabled. Please enable GPS.',
+          error: 'Location is turned off. Turn it on to detect your city.',
+          serviceDisabled: true,
         );
       }
 
@@ -189,7 +225,17 @@ class LocationService {
     return Geolocator.distanceBetween(lat1, lng1, lat2, lng2);
   }
 
-  /// Check if location has changed significantly (>50km)
+  /// How far the user must move before prayer times are recalculated.
+  /// Prayer times shift by roughly a minute per 15–25 km, so anything less
+  /// makes no practical difference and isn't worth a geocoding call.
+  static const double significantMoveMeters = 15000;
+
+  /// Minimum gap between silent auto-detect checks.
+  static const Duration _autoDetectInterval = Duration(minutes: 30);
+
+  DateTime? _lastAutoDetect;
+
+  /// Check if location has changed significantly (see [significantMoveMeters])
   bool hasLocationChangedSignificantly(LocationData newLocation) {
     final stored = getStoredLocation();
     if (stored == null) return true;
@@ -199,7 +245,60 @@ class LocationService {
       newLocation.latitude, newLocation.longitude,
     );
 
-    return distance > 50000; // 50km
+    return distance > significantMoveMeters;
+  }
+
+  /// Quietly picks up a new city when the user has travelled, like weather
+  /// apps do. Returns the new location if it changed, otherwise null.
+  ///
+  /// Never prompts: if location is off or permission isn't already granted it
+  /// does nothing. Runs at most every [_autoDetectInterval], prefers the
+  /// phone's last known fix, and only reverse-geocodes (the one network
+  /// call) once the user has moved more than [significantMoveMeters].
+  Future<LocationData?> autoDetectIfMoved() async {
+    final now = DateTime.now();
+    if (_lastAutoDetect != null && now.difference(_lastAutoDetect!) < _autoDetectInterval) {
+      return null;
+    }
+    _lastAutoDetect = now;
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) return null;
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.whileInUse &&
+          permission != LocationPermission.always) {
+        return null;
+      }
+
+      Position? position = await Geolocator.getLastKnownPosition();
+      final stale = position == null ||
+          now.difference(position.timestamp) > _autoDetectInterval;
+      if (stale) {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 10),
+        );
+      }
+      if (position.latitude == 0 && position.longitude == 0) return null;
+
+      final stored = getStoredLocation();
+      final moved = stored == null
+          ? double.infinity
+          : calculateDistance(stored.latitude, stored.longitude, position.latitude, position.longitude);
+      if (moved <= significantMoveMeters) {
+        debugPrint('[Location] auto-detect: ${(moved / 1000).toStringAsFixed(1)} km from saved, keeping it');
+        return null;
+      }
+
+      final location = await _reverseGeocode(position.latitude, position.longitude);
+      await saveLocation(location);
+      debugPrint('[Location] auto-detect: moved, updated to ${location.displayName}');
+      return location;
+    } catch (e) {
+      // Timeouts, no fix indoors, etc. — try again on the next check.
+      debugPrint('[Location] auto-detect skipped: $e');
+      return null;
+    }
   }
 
   /// Open device location settings

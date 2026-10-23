@@ -54,6 +54,8 @@ android {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    // System "turn on location" dialog (same version geolocator ships with)
+    implementation("com.google.android.gms:play-services-location:21.2.0")
 }
 
 flutter {

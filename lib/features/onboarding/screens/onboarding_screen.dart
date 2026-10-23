@@ -8,6 +8,7 @@ import '../../../core/services/notification_service.dart';
 import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/location_off_prompt.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -66,6 +67,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     });
 
     final result = await _locationService.getCurrentLocation();
+    if (!mounted) return;
 
     setState(() {
       _isLoading = false;
@@ -76,6 +78,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         _error = result.error;
       }
     });
+
+    if (result.serviceDisabled) await showLocationOffPrompt(context);
   }
 
   Future<void> _requestNotificationPermission() async {
