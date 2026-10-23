@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/achievement_service.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/repositories/sunnah_progress_repository.dart';
+import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/repositories/tasbih_repository.dart';
 import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/prayer.dart';
-import '../../../models/prayer_status.dart';
 import '../../../models/sunnah_progress.dart';
 import '../../../models/tasbih.dart';
 import '../../../core/repositories/quran_progress_repository.dart';
@@ -30,7 +30,6 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  final StorageService _storageService = StorageService();
   final AchievementService _achievementService = AchievementService();
   final SunnahProgressRepository _sunnahProgressRepo = SunnahProgressRepository();
   final TasbihRepository _tasbihRepo = TasbihRepository();
@@ -256,17 +255,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return [
       SliverToBoxAdapter(child: _sectionHeader("SUNNAH PROGRESS", const Color(0xFF73D38A))),
 
-      // Streak + Level hero
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _buildSunnahHero(p),
-        ),
-      ),
-
       // Metrics grid
       SliverPadding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
         sliver: SliverGrid.count(
           crossAxisCount: 2,
           mainAxisSpacing: 14,
@@ -274,18 +265,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           childAspectRatio: 1.25,
           children: [
             _buildGlassMetricCard(
-              title: "Unique Sunnahs",
-              value: "${p.uniqueSunnahsPracticed}",
-              unit: "PRACTICED",
-              icon: Icons.explore_rounded,
-              color: const Color(0xFF73D38A),
-            ),
-            _buildGlassMetricCard(
-              title: "Total Actions",
-              value: "${p.totalPracticeActions}",
-              unit: "PRACTICES",
-              icon: Icons.trending_up_rounded,
-              color: AppColors.activeGlow,
+              title: "Current Streak",
+              value: "${p.liveStreak()}",
+              unit: "DAYS",
+              icon: Icons.local_fire_department_rounded,
+              color: AppColors.streakFire,
             ),
             _buildGlassMetricCard(
               title: "Best Streak",
@@ -295,11 +279,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
-              title: "Badges",
-              value: "${p.unlockedBadges.length}",
-              unit: "UNLOCKED",
-              icon: Icons.military_tech_rounded,
-              color: const Color(0xFFE0A8FF),
+              title: "Sunnahs Kept",
+              value: "${p.uniqueSunnahsPracticed}",
+              unit: "DIFFERENT",
+              icon: Icons.explore_rounded,
+              color: const Color(0xFF73D38A),
+            ),
+            _buildGlassMetricCard(
+              title: "Times Kept",
+              value: "${p.totalPracticeActions}",
+              unit: "IN ALL",
+              icon: Icons.trending_up_rounded,
+              color: AppColors.activeGlow,
             ),
           ],
         ),
@@ -790,74 +781,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   // ─────────────── Sunnah Widgets ───────────────
 
-  Widget _buildSunnahHero(SunnahProgress p) {
-    const sunnahAccent = Color(0xFF73D38A);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              sunnahAccent.withOpacity(0.15),
-              sunnahAccent.withOpacity(0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: sunnahAccent.withOpacity(0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: sunnahAccent.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.auto_awesome_rounded,
-                color: sunnahAccent,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Level ${p.level}",
-                    style: AppTextStyles.h2(color: Colors.white),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "${p.totalPoints} pts  •  ${p.currentStreak} day streak",
-                    style: AppTextStyles.tiny(color: sunnahAccent),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: Text(
-                "Rank",
-                style: AppTextStyles.small(color: Colors.white70, weight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTopSunnahsList(SunnahProgress p) {
     final sorted = p.practiceCountsBySunnah.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -876,7 +799,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Most Practiced",
+              "Most Kept",
               style: AppTextStyles.small(color: Colors.white54),
             ),
             const SizedBox(height: 12),
@@ -1091,7 +1014,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   String _cleanSunnahId(String id) {
-    // Convert snake_case ID to Title Case
+    try {
+      final match = context
+          .read<SunnahRepository>()
+          .getAllSunnahsSync()
+          .where((s) => s.id == id);
+      if (match.isNotEmpty) return match.first.title;
+    } catch (_) {
+      // No repository in scope; fall back to prettifying the id.
+    }
     return id
         .replaceAll('_', ' ')
         .split(' ')

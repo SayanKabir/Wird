@@ -72,14 +72,26 @@ class SunnahRepository {
     Sunnah newSunnah;
     do {
       newSunnah = _pickRandomSunnah();
-    } while (newSunnah.id == currentId && _sunnahs.length > 1);
+    } while (newSunnah.id == currentId && _weeklyPool.length > 1);
 
     await _prefsBox?.put(_keyWeeklyId, newSunnah.id);
     return newSunnah;
   }
 
+  /// Sunnahs that suit a weekly spotlight: things you can do on an ordinary
+  /// day. Grooming practices of the fitrah are left out, apart from miswak, so
+  /// the card (and the weekly reminder built from it) never reads oddly.
+  late final List<Sunnah> _weeklyPool = () {
+    final pool = _sunnahs
+        .where((s) =>
+            s.frequency == SunnahFrequency.daily &&
+            (s.category != 'Personal Hygiene' || s.title.startsWith('Use miswak')))
+        .toList(growable: false);
+    return pool.isEmpty ? _sunnahs : pool;
+  }();
+
   Sunnah _pickRandomSunnah() {
-    return _sunnahs[DateTime.now().microsecondsSinceEpoch % _sunnahs.length];
+    return _weeklyPool[DateTime.now().microsecondsSinceEpoch % _weeklyPool.length];
   }
 
   // ───────────────────────────── seed data ──────────────────────────────
