@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/constants/colors.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/deep_link_service.dart';
 import 'features/home/bloc/prayer_bloc.dart';
 import 'features/home/screens/home_screen.dart';
 import 'features/onboarding/screens/onboarding_screen.dart';
@@ -73,11 +74,16 @@ void main() async {
   final quranRepository = QuranRepository();
   await quranRepository.init();
 
+  await DeepLinkService(navigatorKey: navigatorKey, quranRepository: quranRepository).init();
+
   runApp(WirdApp(
     sunnahRepository: sunnahRepository,
     quranRepository: quranRepository,
   ));
 }
+
+/// Lets services outside the widget tree (verse links) push routes.
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class WirdApp extends StatelessWidget {
   final SunnahRepository sunnahRepository;
@@ -127,6 +133,7 @@ class WirdApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
+        navigatorKey: navigatorKey,
         title: 'Wird',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(),

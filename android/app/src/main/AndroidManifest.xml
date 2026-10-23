@@ -40,6 +40,23 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Verse links shared from Wird point at quran.com. Android can't
+                 verify another site's links for us, so these open in Wird only
+                 once the user adds quran.com under the app's "Open by default"
+                 settings; otherwise they open on quran.com as usual. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"/>
+                <data android:host="quran.com"/>
+                <data android:host="www.quran.com"/>
+                <data android:pathAdvancedPattern="/[0-9]+.*"/>
+                <data android:pathAdvancedPattern="/[a-z\-]+/[0-9]+.*"/>
+                <data android:pathPrefix="/ayatul-kursi"/>
+            </intent-filter>
+            <!-- Links are routed by DeepLinkService, not Flutter's router. -->
+            <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
         </activity>
 
         <service

@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/string_lights_overlay.dart';
@@ -22,7 +21,10 @@ import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/verse.dart';
 import '../../../models/surah.dart';
 import '../../../models/quran_bookmark.dart';
+import '../sharing/verse_share.dart';
+import '../sharing/verse_share_sheet.dart';
 import '../widgets/surah_info_modal.dart';
+import '../../../widgets/common/glass_snackbar.dart';
 import '../bloc/quran_bloc.dart';
 import '../../../core/services/haptic_service.dart';
 
@@ -36,12 +38,16 @@ class SurahReadingScreen extends StatefulWidget {
   /// a juz, a bookmark or "continue reading").
   final int? initialVerse;
 
+  /// Last ayah of a shared range; the whole range is highlighted.
+  final int? initialVerseEnd;
+
   const SurahReadingScreen({
     super.key,
     required this.surahId,
     this.surahName,
     this.prayerPeriod = PrayerPeriod.isha,
     this.initialVerse,
+    this.initialVerseEnd,
   });
 
   @override
@@ -124,7 +130,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
         _translationUnavailable = !content.translationAvailable;
         _isLoading = false;
       });
-      if (scrollTo != null && scrollTo > 1) _scrollToVerse(scrollTo);
+      if (scrollTo != null && (scrollTo > 1 || widget.initialVerseEnd != null)) _scrollToVerse(scrollTo);
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -133,6 +139,13 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
         });
       }
     }
+  }
+
+  bool _isHighlighted(int verse) {
+    final start = _highlightVerse;
+    if (start == null) return false;
+    final end = start == widget.initialVerse ? (widget.initialVerseEnd ?? start) : start;
+    return verse >= start && verse <= end;
   }
 
   GlobalKey _keyFor(int verse) => _verseKeys.putIfAbsent(verse, () => GlobalKey());
@@ -166,7 +179,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
         final pos = _scrollController.position;
         _scrollController.jumpTo((pos.pixels - pinned).clamp(pos.minScrollExtent, pos.maxScrollExtent));
         setState(() => _highlightVerse = verse);
-        Future.delayed(const Duration(milliseconds: 2200), () {
+        Future.delayed(Duration(milliseconds: widget.initialVerseEnd != null ? 3200 : 2200), () {
           if (mounted && _highlightVerse == verse) setState(() => _highlightVerse = null);
         });
         return;
@@ -208,6 +221,236 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
     }
     _scrollController.dispose();
     super.dispose();
+  }
+
+  // ── Multi-select & sharing ──
+
+  final Set<int> _selected = {};
+
+  void _toggleSelect(int verse) {
+    setState(() {
+      if (!_selected.remove(verse)) _selected.add(verse);
+    });
+  }
+
+  void _clearSelection() => setState(_selected.clear);
+
+  List<Verse> get _selectedVerses =>
+      _verses.where((v) => _selected.contains(v.verseNumber)).toList();
+
+  void _share(List<Verse> verses) {
+    final surah = _repository.surahById(widget.surahId);
+    if (surah == null || verses.isEmpty) return;
+    showVerseShareSheet(
+      context,
+      share: VerseShare(surah: surah, verses: verses),
+      script: _selectedScript,
+      includeTranslation: _showTranslation,
+      includeTransliteration: _showTransliteration,
+    );
+  }
+
+  Future<void> _copySelection() async {
+    await _copyVerses(_selectedVerses);
+    _clearSelection();
+  }
+
+  Widget _buildSelectionBar(bool isSmallPhone) {
+    final surah = _repository.surahById(widget.surahId);
+    final reference = surah == null || _selected.isEmpty
+        ? ''
+        : VerseShare(surah: surah, verses: _selectedVerses).reference;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFF151A2C).withValues(alpha: 0.96),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.25), width: 0.6),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 24, offset: const Offset(0, 8))],
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Clear selection',
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            onPressed: () {
+              HapticService().light();
+              _clearSelection();
+            },
+          ),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _selected.length == 1 ? '1 ayah' : '${_selected.length} ayahs',
+                  style: AppTextStyles.body(color: Colors.white, weight: FontWeight.w600),
+                ),
+                Text(
+                  reference,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.55)),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy',
+            icon: Icon(Icons.copy_rounded, color: Colors.white.withValues(alpha: 0.85), size: 20),
+            onPressed: _copySelection,
+          ),
+          const SizedBox(width: 4),
+          ElevatedButton.icon(
+            onPressed: () => _share(_selectedVerses),
+            icon: const Icon(Icons.ios_share_rounded, size: 18),
+            label: const Text('Share'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.spiritualGold,
+              foregroundColor: Colors.black,
+              padding: EdgeInsets.symmetric(horizontal: isSmallPhone ? 14 : 18, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<QuranBookmark> _bookmarksFor(int verse) {
+    final state = _quranBloc.state;
+    if (state is! QuranLoaded) return const [];
+    return state.bookmarks.where((b) => b.surahId == widget.surahId && b.verseNumber == verse).toList();
+  }
+
+  void _toggleBookmark(Verse verse) {
+    final existing = _bookmarksFor(verse.verseNumber);
+    if (existing.isEmpty) {
+      _onBookmarkVerse(verse);
+      return;
+    }
+    for (final b in existing) {
+      _quranBloc.add(DeleteBookmark(b.id));
+    }
+    HapticService().light();
+    GlassSnackBar.show(context, message: 'Removed bookmark for ayah ${verse.verseNumber}', icon: Icons.bookmark_remove_rounded);
+  }
+
+  Future<void> _copyVerses(List<Verse> verses) async {
+    final surah = _repository.surahById(widget.surahId);
+    if (surah == null || verses.isEmpty) return;
+    final share = VerseShare(surah: surah, verses: verses);
+    await Clipboard.setData(ClipboardData(
+      text: share.toText(translation: _showTranslation, transliteration: _showTransliteration),
+    ));
+    HapticService().light();
+    if (!mounted) return;
+    GlassSnackBar.show(context, message: 'Copied ${share.title}', icon: Icons.check_rounded);
+  }
+
+  /// The ⋯ sheet: which ayah, then one row of actions.
+  void _showVerseActions(Verse verse, bool isSmallPhone) {
+    final surah = _repository.surahById(widget.surahId);
+    final bookmarked = _bookmarksFor(verse.verseNumber).isNotEmpty;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.5),
+      builder: (sheetCtx) {
+        void run(VoidCallback action) {
+          Navigator.pop(sheetCtx);
+          action();
+        }
+
+        return ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + MediaQuery.paddingOf(sheetCtx).bottom),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.15), width: 0.5)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.spiritualGold.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.25), width: 0.5),
+                        ),
+                        child: Text(
+                          '${verse.verseNumber}',
+                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.spiritualGold),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${surah?.nameTransliteration ?? 'Surah ${widget.surahId}'} ${verse.verseKey}',
+                              style: AppTextStyles.body(color: Colors.white, weight: FontWeight.w600),
+                            ),
+                            Text(
+                              'Juz ${verse.juz} · Ayah ${verse.verseNumber} of ${surah?.versesCount ?? _verses.length}',
+                              style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      _VerseAction(
+                        icon: bookmarked ? Icons.bookmark_rounded : Icons.bookmark_border_rounded,
+                        label: bookmarked ? 'Saved' : 'Bookmark',
+                        active: bookmarked,
+                        onTap: () => run(() => _toggleBookmark(verse)),
+                      ),
+                      _VerseAction(
+                        icon: Icons.copy_rounded,
+                        label: 'Copy',
+                        onTap: () => run(() => _copyVerses([verse])),
+                      ),
+                      _VerseAction(
+                        icon: Icons.ios_share_rounded,
+                        label: 'Share',
+                        onTap: () => run(() => _share([verse])),
+                      ),
+                      _VerseAction(
+                        icon: Icons.checklist_rounded,
+                        label: 'Select',
+                        onTap: () => run(() {
+                          HapticService().selection();
+                          _toggleSelect(verse.verseNumber);
+                        }),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _onBookmarkVerse(Verse verse) {
@@ -349,7 +592,13 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
     final isRamadanMode = IslamicDayUtils.isRamadanDate(now);
     final settings = StorageService().getSettings();
 
-    return Container(
+    // Back clears a selection before it leaves the surah.
+    return PopScope(
+      canPop: _selected.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _clearSelection();
+      },
+      child: Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -387,8 +636,19 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                   child: StringLightsOverlay(),
                 ),
               ),
+
+            // 3. Multi-select actions
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 260),
+              curve: Curves.easeOutCubic,
+              left: hPad,
+              right: hPad,
+              bottom: _selected.isEmpty ? -120 : MediaQuery.paddingOf(context).bottom + 16,
+              child: _buildSelectionBar(isSmallPhone),
+            ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -612,7 +872,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     if (_showTranslation && _translationUnavailable)
                       SliverToBoxAdapter(child: _buildTranslationOfflineNotice(hPad)),
                     SliverPadding(
-                      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + 32),
+                      // Room for the selection bar so the last ayah stays reachable.
+                      padding: EdgeInsets.only(bottom: MediaQuery.of(context).padding.bottom + (_selected.isEmpty ? 32 : 110)),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate((context, index) {
                           final verse = _verses[index];
@@ -622,7 +883,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                           final card = _VerseCard(
                             key: _keyFor(verse.verseNumber),
                             verse: verse,
-                            highlighted: _highlightVerse == verse.verseNumber,
+                            highlighted: _isHighlighted(verse.verseNumber),
                             translationRtl: _translation.isRtl,
                             transliterationScript: _translitScript,
                             showTranslation: _showTranslation,
@@ -632,7 +893,11 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                             isSmallPhone: isSmallPhone,
                             horizontalPadding: hPad,
                             selectedScript: _selectedScript,
-                            onBookmark: () => _onBookmarkVerse(verse),
+                            onMore: () => _showVerseActions(verse, isSmallPhone),
+                            selected: _selected.contains(verse.verseNumber),
+                            selecting: _selected.isNotEmpty,
+                            onToggleSelect: () => _toggleSelect(verse.verseNumber),
+                            onShare: () => _share([verse]),
                           );
                           // Opening mid-surah jumps straight to the ayah;
                           // the entrance stagger only plays from the top.
@@ -737,14 +1002,27 @@ class _VerseCard extends StatelessWidget {
   final bool isSmallPhone;
   final double horizontalPadding;
   final QuranScript selectedScript;
-  final VoidCallback onBookmark;
+
+  /// Opens the ayah's action sheet (the ⋯ button).
+  final VoidCallback onMore;
   final bool highlighted;
   final bool translationRtl;
   final TransliterationScript transliterationScript;
 
+  /// Multi-select: [selecting] is true while any ayah is selected; taps then
+  /// toggle instead of doing nothing.
+  final bool selected;
+  final bool selecting;
+  final VoidCallback onToggleSelect;
+  final VoidCallback onShare;
+
   const _VerseCard({
     super.key,
     required this.verse,
+    required this.onToggleSelect,
+    required this.onShare,
+    this.selected = false,
+    this.selecting = false,
     this.highlighted = false,
     this.translationRtl = false,
     this.transliterationScript = TransliterationScript.latin,
@@ -755,28 +1033,39 @@ class _VerseCard extends StatelessWidget {
     required this.isSmallPhone,
     required this.horizontalPadding,
     required this.selectedScript,
-    required this.onBookmark,
+    required this.onMore,
   });
 
   @override
   Widget build(BuildContext context) {
+    final accent = highlighted || selected;
     return GestureDetector(
-      onLongPress: onBookmark,
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () {
+        HapticService().medium();
+        onToggleSelect();
+      },
+      onTap: selecting
+          ? () {
+              HapticService().selection();
+              onToggleSelect();
+            }
+          : null,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 500),
+        duration: Duration(milliseconds: selecting ? 180 : 500),
         curve: Curves.easeOutCubic,
         margin: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: isSmallPhone ? 4 : 6),
         padding: EdgeInsets.all(isSmallPhone ? 16 : 20),
         decoration: BoxDecoration(
-          color: highlighted
-              ? AppColors.spiritualGold.withValues(alpha: 0.10)
+          color: accent
+              ? AppColors.spiritualGold.withValues(alpha: selected ? 0.14 : 0.10)
               : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: highlighted
+            color: accent
                 ? AppColors.spiritualGold.withValues(alpha: 0.55)
                 : Colors.white.withValues(alpha: 0.08),
-            width: highlighted ? 1 : 0.5,
+            width: accent ? 1 : 0.5,
           ),
         ),
         child: Column(
@@ -803,17 +1092,27 @@ class _VerseCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                GestureDetector(
-                  onTap: () {
-                    HapticService().light();
-                    _showVerseOptions(context, verse, onBookmark, isSmallPhone);
-                  },
-                  child: Container(
-                    padding: EdgeInsets.all(isSmallPhone ? 6 : 8),
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
-                    child: Icon(Icons.more_horiz_rounded, size: isSmallPhone ? 16 : 18, color: Colors.white.withValues(alpha: 0.4)),
+                if (selecting)
+                  Padding(
+                    padding: EdgeInsets.all(isSmallPhone ? 4 : 6),
+                    child: Icon(
+                      selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                      size: isSmallPhone ? 22 : 24,
+                      color: selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.35),
+                    ),
+                  )
+                else
+                  GestureDetector(
+                    onTap: () {
+                      HapticService().light();
+                      onMore();
+                    },
+                    child: Container(
+                      padding: EdgeInsets.all(isSmallPhone ? 6 : 8),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), shape: BoxShape.circle),
+                      child: Icon(Icons.more_horiz_rounded, size: isSmallPhone ? 16 : 18, color: Colors.white.withValues(alpha: 0.4)),
+                    ),
                   ),
-                ),
               ],
             ),
             SizedBox(height: isSmallPhone ? 16 : 20),
@@ -868,140 +1167,46 @@ class _VerseCard extends StatelessWidget {
       ),
     );
   }
-
-  void _showVerseOptions(BuildContext context, Verse verse, VoidCallback bookmarkCallback, bool isSmallPhone) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (sheetCtx) => ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-          child: Container(
-            padding: EdgeInsets.fromLTRB(isSmallPhone ? 20 : 24, 12, isSmallPhone ? 20 : 24, isSmallPhone ? 32 : 40),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.15), width: 0.5)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                SizedBox(height: isSmallPhone ? 20 : 24),
-                Text(
-                  'Verse ${verse.verseNumber}',
-                  style: AppTextStyles.h3(color: AppColors.spiritualGold).copyWith(fontSize: isSmallPhone ? 18 : null),
-                ),
-                SizedBox(height: isSmallPhone ? 12 : 16),
-                _OptionsTile(
-                  icon: Icons.bookmark_rounded,
-                  title: 'Bookmark',
-                  subtitle: 'Save to quick access',
-                  color: AppColors.spiritualGold,
-                  isSmallPhone: isSmallPhone,
-                  onTap: () {
-                    HapticService().selection();
-                    Navigator.pop(sheetCtx);
-                    bookmarkCallback();
-                  },
-                ),
-                const SizedBox(height: 8),
-                _OptionsTile(
-                  icon: Icons.copy_rounded,
-                  title: 'Copy Arabic',
-                  subtitle: 'Copy original text',
-                  color: Colors.white,
-                  isSmallPhone: isSmallPhone,
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: verse.textUthmani));
-                    Navigator.pop(sheetCtx);
-                  },
-                ),
-                if (verse.translationText != null && verse.translationText!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _OptionsTile(
-                    icon: Icons.g_translate_rounded,
-                    title: 'Copy Translation',
-                    subtitle: 'Copy current translation',
-                    color: Colors.white,
-                    isSmallPhone: isSmallPhone,
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: verse.translationText!));
-                      Navigator.pop(sheetCtx);
-                    },
-                  ),
-                ],
-                const SizedBox(height: 8),
-                _OptionsTile(
-                  icon: Icons.share_rounded,
-                  title: 'Share Verse',
-                  subtitle: 'Send to others',
-                  color: Colors.white,
-                  isSmallPhone: isSmallPhone,
-                  onTap: () async {
-                    HapticService().selection();
-                    Navigator.pop(sheetCtx);
-                    final shareText = '${verse.textUthmani}\n\n${verse.translationText ?? ''}\n— Quran ${verse.verseKey}${verse.translationName != null ? ' (${verse.translationName})' : ''}';
-                    try { await Share.share(shareText); } catch (e) { debugPrint('Error sharing: $e'); }
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
-class _OptionsTile extends StatelessWidget {
+class _VerseAction extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final bool isSmallPhone;
+  final String label;
   final VoidCallback onTap;
+  final bool active;
 
-  const _OptionsTile({required this.icon, required this.title, required this.subtitle, required this.color, required this.isSmallPhone, required this.onTap});
+  const _VerseAction({required this.icon, required this.label, required this.onTap, this.active = false});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: isSmallPhone ? 12 : 14, horizontal: isSmallPhone ? 14 : 16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: EdgeInsets.all(isSmallPhone ? 8 : 10),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: isSmallPhone ? 16 : 18),
-            ),
-            SizedBox(width: isSmallPhone ? 12 : 16),
-            Expanded(
+    final color = active ? AppColors.spiritualGold : Colors.white;
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Ink(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: active ? AppColors.spiritualGold.withValues(alpha: 0.12) : Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: active ? AppColors.spiritualGold.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.08),
+                  width: 0.5,
+                ),
+              ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.body(color: Colors.white, weight: FontWeight.w600).copyWith(fontSize: isSmallPhone ? 14 : null)),
-                  Text(subtitle, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)).copyWith(fontSize: isSmallPhone ? 10 : null)),
+                  Icon(icon, color: color, size: 22),
+                  const SizedBox(height: 6),
+                  Text(label, style: AppTextStyles.tiny(color: color.withValues(alpha: 0.85)).copyWith(fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

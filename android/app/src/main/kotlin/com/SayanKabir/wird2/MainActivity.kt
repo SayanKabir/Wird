@@ -16,9 +16,25 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private var pendingLocationResult: MethodChannel.Result? = null
+    private var linksChannel: MethodChannel? = null
+
+    /** Verse link the app was launched with, handed to Dart once. */
+    private var initialLink: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        initialLink = linkFrom(intent)
+        linksChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LINKS_CHANNEL).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "getInitialLink" -> {
+                        result.success(initialLink)
+                        initialLink = null
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, LOCATION_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -64,6 +80,15 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    /** A quran.com link tapped while Wird is already running. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        linkFrom(intent)?.let { linksChannel?.invokeMethod("onLink", it) }
+    }
+
+    private fun linkFrom(intent: Intent?): String? =
+        if (intent?.action == Intent.ACTION_VIEW) intent.dataString else null
+
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -75,6 +100,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val LOCATION_CHANNEL = "com.SayanKabir.wird2/location"
+        private const val LINKS_CHANNEL = "com.SayanKabir.wird2/links"
         private const val LOCATION_SETTINGS_REQUEST = 7301
     }
 
