@@ -133,7 +133,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       hapticsEnabled: fields[23] == null ? true : fields[23] as bool,
       quranTransliterationScript:
           fields[24] == null ? 'latin' : fields[24] as String,
-      performanceMode: fields[25] == null ? 'smooth' : fields[25] as String,
+      // Hand-edited after generation: only trust a String here, so data
+      // written by another build under this index can't block startup.
+      performanceMode: fields[26] is String ? fields[26] as String : 'smooth',
     );
   }
 
@@ -191,7 +193,7 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..write(obj.hapticsEnabled)
       ..writeByte(24)
       ..write(obj.quranTransliterationScript)
-      ..writeByte(25)
+      ..writeByte(26)
       ..write(obj.performanceMode);
   }
 

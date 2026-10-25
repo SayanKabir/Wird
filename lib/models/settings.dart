@@ -459,7 +459,12 @@ class AppSettings extends Equatable {
 
   /// Visual effects budget: 'lite', 'balanced' or 'smooth'. See
   /// [PerformanceMode] and AppEffects for what each level turns on.
-  @HiveField(25, defaultValue: 'smooth')
+  ///
+  /// Field 25 is taken: the tasbih-rework branch stores a bool
+  /// (reduceMotionUserSet) there, and phones that ran that build still have
+  /// it on disk. Reading it as this String crashed Hive before the first
+  /// frame, leaving the app on its splash screen.
+  @HiveField(26, defaultValue: 'smooth')
   final String performanceMode;
 
   const AppSettings({
