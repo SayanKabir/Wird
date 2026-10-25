@@ -1,3 +1,25 @@
+import 'package:flutter/animation.dart';
+
+/// Shared easing curves. Use these instead of hand-picking a curve per
+/// widget, so the whole app moves with one personality: quick to respond,
+/// soft to settle.
+class AppCurves {
+  AppCurves._();
+
+  /// Things entering, exiting or responding to a tap. Starts fast, so the
+  /// change begins the moment the finger lands.
+  static const Curve emphasized = Cubic(0.23, 1, 0.32, 1);
+
+  /// Things moving from one place on screen to another.
+  static const Curve move = Cubic(0.77, 0, 0.175, 1);
+
+  /// Sheets and panels sliding in from an edge (iOS drawer curve).
+  static const Curve drawer = Cubic(0.32, 0.72, 0, 1);
+
+  /// Exits, which should get out of the way rather than linger.
+  static const Curve exit = Curves.easeOutCubic;
+}
+
 /// Wird App Durations - Animation & Timing Constants
 class AppDurations {
   AppDurations._();
@@ -14,6 +36,21 @@ class AppDurations {
 
   /// Screen transitions
   static const Duration slow = Duration(milliseconds: 300);
+
+  /// Pushing a new screen, and popping back from it (exits are quicker).
+  static const Duration route = Duration(milliseconds: 300);
+  static const Duration routeReverse = Duration(milliseconds: 240);
+
+  /// Switching to a neighbouring tab by tapping its icon.
+  static const Duration tabSlide = Duration(milliseconds: 300);
+
+  /// Fading in a distant tab after jumping to it.
+  static const Duration tabFade = Duration(milliseconds: 220);
+
+  /// Gap between items in a staggered list entrance, and the most items that
+  /// are staggered before the rest simply appear together.
+  static const Duration stagger = Duration(milliseconds: 40);
+  static const int staggerMaxItems = 6;
 
   /// Number roll animation
   static const Duration numberRoll = Duration(milliseconds: 400);

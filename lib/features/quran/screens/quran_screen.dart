@@ -19,6 +19,7 @@ import 'surah_reading_screen.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/app_route.dart';
 
 enum _QuranTab { surah, juz, revelation, saved }
 
@@ -381,7 +382,9 @@ class _QuranScreenState extends State<QuranScreen> {
           children: [
             for (final tab in _QuranTab.values)
               Expanded(
-                child: GestureDetector(
+                child: Pressable(
+                  pressedScale: 0.96,
+                  haptic: PressableHaptic.none,
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     if (_tab == tab) return;
@@ -716,32 +719,13 @@ class _QuranScreenState extends State<QuranScreen> {
         : PrayerPeriod.isha;
 
     Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
-        reverseTransitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            SurahReadingScreen(
+      AppRoute(
+        builder: (context) => SurahReadingScreen(
               surahId: surahId,
               surahName: surahName,
               prayerPeriod: prayerPeriod,
               initialVerse: verse,
             ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-          return FadeTransition(
-            opacity: curvedAnimation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.08),
-                end: Offset.zero,
-              ).animate(curvedAnimation),
-              child: child,
-            ),
-          );
-        },
       ),
     ).then((_) => _refreshOffline());
   }
@@ -781,7 +765,7 @@ class _FilterPill extends StatelessWidget {
       ),
     );
     if (onTap == null) return pill;
-    return GestureDetector(onTap: onTap, child: pill);
+    return Pressable(onTap: onTap, pressedScale: 0.95, haptic: PressableHaptic.selection, child: pill);
   }
 }
 
@@ -1071,7 +1055,9 @@ class _JuzCardState extends State<_JuzCard> {
                       ],
                     ),
                   ),
-                  GestureDetector(
+                  Pressable(
+                    pressedScale: 0.97,
+                    haptic: PressableHaptic.none,
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
                       HapticService().selection();
@@ -1100,8 +1086,8 @@ class _JuzCardState extends State<_JuzCard> {
                     child: Column(
                       children: [
                         for (final seg in segments)
-                          InkWell(
-                            borderRadius: BorderRadius.circular(10),
+                          Pressable(
+                            pressedScale: 0.98,
                             onTap: () => widget.onOpen(seg.surah, seg.fromVerse),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -1239,7 +1225,8 @@ class _ContinueReadingCard extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
-      child: GestureDetector(
+      child: Pressable(
+        pressedScale: 0.98,
         onTap: onTap,
         // See the search bar above: blurring the smooth celestial gradient
         // behind this card buys nothing visually and costs an offscreen

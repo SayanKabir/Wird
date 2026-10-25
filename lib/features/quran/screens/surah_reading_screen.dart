@@ -26,6 +26,8 @@ import '../widgets/surah_info_modal.dart';
 import '../bloc/quran_bloc.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/glass_snackbar.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -223,47 +225,11 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
 
     context.read<QuranBloc>().add(SaveBookmark(bookmark));
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: AppBackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            fallbackTint: AppBackdropFilter.sheetTint,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 0.5),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.spiritualGold.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.bookmark_rounded, color: AppColors.spiritualGold, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Bookmarked verse ${verse.verseNumber}',
-                    style: AppTextStyles.small(color: Colors.white).copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
+    GlassSnackBar.show(
+      context,
+      message: 'Bookmarked verse ${verse.verseNumber}',
+      icon: Icons.bookmark_rounded,
+      duration: const Duration(seconds: 2),
     );
 
     HapticService().medium();
@@ -414,7 +380,9 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
           ),
                     leadingWidth: 64,
                     leading: Center(
-                      child: GestureDetector(
+                      child: Pressable(
+                        pressedScale: 0.88,
+                        haptic: PressableHaptic.none,
                         onTap: () {
                           HapticService().light();
                           Navigator.of(context).pop();
@@ -428,7 +396,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     ),
                     actions: [
                       if (SurahInfoLocalRepository().getInfo(widget.surahId) != null) ...[
-                        GestureDetector(
+                        Pressable(
+                          pressedScale: 0.88,
                           onTap: () => _showSurahInfoModal(SurahInfoLocalRepository().getInfo(widget.surahId)!, isSmallPhone),
                           child: Container(
                             padding: EdgeInsets.all(isSmallPhone ? 6 : 8),
@@ -438,7 +407,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                         ),
                         const SizedBox(width: 12),
                       ],
-                      GestureDetector(
+                      Pressable(
+                        pressedScale: 0.88,
                         onTap: () => _showSettingsSheet(isSmallPhone),
                         child: Container(
                           padding: EdgeInsets.all(isSmallPhone ? 6 : 8),
@@ -805,7 +775,9 @@ class _VerseCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                GestureDetector(
+                Pressable(
+                  pressedScale: 0.88,
+                  haptic: PressableHaptic.none,
                   onTap: () {
                     HapticService().light();
                     _showVerseOptions(context, verse, onBookmark, isSmallPhone);
@@ -977,9 +949,9 @@ class _OptionsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return Pressable(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      pressedScale: 0.97,
       child: Container(
         padding: EdgeInsets.symmetric(vertical: isSmallPhone ? 12 : 14, horizontal: isSmallPhone ? 14 : 16),
         decoration: BoxDecoration(

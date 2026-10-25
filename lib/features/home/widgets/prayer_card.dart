@@ -10,6 +10,8 @@ import '../../../core/services/prayer_service.dart';
 import '../../tasbih/screens/session_screen.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/app_route.dart';
+import '../../../widgets/common/pressable.dart';
 
 class PrayerCard extends StatefulWidget {
   final Prayer prayer;
@@ -424,7 +426,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
               HapticService().selection();
               Navigator.push(
                 context,
-                MaterialPageRoute(
+                AppRoute(
                   builder: (_) => const SessionScreen(sessionId: 'after_prayer'),
                 ),
               );
@@ -448,7 +450,9 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
     final isJamaah = widget.entry?.isJamaah ?? false;
     final color = enabled ? AppColors.jumuahAccent : Colors.white.withOpacity(0.2);
 
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.95,
+      haptic: PressableHaptic.none,
       onTap: enabled ? () {
         HapticService().light();
         widget.onToggleJamaah?.call();
@@ -621,14 +625,12 @@ class _ModernActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isEnabled = onTap != null;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        splashColor: color.withOpacity(0.2),
-        child: Ink(
+    // Callers fire their own haptic, so Pressable only adds the press.
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.96,
+      haptic: PressableHaptic.none,
+      child: Container(
           height: 44,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
@@ -668,7 +670,6 @@ class _ModernActionButton extends StatelessWidget {
               ),
             ],
           ),
-        ),
       ),
     );
   }

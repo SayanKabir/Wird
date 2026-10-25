@@ -126,7 +126,7 @@ class SettingsScreenState extends State<SettingsScreen> {
         await _saveSettings(newSettings);
         HapticService().medium();
       } else if (result.serviceDisabled) {
-        if (mounted) await showLocationOffPrompt(context);
+        if (mounted) await showLocationOffPrompt(context, aboveNavBar: true);
       } else {
         if (mounted) _showError(result.error ?? 'Failed to update location');
       }
@@ -211,7 +211,26 @@ class SettingsScreenState extends State<SettingsScreen> {
 
     if (confirmed == true) {
       HapticService().medium();
-      // Logic to reset to defaults
+      // Restore preferences, but keep what isn't a preference: where the
+      // user is, that onboarding is done, and the notification switches
+      // (turning those on needs a permission prompt and schedules alarms).
+      // Reduce motion goes back to the device-based default.
+      final restored = AppSettings.defaults().copyWith(
+        location: _settings.location,
+        onboardingCompleted: _settings.onboardingCompleted,
+        notificationsEnabled: _settings.notificationsEnabled,
+        sunnahNotificationsEnabled: _settings.sunnahNotificationsEnabled,
+        islamicEventsEnabled: _settings.islamicEventsEnabled,
+      );
+      await _saveSettings(restored);
+      if (mounted) {
+        GlassSnackBar.show(
+          context,
+          message: 'Settings restored to defaults',
+          icon: Icons.restore_rounded,
+          bottomMargin: GlassSnackBar.aboveNavBar,
+        );
+      }
     }
   }
 
@@ -219,6 +238,7 @@ class SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       GlassSnackBar.show(
         context,
+        bottomMargin: GlassSnackBar.aboveNavBar,
         message: message,
         isError: true,
       );
@@ -352,7 +372,8 @@ class SettingsScreenState extends State<SettingsScreen> {
                   // Exact alarm permission warning (Android 12+)
                   if (_settings.notificationsEnabled && !_canScheduleExactAlarms) ...[
                     _buildDivider(),
-                    GestureDetector(
+                    Pressable(
+                      pressedScale: 0.98,
                       onTap: () async {
                         await _notificationService.requestExactAlarmPermission();
                         _checkExactAlarmPermission();
@@ -957,15 +978,15 @@ class SettingsScreenState extends State<SettingsScreen> {
                       separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
                       itemBuilder: (context, index) {
                         final isSelected = options[index] == currentValue;
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              HapticService().selection();
-                              onSelected(index);
-                              Navigator.pop(context);
-                            },
-                            child: Padding(
+                        return Pressable(
+                          pressedScale: 0.98,
+                          haptic: PressableHaptic.none,
+                          onTap: () {
+                            HapticService().selection();
+                            onSelected(index);
+                            Navigator.pop(context);
+                          },
+                          child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                               child: Row(
                                 children: [
@@ -982,7 +1003,6 @@ class SettingsScreenState extends State<SettingsScreen> {
                                 ],
                               ),
                             ),
-                          ),
                         );
                       },
                     ),

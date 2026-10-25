@@ -35,6 +35,7 @@ import '../../../core/services/device_profile.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/app_route.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -44,7 +45,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   final PageController _pageController = PageController(initialPage: 2);
   final NotificationService _notificationService = NotificationService();
   final WeatherService _weatherService = WeatherService();
@@ -66,6 +68,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// animation, which is precisely when a hitch is most visible.
   final ValueNotifier<int> _currentPage = ValueNotifier<int>(2);
 
+  /// Index of the dashboard, where the sun or moon is shown in full.
+  static const int _homePageIndex = 2;
+
+  /// How visible the sun or moon is: full on the dashboard, dimmed on other
+  /// tabs so it doesn't glare through their cards. Follows the page position,
+  /// so it fades with the finger during a swipe. A notifier so only the
+  /// celestial body repaints, not the whole home tree.
+  final ValueNotifier<double> _celestialOpacity = ValueNotifier<double>(1);
+
+  /// Fades the pages in after jumping to a distant tab.
+  late final AnimationController _jumpFade = AnimationController(
+    vsync: this,
+    duration: AppDurations.tabFade,
+    value: 1,
+  );
+
+  /// Direction of the last jump, for the small slide that goes with the fade.
+  double _jumpDirection = 1;
+
   bool _showPermissionWarning = false;
   WeatherData? _weather;
   Timer? _weatherTimer;
@@ -75,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pageController.addListener(_onPageScroll);
     _checkPermissions();
     _fetchWeather();
     _autoDetectLocation();
@@ -155,6 +177,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _fetchWeather();
     GlassSnackBar.show(
       context,
+      bottomMargin: GlassSnackBar.aboveNavBar,
       message: 'Location updated to ${moved.displayName}',
       icon: Icons.location_on_rounded,
     );
@@ -197,6 +220,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _currentPage.dispose();
+    _celestialOpacity.dispose();
+    _jumpFade.dispose();
     _weatherTimer?.cancel();
     _debugService.overriddenWeather.removeListener(_onDebugChanged);
     _debugService.overriddenMoonPhase.removeListener(_onDebugChanged);
@@ -208,12 +233,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     HapticService().light();
   }
 
-  void _navToPage(int index) {
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutQuart,
-    );
+  void _onPageScroll() {
+    if (!_pageController.hasClients) return;
+    final page = _pageController.page ?? _homePageIndex.toDouble();
+    final away = (page - _homePageIndex).abs().clamp(0.0, 1.0);
+    _celestialOpacity.value = 1 - 0.75 * away;
+  }
+
+  /// Neighbouring tabs slide over. Distant ones don't fly past every page in
+  /// between: the view jumps there and the new page fades in with a small
+  /// shift in the direction of travel.
+  Future<void> _navToPage(int index) async {
+    if (!_pageController.hasClients) return;
+    final from = (_pageController.page ?? _currentPage.value.toDouble()).round();
+    if (from == index) return;
+    if ((index - from).abs() == 1) {
+      await _pageController.animateToPage(index, duration: AppDurations.tabSlide, curve: AppCurves.emphasized);
+      return;
+    }
+    _pageController.jumpToPage(index);
+    if (motionStill()) return;
+    _jumpDirection = index > from ? 1 : -1;
+    await _jumpFade.forward(from: 0);
   }
 
   /// Tapping the dashboard weather widget slides over to Settings (page 0) and
@@ -221,11 +262,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// the user at the top of a long settings list to hunt for it.
   Future<void> _openWeatherSettings() async {
     HapticService().light();
-    await _pageController.animateToPage(
-      _settingsPageIndex,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutQuart,
-    );
+    await _navToPage(_settingsPageIndex);
     if (!mounted) return;
     await _settingsKey.currentState?.revealWeatherSection();
   }
@@ -353,13 +390,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 lite: lighterVisuals(),
                 latitude: _latitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
+                celestialOpacity: _celestialOpacity,
                 child: Scaffold(
                   resizeToAvoidBottomInset: false,
                   backgroundColor: Colors.transparent,
                   extendBody: true,
                   body: Stack(
                     children: [
-                      PageView(
+                      _JumpFade(
+                        animation: _jumpFade,
+                        direction: () => _jumpDirection,
+                        child: PageView(
                         controller: _pageController,
                         onPageChanged: _onPageChanged,
                         physics: const BouncingScrollPhysics(),
@@ -379,6 +420,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           const QiblaScreen(), // 5
                           const StatisticsScreen(), // 6
                         ],
+                      ),
                       ),
                       // Floating Navigation Capsule
                       Positioned(
@@ -568,8 +610,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: const Text("Fix"),
                   ),
                   const SizedBox(width: 8),
-                  InkWell(
+                  Pressable(
                     onTap: () => setState(() => _showPermissionWarning = false),
+                    pressedScale: 0.85,
                     child: const Icon(
                       Icons.close,
                       color: Colors.white54,
@@ -931,32 +974,12 @@ class _DashboardView extends StatelessWidget {
         : null;
 
     Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
-        reverseTransitionDuration: const Duration(milliseconds: 400),
-        pageBuilder:
-            (context, animation, secondaryAnimation) => IslamicCalendarScreen(
+      AppRoute(
+        builder: (context) => IslamicCalendarScreen(
               initialDate: date,
               prayerPeriod: prayerPeriod,
               maghribTime: maghribTime,
             ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-
-          return FadeTransition(
-            opacity: curvedAnimation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.12),
-                end: Offset.zero,
-              ).animate(curvedAnimation),
-              child: child,
-            ),
-          );
-        },
       ),
     );
   }
@@ -1177,7 +1200,9 @@ class _CurrentPrayerSection extends StatelessWidget {
     final timeData = state.prayerTimes[prayer];
 
 
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.98,
+      haptic: PressableHaptic.none,
       onTap:
           !isCompleted
               ? () {
@@ -1270,12 +1295,14 @@ class _CurrentPrayerSection extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      GestureDetector(
+                      Pressable(
+                        pressedScale: 0.95,
+                        haptic: PressableHaptic.none,
                         onTap: () {
                           HapticService().selection();
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
+                            AppRoute(
                               builder: (_) => const SessionScreen(sessionId: 'after_prayer'),
                             ),
                           );
@@ -1315,7 +1342,9 @@ class _CurrentPrayerSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   // Jamaah toggle pill
-                  GestureDetector(
+                  Pressable(
+                    pressedScale: 0.95,
+                    haptic: PressableHaptic.none,
                     onTap: () {
                       HapticService().selection();
                       context.read<PrayerBloc>().add(
@@ -1580,4 +1609,34 @@ String _formatTime(DateTime time) {
       time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
   final minute = time.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+/// The fade and small slide that bring in a distant tab after a jump. At rest
+/// (value 1) it costs nothing.
+class _JumpFade extends StatelessWidget {
+  final Animation<double> animation;
+  final double Function() direction;
+  final Widget child;
+
+  const _JumpFade({required this.animation, required this.direction, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        // Always the same two wrappers so the PageView below keeps its state;
+        // at full opacity Opacity paints straight through with no layer.
+        final t = AppCurves.emphasized.transform(animation.value);
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(24 * (1 - t) * direction(), 0),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 }

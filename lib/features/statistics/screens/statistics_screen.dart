@@ -18,6 +18,7 @@ import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/prayer_service.dart';
+import '../../../widgets/common/app_route.dart';
 
 // -----------------------------------------------------------------------------
 // MAIN STATISTICS SCREEN
@@ -563,12 +564,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final unlockedCount = achievements.where((a) => a.isUnlocked).length;
     final totalCount = achievements.length;
 
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.98,
+      haptic: PressableHaptic.none,
       onTap: () {
         HapticService().light();
         Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => AchievementsScreen(achievements: achievements))
+            AppRoute(builder: (context) => AchievementsScreen(achievements: achievements))
         );
       },
       child: ClipRRect(

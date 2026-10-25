@@ -7,19 +7,20 @@ import '../home/bloc/prayer_bloc.dart';
 import 'screens/counter_screen.dart';
 import 'screens/dhikr_hub_screen.dart';
 import 'screens/session_screen.dart';
+import '../../widgets/common/app_route.dart';
 
 /// Entry points into the dhikr section, so callers don't build routes.
 class DhikrNav {
   DhikrNav._();
 
   static Future<void> openHub(BuildContext context) =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DhikrHubScreen()));
+      Navigator.of(context).push(AppRoute(builder: (_) => const DhikrHubScreen()));
 
   static Future<void> openSession(BuildContext context, String sessionId) =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => SessionScreen(sessionId: sessionId)));
+      Navigator.of(context).push(AppRoute(builder: (_) => SessionScreen(sessionId: sessionId)));
 
   static Future<void> openCounter(BuildContext context, String counterId) =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => CounterScreen(counterId: counterId)));
+      Navigator.of(context).push(AppRoute(builder: (_) => CounterScreen(counterId: counterId)));
 
   /// The session that suits this time of day. Once the morning or evening
   /// azkar are done, the after-prayer dhikr takes their place.

@@ -10,6 +10,7 @@ import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/location_off_prompt.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/pressable.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -641,7 +642,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required VoidCallback onTap,
     bool compact = false,
   }) {
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.96,
+      haptic: PressableHaptic.none,
       onTap: () {
         HapticService().light();
         onTap();

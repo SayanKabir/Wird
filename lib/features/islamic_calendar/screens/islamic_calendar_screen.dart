@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import '../../../core/constants/durations.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -12,7 +13,20 @@ import '../../../core/utils/islamic_day_utils.dart';
 import '../../../widgets/common/string_lights_overlay.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
-import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/glass_snackbar.dart';
+
+/// Entrance timing for this screen. The route already fades the screen in,
+/// so cards only follow a beat behind: short, quick, and never holding
+/// content back for long.
+const Duration _enter = Duration(milliseconds: 280);
+
+/// How far cards rise as they appear; none when system animations are off.
+double get _rise => motionStill() ? 0 : 0.04;
+
+/// Stagger for list items, capped so a long list never waits on its tail.
+Duration _staggerDelay(int index) =>
+    AppDurations.stagger * (index < AppDurations.staggerMaxItems ? index : AppDurations.staggerMaxItems);
 
 class IslamicCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -85,7 +99,7 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
                     child: _Header(
                       hijriFocused: hijriFocused,
                       focusedMonth: _focusedMonth,
-                    ).animate().fadeIn(duration: 400.ms),
+                    ),
                   ),
 
                   // 2. Today Card
@@ -94,8 +108,8 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
                     sliver: SliverToBoxAdapter(
                       child: _TodayCard(now: now, hijri: hijriNow, maghribTime: widget.maghribTime)
                           .animate()
-                          .fadeIn(delay: 150.ms, duration: 500.ms)
-                          .slideY(begin: 0.08, curve: Curves.easeOutCubic),
+                          .fadeIn(duration: _enter, curve: AppCurves.emphasized)
+                          .slideY(begin: _rise, duration: _enter, curve: AppCurves.emphasized),
                     ),
                   ),
 
@@ -116,8 +130,8 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
                         ),
                       )
                           .animate()
-                          .fadeIn(delay: 300.ms, duration: 500.ms)
-                          .slideY(begin: 0.08, curve: Curves.easeOutCubic),
+                          .fadeIn(delay: AppDurations.stagger, duration: _enter, curve: AppCurves.emphasized)
+                          .slideY(begin: _rise, delay: AppDurations.stagger, duration: _enter, curve: AppCurves.emphasized),
                     ),
                   ),
 
@@ -127,7 +141,7 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
                     sliver: SliverToBoxAdapter(
                       child: _SpecialDaysList(focusedMonth: _focusedMonth)
                           .animate()
-                          .fadeIn(delay: 450.ms, duration: 500.ms),
+                          .fadeIn(delay: AppDurations.stagger * 2, duration: _enter, curve: AppCurves.emphasized),
                     ),
                   ),
                 ],
@@ -160,7 +174,9 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
+          Pressable(
+            pressedScale: 0.88,
+            haptic: PressableHaptic.none,
             onTap: () {
               HapticService().light();
               Navigator.of(context).pop();
@@ -307,7 +323,9 @@ class _MaghribInfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.95,
+      haptic: PressableHaptic.none,
       onTap: () {
         HapticService().light();
         _showInfoSnackBar(context);
@@ -357,50 +375,11 @@ class _MaghribInfoPill extends StatelessWidget {
         ? 'Islamic dates change at Maghrib. $dayStr became ${afterHijri.day} ${afterHijri.monthNameEnglish} after $maghribStr.'
         : 'Islamic dates change at Maghrib. $dayStr is ${beforeHijri.day} ${beforeHijri.monthNameEnglish} until $maghribStr, then changes to ${afterHijri.day} ${afterHijri.monthNameEnglish}.';
 
-    ScaffoldMessenger.of(context).removeCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: AppBackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            fallbackTint: AppBackdropFilter.sheetTint,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.kaabaGold.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.nightlight_round, color: AppColors.kaabaGold, size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      message,
-                      style: AppTextStyles.small(color: Colors.white).copyWith(height: 1.4),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        duration: const Duration(seconds: 5),
-      ),
+    GlassSnackBar.show(
+      context,
+      message: message,
+      icon: Icons.nightlight_round,
+      duration: const Duration(seconds: 5),
     );
   }
 }
@@ -501,7 +480,9 @@ class _CalendarSection extends StatelessWidget {
 
         cells.add(
           Expanded(
-            child: GestureDetector(
+            child: Pressable(
+              pressedScale: 0.9,
+              haptic: PressableHaptic.none,
               onTap: () {
                 HapticService().selection();
                 onDateSelected(date);
@@ -600,7 +581,8 @@ class _NavButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.88,
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(10),
@@ -802,7 +784,7 @@ class _SpecialDaysListState extends State<_SpecialDaysList> {
           style: AppTextStyles.tiny(
             color: AppColors.kaabaGold.withValues(alpha: 0.7),
           ).copyWith(letterSpacing: 3, fontWeight: FontWeight.bold),
-        ).animate().fadeIn(duration: 400.ms),
+        ).animate().fadeIn(duration: _enter, curve: AppCurves.emphasized),
         const SizedBox(height: 16),
         ListView.builder(
           shrinkWrap: true,
@@ -824,8 +806,8 @@ class _SpecialDaysListState extends State<_SpecialDaysList> {
               },
             )
                 .animate()
-                .fadeIn(delay: (index * 80).ms, duration: 400.ms)
-                .slideY(begin: 0.05, duration: 400.ms, curve: Curves.easeOut);
+                .fadeIn(delay: _staggerDelay(index), duration: _enter, curve: AppCurves.emphasized)
+                .slideY(begin: _rise, delay: _staggerDelay(index), duration: _enter, curve: AppCurves.emphasized);
           },
         ),
       ],
@@ -859,7 +841,8 @@ class _EventCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
-      child: GestureDetector(
+      child: Pressable(
+        pressedScale: 0.98,
         onTap: onToggle,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
@@ -1081,6 +1064,6 @@ class _EmptyEventState extends StatelessWidget {
           ],
         ),
       ),
-    ).animate().fadeIn(duration: 500.ms);
+    ).animate().fadeIn(duration: _enter, curve: AppCurves.emphasized);
   }
 }
