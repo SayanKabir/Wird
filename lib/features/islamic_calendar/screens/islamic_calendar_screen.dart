@@ -15,6 +15,7 @@ import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_snackbar.dart';
+import '../../../core/constants/radii.dart';
 
 /// Entrance timing for this screen. The route already fades the screen in,
 /// so cards only follow a beat behind: short, quick, and never holding
@@ -201,7 +202,6 @@ class _Header extends StatelessWidget {
           PageHeader(
             overline: 'ISLAMIC CALENDAR',
             title: 'Calendar',
-            overlineColor: AppColors.kaabaGold.withValues(alpha: 0.8),
           ),
         ],
       ),
@@ -588,7 +588,7 @@ class _NavButton extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.control),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Icon(icon, color: Colors.white70, size: 22),
@@ -870,7 +870,7 @@ class _EventCard extends StatelessWidget {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: accent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(AppRadii.control),
                       border: Border.all(color: accent.withValues(alpha: 0.25)),
                     ),
                     child: Icon(icon, size: 22, color: accent),

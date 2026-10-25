@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../core/constants/durations.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/utils/formatters.dart';
@@ -90,9 +91,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
         borderRadius: BorderRadius.circular(24),
         child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: GestureDetector(
-            onTap: _toggleExpand,
-            child: Container(
+          child: Container(
               decoration: BoxDecoration(
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(24),
@@ -107,35 +106,42 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
               ),
               child: Material(
                 color: Colors.transparent,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      // Header
-                      _buildHeader(status),
-
-                      // Expandable Body
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 350),
-                        curve: Curves.easeOutQuart,
-                        alignment: Alignment.topCenter,
-                        child: _isExpanded
-                            ? Column(
-                          children: [
-                            const SizedBox(height: 20),
-                            Container(height: 1, color: Colors.white.withOpacity(0.1)),
-                            const SizedBox(height: 20),
-                            _buildExpandedDetails(status),
-                          ],
-                        )
-                            : const SizedBox.shrink(),
+                child: Column(
+                  children: [
+                    // Only the header toggles the card. When the whole card
+                    // did, a near miss on Read Azkar or Jama'ah collapsed it
+                    // and the list jumped out from under the finger.
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: _toggleExpand,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: _buildHeader(status),
                       ),
-                    ],
-                  ),
+                    ),
+
+                    // Expandable Body
+                    AnimatedSize(
+                      duration: AppDurations.slow,
+                      curve: AppCurves.emphasized,
+                      alignment: Alignment.topCenter,
+                      child: _isExpanded
+                          ? Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                              child: Column(
+                                children: [
+                                  Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+                                  const SizedBox(height: 20),
+                                  _buildExpandedDetails(status),
+                                ],
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
         ),
       ),
     );

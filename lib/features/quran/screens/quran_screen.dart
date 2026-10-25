@@ -20,6 +20,7 @@ import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/app_route.dart';
+import '../../../core/constants/radii.dart';
 
 enum _QuranTab { surah, juz, revelation, saved }
 
@@ -270,7 +271,6 @@ class _QuranScreenState extends State<QuranScreen> {
               child: const PageHeader(
                 overline: 'THE NOBLE',
                 title: 'Quran',
-                overlineColor: AppColors.spiritualGold,
               ),
             ),
 
@@ -375,7 +375,7 @@ class _QuranScreenState extends State<QuranScreen> {
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.card),
           border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
         ),
         child: Row(
@@ -540,7 +540,7 @@ class _QuranScreenState extends State<QuranScreen> {
     return PopupMenuButton<_SurahSort>(
       initialValue: _sort,
       color: const Color(0xFF1C1F2E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.card)),
       onSelected: (s) {
         HapticService().selection();
         setState(() => _sort = s);
@@ -750,7 +750,7 @@ class _FilterPill extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         color: selected ? AppColors.spiritualGold.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
         border: Border.all(
           color: selected ? AppColors.spiritualGold.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08),
           width: 0.5,
@@ -846,7 +846,7 @@ class _JumpCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadii.group),
           border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.25), width: 0.5),
         ),
         child: Row(
@@ -1555,7 +1555,7 @@ class _QuranErrorView extends StatelessWidget {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadii.card),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 ),

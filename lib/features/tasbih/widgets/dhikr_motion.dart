@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../core/constants/durations.dart';
 
 // ─────────────────── Folding scroll ───────────────────
 
@@ -382,7 +383,7 @@ class TickingNumber extends StatelessWidget {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
       switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      switchOutCurve: AppCurves.exit,
       layoutBuilder: (current, previous) => Stack(
         alignment: Alignment.center,
         children: [...previous, if (current != null) current],

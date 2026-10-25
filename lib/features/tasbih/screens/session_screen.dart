@@ -13,6 +13,7 @@ import '../../../widgets/common/pressable.dart';
 import '../bloc/tasbih_bloc.dart';
 import '../widgets/dhikr_motion.dart';
 import '../widgets/dhikr_widgets.dart';
+import '../../../core/constants/durations.dart';
 
 /// A guided session: each step is said its own number of times, then the
 /// next one comes up. The position is saved as you go, so leaving and coming
@@ -204,7 +205,7 @@ class _SessionScreenState extends State<SessionScreen> {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 320),
             switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
+            switchOutCurve: AppCurves.exit,
             transitionBuilder: (child, animation) {
               // With reduce motion, steps simply cross-fade.
               if (motionStill()) return FadeTransition(opacity: animation, child: child);
@@ -307,7 +308,7 @@ class _SessionScreenState extends State<SessionScreen> {
                   TweenAnimationBuilder<double>(
                     tween: Tween(begin: motionStill() ? 1 : 0.6, end: 1),
                     duration: const Duration(milliseconds: 420),
-                    curve: Curves.easeOutBack,
+                    curve: AppCurves.settle,
                     builder: (context, v, child) => Transform.scale(scale: v, child: child),
                     child: Container(
                       width: 84,
@@ -418,9 +419,9 @@ class _Beads extends StatelessWidget {
           // Re-keyed when filled so the pop plays once, as the bead lands.
           TweenAnimationBuilder<double>(
             key: ValueKey('$i${i < done}'),
-            tween: Tween(begin: i < done && !motionStill() ? 1.3 : 1, end: 1),
-            duration: const Duration(milliseconds: 420),
-            curve: Curves.elasticOut,
+            tween: Tween(begin: i < done && !motionStill() ? 1.18 : 1, end: 1),
+            duration: const Duration(milliseconds: 300),
+            curve: AppCurves.settle,
             builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),

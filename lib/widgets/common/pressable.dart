@@ -97,7 +97,7 @@ class _PressableState extends State<Pressable> {
               duration: AppDurations.press,
               // Ease out on the way down, spring slightly on the way back so the
               // release feels responsive rather than mushy.
-              curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+              curve: _pressed ? Curves.easeOut : AppCurves.settle,
               child: widget.child,
             ),
     );

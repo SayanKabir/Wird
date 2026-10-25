@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/repositories/surah_info_local_repository.dart';
+import '../../../core/constants/radii.dart';
 
 class SurahInfoModal extends StatelessWidget {
   final SurahInfoData info;
@@ -14,7 +15,7 @@ class SurahInfoModal extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: AppColors.background,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
       ),
       child: Stack(
         children: [

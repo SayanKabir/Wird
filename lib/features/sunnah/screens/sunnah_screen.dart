@@ -15,6 +15,7 @@ import '../bloc/sunnah_bloc.dart';
 import '../widgets/sunnah_check.dart';
 import '../widgets/sunnah_detail_sheet.dart';
 import '../widgets/sunnah_format.dart';
+import '../../../core/constants/radii.dart';
 
 /// The Sunnah tab: this week's sunnah, the few the user has chosen to keep
 /// (ticked off day by day), and the library to choose them from.
@@ -86,7 +87,6 @@ class _SunnahScreenState extends State<SunnahScreen> {
             child: const PageHeader(
               overline: 'THE PROPHETIC PATH',
               title: 'Sunnah',
-              overlineColor: AppColors.spiritualGold,
             ),
           ),
         ),
@@ -183,7 +183,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(18),
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 0.5),
                 ),
                 child: Text('Try again', style: AppTextStyles.small(color: Colors.white, weight: FontWeight.w600)),
@@ -227,7 +227,7 @@ class _DhikrCardState extends State<_DhikrCard> {
             padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(AppRadii.group),
               border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
             ),
             child: Row(
@@ -416,7 +416,7 @@ class _PracticeList extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.group),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
       ),
       child: Column(
@@ -492,7 +492,7 @@ class _PracticeEmpty extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.group),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
       ),
       child: Text(
@@ -596,7 +596,7 @@ class _CategoryPill extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected ? AppColors.spiritualGold.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(AppRadii.pill),
             border: Border.all(
               color: selected ? AppColors.spiritualGold.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08),
               width: 0.5,

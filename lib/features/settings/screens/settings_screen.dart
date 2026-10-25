@@ -29,6 +29,7 @@ import '../../../core/repositories/quran_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../core/constants/radii.dart';
 
 
 class SettingsScreen extends StatefulWidget {
@@ -930,7 +931,7 @@ class SettingsScreenState extends State<SettingsScreen> {
       isScrollControlled: true,
       barrierColor: Colors.black.withOpacity(0.6), // Darken background
       builder: (context) => ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
         child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
           fallbackTint: AppBackdropFilter.sheetTint,
@@ -938,7 +939,7 @@ class SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.10),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
               border: Border.all(color: Colors.white.withOpacity(0.15)),
             ),
             child: SafeArea(

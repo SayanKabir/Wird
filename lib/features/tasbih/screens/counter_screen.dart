@@ -11,6 +11,7 @@ import '../bloc/tasbih_bloc.dart';
 import '../widgets/counter_editor_sheet.dart';
 import '../widgets/dhikr_motion.dart';
 import '../widgets/dhikr_widgets.dart';
+import '../../../core/constants/radii.dart';
 
 /// Counting one dhikr freely, in rounds of its target.
 class CounterScreen extends StatefulWidget {
@@ -232,7 +233,7 @@ class _OptionRow extends StatelessWidget {
     final color = onTap == null ? base.withValues(alpha: 0.3) : base;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(AppRadii.card),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
         child: Row(

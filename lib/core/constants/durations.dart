@@ -16,8 +16,14 @@ class AppCurves {
   /// Sheets and panels sliding in from an edge (iOS drawer curve).
   static const Curve drawer = Cubic(0.32, 0.72, 0, 1);
 
-  /// Exits, which should get out of the way rather than linger.
-  static const Curve exit = Curves.easeOutCubic;
+  /// Exits, for AnimatedSwitcher's switchOutCurve or a reverseCurve. Those
+  /// play backwards, so this ease-in shape makes the leaving element start
+  /// moving at once rather than lingering.
+  static const Curve exit = Curves.easeInCubic;
+
+  /// A single soft overshoot for small things settling into place (a
+  /// released press, a tick, a filled bead). Never more than one wobble.
+  static const Curve settle = Curves.easeOutBack;
 }
 
 /// Wird App Durations - Animation & Timing Constants

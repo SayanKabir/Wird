@@ -13,6 +13,7 @@ import '../bloc/sunnah_bloc.dart';
 import 'sunnah_check.dart';
 import 'sunnah_format.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../core/constants/radii.dart';
 
 /// Opens the detail sheet for [sunnah]. Its controls act in place: ticking it
 /// or adding it to the practice updates the sheet and the screen behind it,
@@ -45,7 +46,7 @@ class SunnahDetailSheet extends StatelessWidget {
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: size.height * 0.88),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
         child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
           fallbackTint: AppBackdropFilter.sheetTint,
@@ -162,7 +163,7 @@ class _ArabicBlock extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.group),
         border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
       ),
       child: Column(

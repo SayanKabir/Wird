@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/colors.dart';
 import '../../core/constants/text_styles.dart';
 
 /// The standard hero header for a top-level page: a small letter-spaced
@@ -11,8 +12,8 @@ import '../../core/constants/text_styles.dart';
 /// overline opacity was 0.4 on one screen and 0.5 on the others.
 ///
 /// [AppTextStyles.h1] is the documented "screen title" style, so the title is
-/// always h1 here. Pass [overlineColor] for pages that accent the overline
-/// (Quran and Sunnah use [AppColors.spiritualGold]); it defaults to muted white.
+/// always h1 here. The overline is the app's gold accent on every page;
+/// [overlineColor] exists only for a deliberate exception.
 class PageHeader extends StatelessWidget {
   /// Small letter-spaced label above the title, e.g. 'INSIGHTS'.
   final String overline;
@@ -20,7 +21,7 @@ class PageHeader extends StatelessWidget {
   /// The screen title, e.g. 'Statistics'.
   final String title;
 
-  /// Optional accent colour for the overline. Defaults to white at 50% opacity.
+  /// Overrides the overline's gold. Leave null to match the rest of the app.
   final Color? overlineColor;
 
   const PageHeader({
@@ -38,7 +39,7 @@ class PageHeader extends StatelessWidget {
         Text(
           overline,
           style: AppTextStyles.tiny(
-            color: overlineColor ?? Colors.white.withValues(alpha: 0.5),
+            color: overlineColor ?? AppColors.spiritualGold,
           ).copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),

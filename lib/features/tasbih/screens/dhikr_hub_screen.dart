@@ -11,6 +11,7 @@ import '../bloc/tasbih_bloc.dart';
 import '../dhikr_nav.dart';
 import '../widgets/counter_editor_sheet.dart';
 import '../widgets/dhikr_widgets.dart';
+import '../../../core/constants/radii.dart';
 
 /// The dhikr hub: guided sessions and free counters.
 class DhikrHubScreen extends StatefulWidget {
@@ -228,7 +229,7 @@ class _Group extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.group),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
       ),
       child: Column(

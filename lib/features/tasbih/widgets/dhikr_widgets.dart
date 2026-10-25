@@ -13,6 +13,8 @@ import '../../../widgets/common/pressable.dart';
 import '../../home/bloc/prayer_bloc.dart';
 import '../../home/widgets/celestial_background.dart';
 import 'dhikr_motion.dart';
+import '../../../core/constants/radii.dart';
+import '../../../core/constants/durations.dart';
 
 /// The sky behind the dhikr screens, matching the time of day like the rest
 /// of the app. The sun or moon is hidden so nothing competes with the text.
@@ -187,11 +189,11 @@ class DhikrTextCard extends StatelessWidget {
           end: Alignment.bottomCenter,
           colors: [Colors.white.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.03)],
         ),
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(AppRadii.panel),
         border: Border.all(color: Colors.white.withValues(alpha: 0.09), width: 0.5),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(AppRadii.panel),
         child: FoldingScrollView(
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
           child: Column(
@@ -259,9 +261,9 @@ class DhikrRing extends StatelessWidget {
     final glow = !lighterVisuals();
     return TweenAnimationBuilder<double>(
       key: ValueKey(full ? pulseKey : null),
-      tween: Tween(begin: full && !still ? 1.06 : 1, end: 1),
-      duration: const Duration(milliseconds: 520),
-      curve: Curves.elasticOut,
+      tween: Tween(begin: full && !still ? 1.05 : 1, end: 1),
+      duration: const Duration(milliseconds: 360),
+      curve: AppCurves.emphasized,
       builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
       child: SizedBox(
         width: size,

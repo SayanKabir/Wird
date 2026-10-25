@@ -11,6 +11,7 @@ import '../../../models/tasbih.dart';
 import '../../../widgets/common/pressable.dart';
 import '../bloc/tasbih_bloc.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../core/constants/radii.dart';
 
 /// Frosted bottom-sheet frame shared by the dhikr sheets.
 class DhikrSheetFrame extends StatelessWidget {
@@ -21,7 +22,7 @@ class DhikrSheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
       child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
         fallbackTint: AppBackdropFilter.sheetTint,
@@ -277,7 +278,7 @@ class _CounterEditorState extends State<_CounterEditor> {
 
   InputDecoration _fieldDecoration({required String hint, required String? error}) {
     OutlineInputBorder border(Color c) => OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.card),
           borderSide: BorderSide(color: c, width: 0.8),
         );
     return InputDecoration(
@@ -314,7 +315,7 @@ class _Chip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
         decoration: BoxDecoration(
           color: selected ? AppColors.spiritualGold.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadii.pill),
           border: Border.all(
             color: selected ? AppColors.spiritualGold.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.1),
             width: 0.5,

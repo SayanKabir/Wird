@@ -202,7 +202,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
         children: [
           Text(
             "FIND QIBLA",
-            style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5))
+            style: AppTextStyles.tiny(color: AppColors.spiritualGold)
                 .copyWith(letterSpacing: 4, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -316,10 +316,10 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
       color = AppColors.qiblaAligned;
     } else if (offset > 0) {
       status = "TURN RIGHT";
-      color = AppColors.statusLate;
+      color = AppColors.spiritualGold;
     } else {
       status = "TURN LEFT";
-      color = AppColors.statusLate;
+      color = AppColors.spiritualGold;
     }
 
     return Column(

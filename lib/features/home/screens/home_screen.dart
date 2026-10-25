@@ -36,6 +36,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/app_route.dart';
+import '../../../core/constants/radii.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -492,7 +493,32 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                 ],
               ),
-              child: Row(
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  // A soft highlight that sits behind the current icon and
+                  // follows the page position, so it glides with a swipe and
+                  // slides across when a tab is tapped.
+                  AnimatedBuilder(
+                    animation: _pageController,
+                    builder: (context, _) {
+                      final page = _pageController.hasClients && _pageController.position.haveDimensions
+                          ? (_pageController.page ?? currentPage.toDouble())
+                          : currentPage.toDouble();
+                      return Transform.translate(
+                        offset: Offset(page.clamp(0.0, 6.0) * iconWidth, 0),
+                        child: Container(
+                          width: iconWidth,
+                          height: iconHeight,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppRadii.pill),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  Row(
                 mainAxisSize: MainAxisSize.min, // Hug contents
                 children: [
                   _buildIndicatorIcon(0, Icons.tune_rounded, iconWidth, iconHeight, iconSize, currentPage), // Settings
@@ -502,6 +528,8 @@ class _HomeScreenState extends State<HomeScreen>
                   _buildIndicatorIcon(4, Icons.auto_stories_rounded, iconWidth, iconHeight, iconSize, currentPage), // Sunnah
                   _buildIndicatorIcon(5, Icons.explore_rounded, iconWidth, iconHeight, iconSize, currentPage), // Qibla
                   _buildIndicatorIcon(6, Icons.bar_chart_rounded, iconWidth, iconHeight, iconSize, currentPage), // Stats
+                ],
+              ),
                 ],
               ),
             ),
@@ -523,7 +551,7 @@ class _HomeScreenState extends State<HomeScreen>
       pressedScale: 0.86,
       child: AnimatedContainer(
         duration: AppDurations.normal,
-        curve: Curves.easeOutBack,
+        curve: AppCurves.settle,
         width: width,
         height: height,
         alignment: Alignment.center,
@@ -534,7 +562,7 @@ class _HomeScreenState extends State<HomeScreen>
           size: size,
           color: color,
           // Add a subtle glow only to the active icon
-          shadows: isSelected
+          shadows: isSelected && !lighterVisuals()
               ? [
                   BoxShadow(
                     color: Colors.white.withValues(alpha: 0.4),
@@ -1008,7 +1036,7 @@ class _DashboardView extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.card),
           border: Border.all(color: accent.withValues(alpha: 0.3)),
         ),
         child: Row(
@@ -1054,7 +1082,7 @@ class _DashboardView extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.card),
           border: Border.all(color: accent.withValues(alpha: 0.25)),
         ),
         child: Row(
@@ -1133,7 +1161,7 @@ class _DashboardView extends StatelessWidget {
         AnimatedSwitcher(
           duration: AppDurations.weatherFade,
           switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          switchOutCurve: AppCurves.exit,
           transitionBuilder: (child, animation) => FadeTransition(
             opacity: animation,
             child: ScaleTransition(
@@ -1154,7 +1182,7 @@ class _DashboardView extends StatelessWidget {
         AnimatedSwitcher(
           duration: AppDurations.weatherFade,
           switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          switchOutCurve: AppCurves.exit,
           child: Text(
             temperature,
             key: ValueKey(temperature),
@@ -1260,7 +1288,32 @@ class _CurrentPrayerSection extends StatelessWidget {
             const SizedBox(height: 16),
 
             if (isCompleted)
-              Column(
+              // Marking the prayer is a moment worth a beat: the pills settle
+              // in from slightly small, under a gold glow that fades away.
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: motionStill() ? 1 : 0, end: 1),
+                duration: const Duration(milliseconds: 520),
+                curve: Curves.linear,
+                builder: (context, t, child) {
+                  final pop = AppCurves.settle.transform((t / 0.65).clamp(0.0, 1.0));
+                  final glow = (1 - t) * (lighterVisuals() ? 0 : 1);
+                  return Opacity(
+                    opacity: AppCurves.emphasized.transform((t / 0.4).clamp(0.0, 1.0)),
+                    child: Transform.scale(
+                      scale: 0.9 + 0.1 * pop,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadii.pill),
+                          boxShadow: glow > 0
+                              ? [BoxShadow(color: AppColors.spiritualGold.withValues(alpha: 0.35 * glow), blurRadius: 28)]
+                              : null,
+                        ),
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1395,6 +1448,7 @@ class _CurrentPrayerSection extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
               )
             else
               Column(

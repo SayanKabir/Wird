@@ -28,6 +28,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_snackbar.dart';
+import '../../../core/constants/radii.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -573,7 +574,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                                 backgroundColor: Colors.white.withValues(alpha: 0.1),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.card)),
                               ),
                             ),
                           ],
@@ -850,7 +851,7 @@ class _VerseCard extends StatelessWidget {
       isScrollControlled: true,
       barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (sheetCtx) => ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
         child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
           fallbackTint: AppBackdropFilter.sheetTint,
@@ -1105,7 +1106,7 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
   Widget build(BuildContext context) {
     final small = widget.isSmallPhone;
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
       child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
         fallbackTint: AppBackdropFilter.sheetTint,

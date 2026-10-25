@@ -11,6 +11,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/location_off_prompt.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../core/constants/radii.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -775,7 +776,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 backgroundColor: AppColors.spiritualGold,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.pill)),
               ),
               child: _isLoading
                   ? const PremiumFlowingLoader(size: 20, color: Colors.black)

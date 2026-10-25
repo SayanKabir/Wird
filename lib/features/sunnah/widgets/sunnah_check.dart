@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../core/constants/durations.dart';
 
 /// The "done today" circle. Tapping it again undoes the tick, so the circle
 /// itself is the only feedback: it fills gold with a small pop, and a light
@@ -54,7 +55,7 @@ class SunnahCheck extends StatelessWidget {
             ),
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
-              switchInCurve: Curves.easeOutBack,
+              switchInCurve: AppCurves.settle,
               transitionBuilder: (child, animation) => motionStill()
                   ? FadeTransition(opacity: animation, child: child)
                   : ScaleTransition(scale: animation, child: child),
