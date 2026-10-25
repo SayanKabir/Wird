@@ -583,61 +583,61 @@ class SettingsScreenState extends State<SettingsScreen> {
 
   // --- Widget Components ---
 
+  /// The city gets the whole width of the card. The pin sits in the caption
+  /// and Update is a round icon button, so a long name like "Bhubaneswar" no
+  /// longer has to squeeze between a large icon and a labelled pill.
   Widget _buildLocationCard() {
     return _GlassSection(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
+          padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
           child: Row(
             children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.spiritualGold.withValues(alpha: 0.14),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.location_on_rounded, color: AppColors.spiritualGold, size: 22),
-              ),
-              const SizedBox(width: AppSpacing.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Prayer times for', style: AppTextStyles.tiny()),
-                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on_rounded, color: AppColors.spiritualGold, size: 14),
+                        const SizedBox(width: 4),
+                        Text('Prayer times for', style: AppTextStyles.tiny()),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
                       _settings.location?.city ?? 'Detecting…',
                       style: AppTextStyles.h3(),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.md),
               if (_isLoadingLocation)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: SizedBox(width: 20, height: 20, child: PremiumFlowingLoader(size: 20, color: Colors.white)),
+                const SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: SizedBox(width: 20, height: 20, child: PremiumFlowingLoader(size: 20, color: Colors.white)),
+                  ),
                 )
               else
-                Pressable(
-                  onTap: _updateLocation,
-                  pressedScale: 0.88,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.my_location_rounded, size: 14, color: Colors.white),
-                        const SizedBox(width: 6),
-                        Text('Update', style: AppTextStyles.small(color: Colors.white, weight: FontWeight.w600)),
-                      ],
+                Semantics(
+                  button: true,
+                  label: 'Update location',
+                  child: Pressable(
+                    onTap: _updateLocation,
+                    pressedScale: 0.88,
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.my_location_rounded, size: 20, color: Colors.white),
                     ),
                   ),
                 ),
