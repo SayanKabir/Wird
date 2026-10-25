@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../widgets/common/prayer_glyph.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
@@ -180,10 +181,13 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
         ),
       ),
       alignment: Alignment.center,
-      child: Icon(
-        widget.prayer.iconForDay(widget.date),
-        size: 22,
+      // Only the current prayer's glyph animates; the rest draw a still frame.
+      child: PrayerGlyph(
+        prayer: widget.prayer,
+        date: widget.date,
+        size: 26,
         color: iconColor,
+        animate: widget.isActive && !widget.reduceMotion,
       ),
     );
   }

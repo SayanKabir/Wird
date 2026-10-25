@@ -16,6 +16,7 @@ import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../models/quran_progress.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/prayer_glyph.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../../widgets/common/app_route.dart';
@@ -640,7 +641,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               color: Colors.white.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
-            child: Icon(prayer.icon, size: 20, color: Colors.white.withValues(alpha: 0.8)),
+            child: PrayerGlyph(prayer: prayer, size: 22, color: Colors.white.withValues(alpha: 0.8)),
           ),
           const SizedBox(width: 16),
           Expanded(
