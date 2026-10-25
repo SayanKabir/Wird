@@ -538,7 +538,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       double height, double size, int currentPage) {
     final isSelected = currentPage == index;
 
-    // The active tab sits in a gold-tinted pill. Colour and a soft glow alone
+    // The active tab sits in a soft white pill. Colour and a soft glow alone
     // weren't enough: over the bright Dhuhr/Asr sky the capsule turns pale
     // and a white icon barely stood apart from the dimmed ones.
     return Pressable(
@@ -557,21 +557,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             height: isSelected ? height - 8 : size + 8,
             decoration: BoxDecoration(
               color: isSelected
-                  ? AppColors.spiritualGold.withValues(alpha: 0.22)
+                  ? Colors.white.withValues(alpha: 0.2)
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(height),
-              border: Border.all(
-                color: isSelected
-                    ? AppColors.spiritualGold.withValues(alpha: 0.5)
-                    : Colors.transparent,
-              ),
             ),
             alignment: Alignment.center,
             child: Icon(
               icon,
               size: size,
               color: isSelected
-                  ? AppColors.spiritualGold
+                  ? Colors.white
                   : Colors.white.withValues(alpha: 0.45),
             ),
           ),
