@@ -9,6 +9,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../models/tasbih.dart';
 import '../bloc/tasbih_bloc.dart';
 import '../widgets/counter_editor_sheet.dart';
+import '../widgets/dhikr_motion.dart';
 import '../widgets/dhikr_widgets.dart';
 
 /// Counting one dhikr freely, in rounds of its target.
@@ -22,8 +23,6 @@ class CounterScreen extends StatefulWidget {
 }
 
 class _CounterScreenState extends State<CounterScreen> {
-  bool _pressed = false;
-
   @override
   void initState() {
     super.initState();
@@ -103,56 +102,44 @@ class _CounterScreenState extends State<CounterScreen> {
         // Only this area counts, so reading or scrolling the text above
         // never adds a tap by accident.
         Expanded(
-          child: Semantics(
-            button: true,
-            label: 'Count ${t.name}. $shown of ${t.targetCount}',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) {
-                setState(() => _pressed = true);
-                _tap(t);
-              },
-              onTapUp: (_) => setState(() => _pressed = false),
-              onTapCancel: () => setState(() => _pressed = false),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedScale(
-                      scale: _pressed ? 0.97 : 1,
-                      duration: const Duration(milliseconds: 90),
-                      child: DhikrRing(
-                        progress: t.targetCount == 0 ? 0 : shown / t.targetCount,
-                        size: (height * 0.3).clamp(200.0, 270.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '$shown',
-                              style: AppTextStyles.h1(color: full ? AppColors.spiritualGold : Colors.white).copyWith(
-                                fontSize: 68,
-                                fontWeight: FontWeight.w300,
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                              ),
-                            ),
-                            Text(
-                              'of ${t.targetCount}',
-                              style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.5)),
-                            ),
-                          ],
+          child: RippleTapArea(
+            semanticLabel: 'Count ${t.name}. $shown of ${t.targetCount}',
+            onTap: () => _tap(t),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DhikrRing(
+                    progress: t.targetCount == 0 ? 0 : shown / t.targetCount,
+                    size: (height * 0.3).clamp(200.0, 270.0),
+                    pulseKey: t.round,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TickingNumber(
+                          value: shown,
+                          style: AppTextStyles.counter(color: full ? AppColors.spiritualGold : Colors.white),
                         ),
-                      ),
+                        Text(
+                          'of ${t.targetCount}',
+                          style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.5)),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 18),
-                    Text(
+                  ),
+                  const SizedBox(height: 18),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Text(
                       caption,
+                      key: ValueKey(caption),
                       textAlign: TextAlign.center,
                       style: AppTextStyles.small(
                         color: full ? AppColors.spiritualGold.withValues(alpha: 0.85) : Colors.white.withValues(alpha: 0.55),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

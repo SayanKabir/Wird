@@ -12,6 +12,7 @@ import '../../../models/settings.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../home/bloc/prayer_bloc.dart';
 import '../../home/widgets/celestial_background.dart';
+import 'dhikr_motion.dart';
 
 /// The sky behind the dhikr screens, matching the time of day like the rest
 /// of the app. The sun or moon is hidden so nothing competes with the text.
@@ -146,7 +147,8 @@ class DhikrHeader extends StatelessWidget {
 }
 
 /// Arabic, transliteration, translation and virtue. Scrolls on its own when
-/// the text is long, so it never pushes the counting area off screen.
+/// the text is long, so it never pushes the counting area off screen, and
+/// text heading out of view folds away softly instead of being cut off.
 class DhikrTextCard extends StatelessWidget {
   final String arabic;
   final String? transliteration;
@@ -170,54 +172,63 @@ class DhikrTextCard extends StatelessWidget {
     final long = arabic.length > 120;
     final arabicStyle = AppTextStyles.arabic(
       color: Colors.white,
-      size: long ? 23 : 32,
+      size: long ? 24 : 34,
       script: quranic ? QuranScript.uthmani : null,
-    ).copyWith(height: long ? 2.0 : 1.7);
+    ).copyWith(height: long ? 1.9 : 1.6);
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.03)],
+        ),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.09), width: 0.5),
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        borderRadius: BorderRadius.circular(26),
+        child: FoldingScrollView(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
           child: Column(
             children: [
-              Text(arabic, textAlign: TextAlign.center, textDirection: TextDirection.rtl, style: arabicStyle),
-              if (transliteration != null) ...[
-                const SizedBox(height: 12),
-                Text(
+              FoldText(arabic, style: arabicStyle, direction: TextDirection.rtl),
+              if (transliteration != null || translation != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  child: Fold(
+                    child: Container(
+                      width: 28,
+                      height: 1,
+                      color: AppColors.spiritualGold.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
+              if (transliteration != null)
+                FoldText(
                   transliteration!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.small(color: AppColors.spiritualGold.withValues(alpha: 0.85))
+                  style: AppTextStyles.small(color: AppColors.spiritualGold.withValues(alpha: 0.9))
                       .copyWith(fontStyle: FontStyle.italic, height: 1.5),
                 ),
-              ],
               if (translation != null) ...[
-                const SizedBox(height: 8),
-                Text(
+                const SizedBox(height: 10),
+                FoldText(
                   translation!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7)).copyWith(height: 1.5),
+                  style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.72)).copyWith(height: 1.5),
                 ),
               ],
               if (virtue != null) ...[
-                const SizedBox(height: 14),
-                Text(
+                const SizedBox(height: 16),
+                FoldText(
                   virtue!,
-                  textAlign: TextAlign.center,
                   style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.55)).copyWith(height: 1.5),
                 ),
               ],
               if (reference != null) ...[
                 const SizedBox(height: 8),
-                Text(reference!, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.4))),
+                Fold(child: Text(reference!, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.4)))),
               ],
             ],
           ),
@@ -227,26 +238,38 @@ class DhikrTextCard extends StatelessWidget {
   }
 }
 
-/// Progress ring that eases between values and turns fully gold when full.
+/// Progress ring that eases between values. A small bead rides the leading
+/// edge, and a full round glows softly and gives a gentle pulse.
 class DhikrRing extends StatelessWidget {
   final double progress;
   final double size;
   final Widget child;
 
-  const DhikrRing({super.key, required this.progress, required this.child, this.size = 240});
+  /// Changes whenever a round fills, to replay the pulse.
+  final Object? pulseKey;
+
+  const DhikrRing({super.key, required this.progress, required this.child, this.size = 240, this.pulseKey});
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: TweenAnimationBuilder<double>(
-        tween: Tween(end: progress.clamp(0.0, 1.0)),
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
-        builder: (context, value, _) => CustomPaint(
-          painter: _RingPainter(value),
-          child: Center(child: child),
+    final full = progress >= 1;
+    return TweenAnimationBuilder<double>(
+      key: ValueKey(full ? pulseKey : null),
+      tween: Tween(begin: full ? 1.06 : 1, end: 1),
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: progress.clamp(0.0, 1.0)),
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          builder: (context, value, _) => CustomPaint(
+            painter: _RingPainter(value, stroke: size < 160 ? 7 : 10),
+            child: Center(child: child),
+          ),
         ),
       ),
     );
@@ -255,40 +278,64 @@ class DhikrRing extends StatelessWidget {
 
 class _RingPainter extends CustomPainter {
   final double progress;
+  final double stroke;
 
-  _RingPainter(this.progress);
+  _RingPainter(this.progress, {required this.stroke});
 
   @override
   void paint(Canvas canvas, Size size) {
-    const stroke = 10.0;
-    final rect = Offset.zero & size;
-    final arcRect = rect.deflate(stroke / 2);
-    canvas.drawArc(
-      arcRect,
-      0,
-      math.pi * 2,
-      false,
+    final arcRect = (Offset.zero & size).deflate(stroke / 2 + 6);
+    final center = arcRect.center;
+    final radius = arcRect.width / 2;
+
+    canvas.drawCircle(
+      center,
+      radius,
       Paint()
         ..color = Colors.white.withValues(alpha: 0.08)
         ..style = PaintingStyle.stroke
         ..strokeWidth = stroke,
     );
     if (progress <= 0) return;
+
+    final sweep = math.pi * 2 * progress;
+    final full = progress >= 1;
+    if (full) {
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..color = AppColors.spiritualGold.withValues(alpha: 0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke * 1.6
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+      );
+    }
     canvas.drawArc(
       arcRect,
       -math.pi / 2,
-      math.pi * 2 * progress,
+      sweep,
       false,
       Paint()
-        ..color = AppColors.spiritualGold.withValues(alpha: progress >= 1 ? 1 : 0.85)
+        ..shader = SweepGradient(
+          endAngle: math.pi * 2,
+          colors: [AppColors.spiritualGold.withValues(alpha: 0.55), AppColors.spiritualGold],
+          stops: [0, progress.clamp(0.01, 1.0)],
+          transform: const GradientRotation(-math.pi / 2),
+        ).createShader(arcRect)
         ..style = PaintingStyle.stroke
         ..strokeCap = StrokeCap.round
         ..strokeWidth = stroke,
     );
+    if (!full) {
+      final angle = -math.pi / 2 + sweep;
+      final head = center + Offset(math.cos(angle), math.sin(angle)) * radius;
+      canvas.drawCircle(head, stroke * 0.95, Paint()..color = Colors.white);
+    }
   }
 
   @override
-  bool shouldRepaint(_RingPainter old) => old.progress != progress;
+  bool shouldRepaint(_RingPainter old) => old.progress != progress || old.stroke != stroke;
 }
 
 /// Quiet text action ("Undo", "Skip step") that dims when it can't act.

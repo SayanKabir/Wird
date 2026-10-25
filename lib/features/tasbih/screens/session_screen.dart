@@ -11,6 +11,7 @@ import '../../../core/repositories/tasbih_repository.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
 import '../bloc/tasbih_bloc.dart';
+import '../widgets/dhikr_motion.dart';
 import '../widgets/dhikr_widgets.dart';
 
 /// A guided session: each step is said its own number of times, then the
@@ -35,7 +36,8 @@ class _SessionScreenState extends State<SessionScreen> {
   int _count = 0;
   bool _finished = false;
   bool _resumed = false;
-  bool _pressed = false;
+  /// Direction of the last step change, for the slide.
+  bool _movedForward = true;
 
   /// Set while a finished step holds for a moment before the next appears;
   /// taps in that window are ignored so a quick extra tap doesn't spill over.
@@ -97,6 +99,7 @@ class _SessionScreenState extends State<SessionScreen> {
 
   void _goTo(int step) {
     setState(() {
+      _movedForward = step > _step;
       _step = step;
       _count = 0;
       _resumed = false;
@@ -127,6 +130,7 @@ class _SessionScreenState extends State<SessionScreen> {
       final previous = _steps[_step - 1];
       _tally(previous, -1);
       setState(() {
+        _movedForward = false;
         _step--;
         _count = previous.count - 1;
       });
@@ -143,6 +147,7 @@ class _SessionScreenState extends State<SessionScreen> {
 
   void _restart() {
     setState(() {
+      _movedForward = true;
       _finished = false;
       _step = 0;
       _count = 0;
@@ -194,8 +199,23 @@ class _SessionScreenState extends State<SessionScreen> {
         ),
         const SizedBox(height: 10),
         Expanded(
+          // New steps slide in from the reading direction's end; going back
+          // (undo across a step) slides the other way.
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 260),
+            duration: const Duration(milliseconds: 320),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final incoming = child.key == ValueKey(_step);
+              final dir = (_movedForward ? 1 : -1) * (incoming ? 1 : -1);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: Offset(0.12 * dir, 0), end: Offset.zero).animate(animation),
+                  child: child,
+                ),
+              );
+            },
             child: DhikrTextCard(
               key: ValueKey(_step),
               arabic: step.arabic,
@@ -210,45 +230,36 @@ class _SessionScreenState extends State<SessionScreen> {
         // Counting area: a fixed band below the text.
         SizedBox(
           height: (MediaQuery.sizeOf(context).height * 0.26).clamp(170.0, 230.0),
-          child: Semantics(
-            button: true,
-            label: '${step.label}, $_count of ${step.count}',
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (_) {
-                setState(() => _pressed = true);
-                _tap();
-              },
-              onTapUp: (_) => setState(() => _pressed = false),
-              onTapCancel: () => setState(() => _pressed = false),
-              child: AnimatedScale(
-                scale: _pressed ? 0.97 : 1,
-                duration: const Duration(milliseconds: 90),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    step.count <= 7
-                        ? _Beads(total: step.count, done: _count)
-                        : DhikrRing(
-                            progress: _count / step.count,
-                            size: 128,
-                            child: Text(
-                              '$_count',
-                              style: AppTextStyles.h1(color: stepDone ? AppColors.spiritualGold : Colors.white).copyWith(
-                                fontSize: 40,
-                                fontWeight: FontWeight.w300,
-                                fontFeatures: const [FontFeature.tabularFigures()],
-                              ),
-                            ),
+          child: RippleTapArea(
+            semanticLabel: '${step.label}, $_count of ${step.count}',
+            onTap: _tap,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                step.count <= 7
+                    ? _Beads(total: step.count, done: _count)
+                    : DhikrRing(
+                        progress: _count / step.count,
+                        size: 132,
+                        pulseKey: _step,
+                        child: TickingNumber(
+                          value: _count,
+                          style: AppTextStyles.counter(
+                            color: stepDone ? AppColors.spiritualGold : Colors.white,
+                            size: 40,
                           ),
-                    const SizedBox(height: 14),
-                    Text(
-                      _resumed ? 'Picked up where you left off' : _hint(step),
-                      style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.55)),
-                    ),
-                  ],
+                        ),
+                      ),
+                const SizedBox(height: 14),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  child: Text(
+                    _resumed ? 'Picked up where you left off' : _hint(step),
+                    key: ValueKey('$_resumed${step.count}'),
+                    style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.55)),
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -402,18 +413,29 @@ class _Beads extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (var i = 0; i < total; i++)
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutBack,
-            width: 30,
-            height: 30,
-            margin: const EdgeInsets.symmetric(horizontal: 6),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: i < done ? AppColors.spiritualGold : Colors.transparent,
-              border: Border.all(
-                color: i < done ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.4),
-                width: 1.5,
+          // Re-keyed when filled so the pop plays once, as the bead lands.
+          TweenAnimationBuilder<double>(
+            key: ValueKey('$i${i < done}'),
+            tween: Tween(begin: i < done ? 1.3 : 1, end: 1),
+            duration: const Duration(milliseconds: 420),
+            curve: Curves.elasticOut,
+            builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              width: 30,
+              height: 30,
+              margin: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i < done ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.04),
+                border: Border.all(
+                  color: i < done ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.4),
+                  width: 1.5,
+                ),
+                boxShadow: i < done
+                    ? [BoxShadow(color: AppColors.spiritualGold.withValues(alpha: 0.45), blurRadius: 12)]
+                    : null,
               ),
             ),
           ),
