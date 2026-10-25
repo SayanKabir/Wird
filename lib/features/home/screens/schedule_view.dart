@@ -3,7 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:wird2/models/prayer_status.dart'; // Ensure correct path
 import '../../../core/constants/colors.dart';
-import '../../../core/constants/text_styles.dart';
+import '../../../core/constants/spacing.dart';
+import '../../../widgets/common/page_header.dart';
 import '../../../core/utils/hijri_date.dart'; // Import Hijri utility
 import '../../../models/prayer.dart';
 import '../bloc/prayer_bloc.dart';
@@ -23,45 +24,25 @@ class ScheduleView extends StatelessWidget {
     final hijriStr = '${hijri.day} ${hijri.monthNameEnglish} ${hijri.year} AH'; // e.g., "12 Sha'ban 1444 AH"
 
     return SafeArea(
+      bottom: false,
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // 2. Updated Header (Gregorian + Hijri)
+          // Header: same PageHeader as every other tab, with the Hijri date
+          // as the overline and today's date as the title.
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Primary: Gregorian Date
-                  Text(
-                    gregorianStr,
-                    style: AppTextStyles.h2(color: Colors.white).copyWith(
-                      letterSpacing: 0.5,
-                      height: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Secondary: Hijri Date
-                  Text(
-                    hijriStr,
-                    style: AppTextStyles.body(
-                      color: Colors.white.withOpacity(0.6),
-                    ).copyWith(
-                      fontFamily: 'JetBrains Mono', // Monospaced looks technical/precise here
-                      letterSpacing: 0.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
+              padding: AppSpacing.header(context),
+              child: PageHeader(
+                overline: hijriStr.toUpperCase(),
+                title: gregorianStr,
               ),
             ),
           ),
 
           // 3. Timeline List
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.gutter(context)),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
                     (context, index) {
@@ -165,7 +146,7 @@ class ScheduleView extends StatelessWidget {
           ),
 
           // Bottom Spacer
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
+          SliverToBoxAdapter(child: SizedBox(height: AppSpacing.navClearance(context))),
         ],
       ),
     );

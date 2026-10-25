@@ -1516,7 +1516,7 @@ class _NextPrayerSection extends StatelessWidget {
             style: AppTextStyles.body(
               color: textColor.withValues(alpha: 0.7),
             ).copyWith(
-              fontFamily: 'JetBrains Mono',
+              fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),

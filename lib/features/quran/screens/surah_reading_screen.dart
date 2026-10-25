@@ -485,7 +485,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                         ),
                         child: Text(
                           '${verse.verseNumber}',
-                          style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.spiritualGold),
+                          style: AppTextStyles.inter(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.spiritualGold),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -1202,7 +1202,7 @@ class _VerseCard extends StatelessWidget {
                   ),
                   child: Text(
                     '${verse.verseNumber}',
-                    style: GoogleFonts.inter(
+                    style: AppTextStyles.inter(
                         fontSize: isSmallPhone ? 12 : 13,
                         fontWeight: FontWeight.w700,
                         color: AppColors.spiritualGold
@@ -1270,7 +1270,7 @@ class _VerseCard extends StatelessWidget {
               ),
               Text(
                 verse.translationText!,
-                style: GoogleFonts.inter(
+                style: AppTextStyles.inter(
                     fontSize: isSmallPhone ? translationFontSize * 0.9 : translationFontSize,
                     fontWeight: FontWeight.w400,
                     color: Colors.white.withValues(alpha: 0.8),
@@ -1645,7 +1645,7 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
                   _FontSizeSlider(
                     label: 'Translation Font Size',
                     sampleText: 'In the name of Allah',
-                    sampleStyle: GoogleFonts.inter(fontSize: _p.translationFontSize, color: Colors.white.withValues(alpha: 0.6), height: 1.5),
+                    sampleStyle: AppTextStyles.inter(fontSize: _p.translationFontSize, color: Colors.white.withValues(alpha: 0.6), height: 1.5),
                     sampleDirection: TextDirection.ltr,
                     value: _p.translationFontSize,
                     min: 12, max: 24,

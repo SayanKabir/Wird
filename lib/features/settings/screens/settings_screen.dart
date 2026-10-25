@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:wird2/widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/glass_snackbar.dart';
+import '../../../widgets/common/glass_sheet.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/constants/colors.dart';
+import '../../../core/constants/effects.dart';
+import '../../../core/constants/spacing.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
@@ -13,9 +16,6 @@ import '../../../core/services/location_service.dart';
 import '../../../models/settings.dart';
 import '../../../models/prayer.dart';
 import '../../home/bloc/prayer_bloc.dart';
-import '../../../core/services/debug_service.dart';
-import '../../../core/services/weather_service.dart';
-import '../../../core/utils/moon_phase_utils.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
@@ -28,7 +28,18 @@ import '../../../core/repositories/quran_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-
+/// Settings, grouped by what the user is trying to change:
+///
+/// 1. Location (the hero card) — everything else depends on it.
+/// 2. Prayer times — how times are calculated and which optional prayers show.
+/// 3. Notifications — prayer alerts (per-prayer toggles fold away) and the
+///    sunnah / occasion reminders.
+/// 4. Quran — mirrors the reader's settings sheet.
+/// 5. Look & feel — performance mode, background, weather, motion, haptics.
+/// 6. Support.
+///
+/// Every row shares one shape: a tinted icon, a title, an optional value or
+/// subtitle, and a chevron or switch.
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -46,11 +57,11 @@ class SettingsScreenState extends State<SettingsScreen> {
   final StorageService _storageService = StorageService();
   final NotificationService _notificationService = NotificationService();
   final LocationService _locationService = LocationService();
-  final DebugService _debugService = DebugService();
 
   late AppSettings _settings;
   bool _isLoadingLocation = false;
   bool _canScheduleExactAlarms = true; // Assume true until checked
+  bool _showPerPrayerAlerts = false;
 
   @override
   void initState() {
@@ -75,8 +86,8 @@ class SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  /// Scrolls the Weather & Background section into view and flashes it, so the
-  /// user can see which controls the tap brought them to.
+  /// Scrolls the Look & Feel section into view and flashes it, so the user can
+  /// see which controls the tap brought them to.
   Future<void> revealWeatherSection() async {
     final target = _weatherSectionKey.currentContext;
     if (target == null) return;
@@ -84,8 +95,8 @@ class SettingsScreenState extends State<SettingsScreen> {
       target,
       duration: const Duration(milliseconds: 450),
       curve: Curves.easeOutCubic,
-      // Sits the controls a little way down the viewport so the
-      // "WEATHER & BACKGROUND" header above them stays visible too.
+      // Sits the controls a little way down the viewport so the section
+      // label above them stays visible too.
       alignment: 0.18,
     );
     if (!mounted) return;
@@ -136,79 +147,54 @@ class SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _resetSettings() async {
-    // Custom "Celestial" Glass Dialog
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showGlassSheet<bool>(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.6), // Darker backdrop for focus
-      builder: (c) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.15)),
+      title: 'Reset settings?',
+      subtitle: 'Every preference goes back to its default. Your location, '
+          'prayer history and bookmarks are kept.',
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.md, AppSpacing.xl, AppSpacing.xl),
+        child: Builder(
+          builder: (c) => Row(
+            children: [
+              Expanded(
+                child: _SheetButton(
+                  label: 'Cancel',
+                  onTap: () => Navigator.pop(c, false),
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.restore_rounded, size: 48, color: Colors.white70),
-                  const SizedBox(height: 16),
-                  Text('Reset Settings?', style: AppTextStyles.h2()),
-                  const SizedBox(height: 12),
-                  Text(
-                    'This will restore all preferences to their default values. This action cannot be undone.',
-                    style: AppTextStyles.body(color: Colors.white60),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(c, false),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                          child: Text('Cancel', style: AppTextStyles.body(color: Colors.white)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () => Navigator.pop(c, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.statusMissed.withOpacity(0.2),
-                            foregroundColor: AppColors.statusMissed,
-                            elevation: 0,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: AppColors.statusMissed.withOpacity(0.5))
-                            ),
-                          ),
-                          child: const Text('Reset'),
-                        ),
-                      ),
-                    ],
-                  )
-                ],
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _SheetButton(
+                  label: 'Reset',
+                  color: AppColors.statusMissed,
+                  onTap: () => Navigator.pop(c, true),
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     );
 
-    if (confirmed == true) {
-      HapticService().medium();
-      // Logic to reset to defaults
+    if (confirmed != true || !mounted) return;
+    HapticService().medium();
+    // Keep what isn't a preference: where the user is and that they've been
+    // through onboarding.
+    await _saveSettings(AppSettings(
+      location: _settings.location,
+      onboardingCompleted: _settings.onboardingCompleted,
+    ));
+    if (!mounted) return;
+    try {
+      final sunnah = await context.read<SunnahRepository>().getWeeklySunnah();
+      await _notificationService.scheduleWeeklySunnahReminder(sunnah.title);
+      await _notificationService.scheduleSpecialDayNotification();
+    } catch (e) {
+      debugPrint('Error rescheduling reminders after reset: $e');
+    }
+    if (mounted) {
+      GlassSnackBar.show(context, message: 'Settings restored to defaults', icon: Icons.restore_rounded);
     }
   }
 
@@ -224,444 +210,336 @@ class SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final gutter = AppSpacing.gutter(context);
+
+    Widget section(String label, List<Widget> rows, {Key? key, bool highlight = false}) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          key: key,
+          padding: EdgeInsets.fromLTRB(gutter, AppSpacing.section, gutter, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.md),
+                child: Text(label, style: AppTextStyles.sectionLabel(color: AppColors.spiritualGold)),
+              ),
+              _GlassSection(highlight: highlight, children: rows),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final translation = QuranTranslations.resolve(_settings.quranSelectedTranslation);
+    final mode = PerformanceMode.fromKey(_settings.performanceMode);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(
+        bottom: false,
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // 1. Header
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const PageHeader(overline: "PREFERENCES", title: "Settings"),
-                  ],
-                ),
+                padding: AppSpacing.header(context).copyWith(bottom: 0),
+                child: const PageHeader(overline: 'PREFERENCES', title: 'Settings'),
               ),
             ),
 
-            // 2. Location Hero Card
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.fromLTRB(gutter, AppSpacing.belowHeader, gutter, 0),
                 child: _buildLocationCard(),
               ),
             ),
 
             // ── PRAYER TIMES ──
-            // Sections are ordered by how central they are to the app: how the
-            // times are calculated, then how you are told about them, then the
-            // optional prayers, then per-feature preferences, then support.
-            _buildSectionHeader("PRAYER TIMES"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildSettingTile(
-                    title: "Calculation Method",
-                    value: _settings.calculationMethod.displayName,
-                    icon: Icons.public,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Calculation Method',
-                      options: CalculationMethodType.values.map((e) => e.displayName).toList(),
-                      currentValue: _settings.calculationMethod.displayName,
-                      onSelected: (index) {
-                        _saveSettings(_settings.copyWith(
-                            calculationMethod: CalculationMethodType.values[index]
-                        ));
-                      },
-                    ),
+            section('PRAYER TIMES', [
+              _SettingRow(
+                icon: Icons.public_rounded,
+                title: 'Calculation method',
+                value: _settings.calculationMethod.displayName,
+                onTap: () => _showSelectionDialog(
+                  title: 'Calculation method',
+                  options: CalculationMethodType.values.map((e) => e.displayName).toList(),
+                  currentValue: _settings.calculationMethod.displayName,
+                  onSelected: (index) => _saveSettings(
+                    _settings.copyWith(calculationMethod: CalculationMethodType.values[index]),
                   ),
-                  _buildDivider(),
-                  _buildSettingTile(
-                    title: "Asr Method",
-                    value: _settings.madhab == MadhabType.shafi ? 'Standard' : 'Hanafi',
-                    icon: Icons.access_time,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Asr Method',
-                      options: ['Standard (Shafi, Maliki, Hanbali)', 'Hanafi'],
-                      currentValue: _settings.madhab == MadhabType.shafi ? 'Standard (Shafi, Maliki, Hanbali)' : 'Hanafi',
-                      onSelected: (index) {
-                        _saveSettings(_settings.copyWith(
-                            madhab: index == 0 ? MadhabType.shafi : MadhabType.hanafi
-                        ));
-                      },
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-
-            // ── OPTIONAL PRAYERS ──
-            // Split out of "Prayer Settings": these choose which voluntary
-            // prayers appear in your schedule, which is a different decision
-            // from how the obligatory times are calculated.
-            _buildSectionHeader("OPTIONAL PRAYERS"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildSwitchRow(
-                    title: "Tahajjud",
-                    subtitle: "Last third of the night",
-                    value: _settings.includeTahajjud,
-                    onChanged: (v) => _saveSettings(_settings.copyWith(includeTahajjud: v)),
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Ishraq",
-                    subtitle: "15 min after sunrise",
-                    value: _settings.includeIshraq,
-                    onChanged: (v) => _saveSettings(_settings.copyWith(includeIshraq: v)),
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Duha",
-                    subtitle: "Forenoon prayer",
-                    value: _settings.includeDuha,
-                    onChanged: (v) => _saveSettings(_settings.copyWith(includeDuha: v)),
-                  ),
-                ]),
-              ),
-            ),
-
-            // ── NOTIFICATIONS ──
-            _buildSectionHeader("NOTIFICATIONS"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildSwitchRow(
-                    title: "Prayer Notifications",
-                    value: _settings.notificationsEnabled,
-                    onChanged: (val) async {
-                      if (val) {
-                        final granted = await _notificationService.requestPermission();
-                        if (granted) _saveSettings(_settings.copyWith(notificationsEnabled: true));
-                      } else {
-                        _saveSettings(_settings.copyWith(notificationsEnabled: false));
-                      }
-                    },
-                  ),
-                  // Exact alarm permission warning (Android 12+)
-                  if (_settings.notificationsEnabled && !_canScheduleExactAlarms) ...[
-                    _buildDivider(),
-                    GestureDetector(
-                      onTap: () async {
-                        await _notificationService.requestExactAlarmPermission();
-                        _checkExactAlarmPermission();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 24),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Exact Alarms Required",
-                                    style: AppTextStyles.body(color: Colors.white)
-                                        .copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "Tap to enable 'Alarms & reminders' in settings for accurate prayer notifications.",
-                                    style: AppTextStyles.small(color: Colors.white.withOpacity(0.7)),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.chevron_right_rounded, color: Colors.white54),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (_settings.notificationsEnabled) ...[
-                    _buildDivider(),
-                    ...fardhPrayers.map((prayer) {
-                      final pSettings = _settings.notificationSettings[prayer.name] ??
-                          PrayerNotificationSettings(startNotification: true, endWarning: true);
-
-                      return Column(
-                        children: [
-                          _buildSwitchRow(
-                            title: prayer.displayName,
-                            value: pSettings.startNotification,
-                            compact: true,
-                            onChanged: (val) {
-                              final newMap = Map<String, PrayerNotificationSettings>.from(_settings.notificationSettings);
-                              newMap[prayer.name] = pSettings.copyWith(startNotification: val);
-                              _saveSettings(_settings.copyWith(notificationSettings: newMap));
-                            },
-                          ),
-                          if (prayer != fardhPrayers.last) _buildDivider(),
-                        ],
-                      );
-                    }),
-                  ],
-                ]),
-              ),
-            ),
-
-            // ── SUNNAH & INSIGHTS ──
-            // These two were previously appended to the end of NOTIFICATIONS,
-            // where they read as stray prayer-alert settings. They are their own
-            // concern — reminders about sunnahs and Islamic occasions — so they
-            // get their own section.
-            _buildSectionHeader("SUNNAH & INSIGHTS"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildSwitchRow(
-                    title: "Weekly Sunnah Reminder",
-                    subtitle: "Every Monday at 9:00 AM",
-                    value: _settings.sunnahNotificationsEnabled,
-                    onChanged: (v) async {
-                      await _saveSettings(_settings.copyWith(sunnahNotificationsEnabled: v));
-                      if (v && mounted) {
-                        try {
-                          final sunnah = await context.read<SunnahRepository>().getWeeklySunnah();
-                          await _notificationService.scheduleWeeklySunnahReminder(sunnah.title);
-                        } catch (e) {
-                          debugPrint('Error scheduling sunnah reminder: $e');
-                        }
-                      } else {
-                        await _notificationService.cancelSunnahNotifications();
-                      }
-                    },
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Islamic Events",
-                    subtitle: "Notify on special Islamic days",
-                    value: _settings.islamicEventsEnabled,
-                    onChanged: (v) async {
-                      await _saveSettings(_settings.copyWith(islamicEventsEnabled: v));
-                      if (v) {
-                        await _notificationService.scheduleSpecialDayNotification();
-                      } else {
-                        await _notificationService.cancelEventNotifications();
-                      }
-                    },
-                  ),
-                ]),
-              ),
-            ),
-
-            // ── QURAN ──
-            // Mirrors the in-reader settings sheet so the same preferences are
-            // reachable without opening a surah first. Both write to the same
-            // AppSettings fields, so the two stay in sync.
-            _buildSectionHeader("QURAN"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildSettingTile(
-                    title: "Arabic Script",
-                    value: _settings.quranSelectedScript.displayName,
-                    icon: Icons.font_download_rounded,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Arabic Script',
-                      options: QuranScript.values.map((s) => s.displayName).toList(),
-                      currentValue: _settings.quranSelectedScript.displayName,
-                      onSelected: (index) {
-                        _saveSettings(_settings.copyWith(
-                          quranSelectedScript: QuranScript.values[index],
-                        ));
-                      },
-                    ),
-                  ),
-                  _buildDivider(),
-                  _buildSettingTile(
-                    title: "Translation",
-                    value: QuranTranslations.resolve(_settings.quranSelectedTranslation).name,
-                    icon: Icons.translate_rounded,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Translation',
-                      options: [for (final t in QuranTranslations.all) '${t.language} · ${t.name}'],
-                      currentValue: () {
-                        final t = QuranTranslations.resolve(_settings.quranSelectedTranslation);
-                        return '${t.language} · ${t.name}';
-                      }(),
-                      onSelected: (index) {
-                        final t = QuranTranslations.all[index];
-                        _saveSettings(_settings.copyWith(quranSelectedTranslation: '${t.id}'));
-                        // Save the whole translation for offline reading.
-                        context.read<QuranRepository>().downloadTranslation(t.id).catchError((_) {});
-                      },
-                    ),
-                  ),
-                  _buildDivider(),
-                  _buildSettingTile(
-                    title: "Transliteration",
-                    value: TransliterationScript.fromKey(_settings.quranTransliterationScript).label,
-                    icon: Icons.text_fields_rounded,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Transliteration',
-                      options: [for (final t in TransliterationScript.values) t.label],
-                      currentValue: TransliterationScript.fromKey(_settings.quranTransliterationScript).label,
-                      onSelected: (index) {
-                        _saveSettings(_settings.copyWith(
-                          quranTransliterationScript: TransliterationScript.values[index].key,
-                        ));
-                      },
-                    ),
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Show Translation",
-                    subtitle: "Display meanings beneath each verse",
-                    value: _settings.quranShowTranslation,
-                    onChanged: (v) =>
-                        _saveSettings(_settings.copyWith(quranShowTranslation: v)),
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Show Transliteration",
-                    subtitle: "Pronunciation guide beneath each verse",
-                    value: _settings.quranShowTransliteration,
-                    onChanged: (v) =>
-                        _saveSettings(_settings.copyWith(quranShowTransliteration: v)),
-                  ),
-                ]),
-              ),
-            ),
-
-            // ── WEATHER & BACKGROUND ──
-            // Tapping the weather widget on the dashboard scrolls here; see
-            // revealWeatherSection().
-            _buildSectionHeader("WEATHER & BACKGROUND"),
-            SliverToBoxAdapter(
-              child: Padding(
-                // Key sits on this box child, not on the SliverToBoxAdapter:
-                // Scrollable.ensureVisible resolves a box render object, and a
-                // sliver's context would not give it one.
-                key: _weatherSectionKey,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 350),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: _highlightWeatherSection
-                          ? AppColors.spiritualGold.withOpacity(0.55)
-                          : Colors.transparent,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: _buildGlassSection([
-                    _buildSwitchRow(
-                      title: "Show Weather",
-                      subtitle: "Display weather widget on dashboard",
-                      value: _settings.showWeatherWidget,
-                      onChanged: (val) {
-                        _saveSettings(_settings.copyWith(showWeatherWidget: val));
-                      },
-                    ),
-                    _buildDivider(),
-                    _buildSettingTile(
-                      title: "Background Theme",
-                      value: _getThemeDisplayName(_settings.weatherTheme),
-                      icon: Icons.wallpaper_rounded,
-                      onTap: () => _showSelectionDialog(
-                        title: 'Background Theme',
-                        options: WeatherTheme.values.map(_getThemeDisplayName).toList(),
-                        currentValue: _getThemeDisplayName(_settings.weatherTheme),
-                        onSelected: (index) {
-                          _saveSettings(_settings.copyWith(
-                              weatherTheme: WeatherTheme.values[index]
-                          ));
-                        },
-                      ),
-                    ),
-                  ]),
                 ),
               ),
-            ),
+              _SettingRow(
+                icon: Icons.wb_twilight_rounded,
+                title: 'Asr method',
+                value: _settings.madhab == MadhabType.shafi ? 'Standard' : 'Hanafi',
+                onTap: () => _showSelectionDialog(
+                  title: 'Asr method',
+                  options: const ['Standard (Shafi, Maliki, Hanbali)', 'Hanafi'],
+                  currentValue: _settings.madhab == MadhabType.shafi
+                      ? 'Standard (Shafi, Maliki, Hanbali)'
+                      : 'Hanafi',
+                  onSelected: (index) => _saveSettings(
+                    _settings.copyWith(madhab: index == 0 ? MadhabType.shafi : MadhabType.hanafi),
+                  ),
+                ),
+              ),
+              _SwitchRow(
+                icon: Icons.nights_stay_rounded,
+                title: 'Tahajjud',
+                subtitle: 'Last third of the night',
+                value: _settings.includeTahajjud,
+                onChanged: (v) => _saveSettings(_settings.copyWith(includeTahajjud: v)),
+              ),
+              _SwitchRow(
+                icon: Icons.wb_sunny_outlined,
+                title: 'Ishraq',
+                subtitle: '15 minutes after sunrise',
+                value: _settings.includeIshraq,
+                onChanged: (v) => _saveSettings(_settings.copyWith(includeIshraq: v)),
+              ),
+              _SwitchRow(
+                icon: Icons.light_mode_rounded,
+                title: 'Duha',
+                subtitle: 'Forenoon prayer',
+                value: _settings.includeDuha,
+                onChanged: (v) => _saveSettings(_settings.copyWith(includeDuha: v)),
+              ),
+            ]),
 
-            // ── FEEDBACK & MOTION ──
-            _buildSectionHeader("FEEDBACK & MOTION"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildSettingTile(
-                    title: "Performance Mode",
-                    value: PerformanceMode.fromKey(_settings.performanceMode).description,
-                    icon: Icons.speed_rounded,
-                    onTap: () => _showSelectionDialog(
-                      title: 'Performance Mode',
-                      options: [for (final m in PerformanceMode.values) m.label],
-                      currentValue: PerformanceMode.fromKey(_settings.performanceMode).label,
-                      onSelected: (index) => _saveSettings(_settings.copyWith(
-                        performanceMode: PerformanceMode.values[index].key,
-                      )),
+            // ── NOTIFICATIONS ──
+            section('NOTIFICATIONS', [
+              _SwitchRow(
+                icon: Icons.notifications_rounded,
+                title: 'Prayer alerts',
+                subtitle: 'A reminder as each prayer begins',
+                value: _settings.notificationsEnabled,
+                onChanged: (val) async {
+                  if (val) {
+                    final granted = await _notificationService.requestPermission();
+                    if (granted) _saveSettings(_settings.copyWith(notificationsEnabled: true));
+                  } else {
+                    _saveSettings(_settings.copyWith(notificationsEnabled: false));
+                  }
+                },
+              ),
+              if (_settings.notificationsEnabled && !_canScheduleExactAlarms)
+                _SettingRow(
+                  icon: Icons.warning_amber_rounded,
+                  tint: Colors.orange,
+                  title: 'Allow exact alarms',
+                  value: "Turn on 'Alarms & reminders' so alerts arrive on time",
+                  onTap: () async {
+                    await _notificationService.requestExactAlarmPermission();
+                    _checkExactAlarmPermission();
+                  },
+                ),
+              if (_settings.notificationsEnabled) ...[
+                _SettingRow(
+                  icon: Icons.tune_rounded,
+                  title: 'Per-prayer alerts',
+                  value: _perPrayerSummary(),
+                  trailing: AnimatedRotation(
+                    turns: _showPerPrayerAlerts ? 0.25 : 0,
+                    duration: AppDurations.normal,
+                    child: const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
+                  ),
+                  onTap: () => setState(() => _showPerPrayerAlerts = !_showPerPrayerAlerts),
+                ),
+                if (_showPerPrayerAlerts)
+                  for (final prayer in fardhPrayers) _buildPrayerAlertRow(prayer),
+              ],
+              _SwitchRow(
+                icon: Icons.auto_stories_rounded,
+                title: 'Weekly sunnah',
+                subtitle: 'Mondays at 9:00 AM',
+                value: _settings.sunnahNotificationsEnabled,
+                onChanged: (v) async {
+                  await _saveSettings(_settings.copyWith(sunnahNotificationsEnabled: v));
+                  if (v && mounted) {
+                    try {
+                      final sunnah = await context.read<SunnahRepository>().getWeeklySunnah();
+                      await _notificationService.scheduleWeeklySunnahReminder(sunnah.title);
+                    } catch (e) {
+                      debugPrint('Error scheduling sunnah reminder: $e');
+                    }
+                  } else {
+                    await _notificationService.cancelSunnahNotifications();
+                  }
+                },
+              ),
+              _SwitchRow(
+                icon: Icons.celebration_rounded,
+                title: 'Islamic occasions',
+                subtitle: 'Ramadan, Eid and other special days',
+                value: _settings.islamicEventsEnabled,
+                onChanged: (v) async {
+                  await _saveSettings(_settings.copyWith(islamicEventsEnabled: v));
+                  if (v) {
+                    await _notificationService.scheduleSpecialDayNotification();
+                  } else {
+                    await _notificationService.cancelEventNotifications();
+                  }
+                },
+              ),
+            ]),
+
+            // ── QURAN ──
+            // Mirrors the in-reader settings sheet; both write the same fields.
+            section('QURAN', [
+              _SettingRow(
+                icon: Icons.font_download_rounded,
+                title: 'Arabic script',
+                value: _settings.quranSelectedScript.displayName,
+                onTap: () => _showSelectionDialog(
+                  title: 'Arabic script',
+                  options: QuranScript.values.map((s) => s.displayName).toList(),
+                  currentValue: _settings.quranSelectedScript.displayName,
+                  onSelected: (index) => _saveSettings(
+                    _settings.copyWith(quranSelectedScript: QuranScript.values[index]),
+                  ),
+                ),
+              ),
+              _SettingRow(
+                icon: Icons.translate_rounded,
+                title: 'Translation',
+                value: '${translation.language} · ${translation.name}',
+                onTap: () => _showSelectionDialog(
+                  title: 'Translation',
+                  options: [for (final t in QuranTranslations.all) '${t.language} · ${t.name}'],
+                  currentValue: '${translation.language} · ${translation.name}',
+                  onSelected: (index) {
+                    final t = QuranTranslations.all[index];
+                    _saveSettings(_settings.copyWith(quranSelectedTranslation: '${t.id}'));
+                    // Save the whole translation for offline reading.
+                    context.read<QuranRepository>().downloadTranslation(t.id).catchError((_) {});
+                  },
+                ),
+              ),
+              _SettingRow(
+                icon: Icons.text_fields_rounded,
+                title: 'Transliteration script',
+                value: TransliterationScript.fromKey(_settings.quranTransliterationScript).label,
+                onTap: () => _showSelectionDialog(
+                  title: 'Transliteration script',
+                  options: [for (final t in TransliterationScript.values) t.label],
+                  currentValue: TransliterationScript.fromKey(_settings.quranTransliterationScript).label,
+                  onSelected: (index) => _saveSettings(_settings.copyWith(
+                    quranTransliterationScript: TransliterationScript.values[index].key,
+                  )),
+                ),
+              ),
+              _SwitchRow(
+                icon: Icons.subject_rounded,
+                title: 'Show translation',
+                value: _settings.quranShowTranslation,
+                onChanged: (v) => _saveSettings(_settings.copyWith(quranShowTranslation: v)),
+              ),
+              _SwitchRow(
+                icon: Icons.record_voice_over_rounded,
+                title: 'Show transliteration',
+                value: _settings.quranShowTransliteration,
+                onChanged: (v) => _saveSettings(_settings.copyWith(quranShowTransliteration: v)),
+              ),
+            ]),
+
+            // ── LOOK & FEEL ──
+            // Tapping the weather widget on the dashboard scrolls here; see
+            // revealWeatherSection().
+            section(
+              'LOOK & FEEL',
+              key: _weatherSectionKey,
+              highlight: _highlightWeatherSection,
+              [
+                _PerformanceModePicker(
+                  mode: mode,
+                  onChanged: (m) => _saveSettings(_settings.copyWith(performanceMode: m.key)),
+                ),
+                _SettingRow(
+                  icon: Icons.wallpaper_rounded,
+                  title: 'Background',
+                  value: _getThemeDisplayName(_settings.weatherTheme),
+                  onTap: () => _showSelectionDialog(
+                    title: 'Background',
+                    options: WeatherTheme.values.map(_getThemeDisplayName).toList(),
+                    currentValue: _getThemeDisplayName(_settings.weatherTheme),
+                    onSelected: (index) => _saveSettings(
+                      _settings.copyWith(weatherTheme: WeatherTheme.values[index]),
                     ),
                   ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Haptic Feedback",
-                    subtitle: "Subtle vibration on taps and selections",
-                    value: _settings.hapticsEnabled,
-                    onChanged: (v) =>
-                        _saveSettings(_settings.copyWith(hapticsEnabled: v)),
-                  ),
-                  _buildDivider(),
-                  _buildSwitchRow(
-                    title: "Reduce Motion",
-                    subtitle: "Minimise animation across the app",
-                    value: _settings.reduceMotion,
-                    onChanged: (v) =>
-                        _saveSettings(_settings.copyWith(reduceMotion: v)),
-                  ),
-                ]),
-              ),
+                ),
+                _SwitchRow(
+                  icon: Icons.cloud_rounded,
+                  title: 'Weather on dashboard',
+                  value: _settings.showWeatherWidget,
+                  onChanged: (v) => _saveSettings(_settings.copyWith(showWeatherWidget: v)),
+                ),
+                _SwitchRow(
+                  icon: Icons.motion_photos_off_rounded,
+                  title: 'Reduce motion',
+                  subtitle: 'Still the sky and skip animations',
+                  value: _settings.reduceMotion,
+                  onChanged: (v) => _saveSettings(_settings.copyWith(reduceMotion: v)),
+                ),
+                _SwitchRow(
+                  icon: Icons.vibration_rounded,
+                  title: 'Haptic feedback',
+                  value: _settings.hapticsEnabled,
+                  onChanged: (v) => _saveSettings(_settings.copyWith(hapticsEnabled: v)),
+                ),
+              ],
             ),
 
             // ── SUPPORT ──
-            _buildSectionHeader("SUPPORT"),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildGlassSection([
-                  _buildActionTile(
-                    title: "Report an Issue",
-                    icon: Icons.mail_outline_rounded,
-                    onTap: _launchReportEmail,
-                  ),
-                  _buildDivider(),
-                  _buildActionTile(
-                    title: "Reset Settings",
-                    icon: Icons.restore_rounded,
-                    isDestructive: true,
-                    onTap: _resetSettings,
-                  ),
-                ]),
+            section('SUPPORT', [
+              _SettingRow(
+                icon: Icons.mail_outline_rounded,
+                title: 'Report an issue',
+                onTap: _launchReportEmail,
               ),
-            ),
+              _SettingRow(
+                icon: Icons.restore_rounded,
+                tint: AppColors.statusMissed,
+                title: 'Reset settings',
+                destructive: true,
+                onTap: _resetSettings,
+              ),
+            ]),
 
-
-            const SliverToBoxAdapter(child: SizedBox(height: 120)),
+            SliverToBoxAdapter(child: SizedBox(height: AppSpacing.navClearance(context))),
           ],
         ),
       ),
     );
   }
+
   // --- Helper Methods ---
+
+  PrayerNotificationSettings _alertSettingsFor(Prayer prayer) =>
+      _settings.notificationSettings[prayer.name] ??
+      PrayerNotificationSettings(startNotification: true, endWarning: true);
+
+  String _perPrayerSummary() {
+    final on = fardhPrayers.where((p) => _alertSettingsFor(p).startNotification).length;
+    if (on == fardhPrayers.length) return 'All five prayers';
+    if (on == 0) return 'None';
+    return '$on of ${fardhPrayers.length} prayers';
+  }
+
+  Widget _buildPrayerAlertRow(Prayer prayer) {
+    final pSettings = _alertSettingsFor(prayer);
+    return _SwitchRow(
+      title: prayer.displayName,
+      indent: true,
+      value: pSettings.startNotification,
+      onChanged: (val) {
+        final newMap = Map<String, PrayerNotificationSettings>.from(_settings.notificationSettings);
+        newMap[prayer.name] = pSettings.copyWith(startNotification: val);
+        _saveSettings(_settings.copyWith(notificationSettings: newMap));
+      },
+    );
+  }
 
   Future<void> _launchReportEmail() async {
     final deviceInfo = '${Platform.operatingSystem} ${Platform.operatingSystemVersion}';
@@ -683,40 +561,31 @@ class SettingsScreenState extends State<SettingsScreen> {
   // --- Widget Components ---
 
   Widget _buildLocationCard() {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08), // Increased opacity for visibility
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.12)),
-          ),
+    return _GlassSection(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1), // Glassy icon bg
+                  color: AppColors.spiritualGold.withValues(alpha: 0.14),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.location_on_rounded, color: AppColors.spiritualGold, size: 24),
+                child: const Icon(Icons.location_on_rounded, color: AppColors.spiritualGold, size: 22),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: AppSpacing.lg),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text('Prayer times for', style: AppTextStyles.tiny()),
+                    const SizedBox(height: 2),
                     Text(
-                      "Current Location",
-                      style: AppTextStyles.tiny(color: Colors.white60),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _settings.location?.city ?? "Detecting...",
-                      style: AppTextStyles.h3(color: Colors.white),
+                      _settings.location?.city ?? 'Detecting…',
+                      style: AppTextStyles.h3(),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -724,173 +593,35 @@ class SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               if (_isLoadingLocation)
-                const SizedBox(
-                    width: 20, height: 20,
-                    child: PremiumFlowingLoader(size: 20, color: Colors.white)
+                const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(width: 20, height: 20, child: PremiumFlowingLoader(size: 20, color: Colors.white)),
                 )
               else
-                IconButton(
-                  onPressed: _updateLocation,
-                  icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                  tooltip: "Update Location",
-                )
+                Pressable(
+                  onTap: _updateLocation,
+                  pressedScale: 0.88,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.my_location_rounded, size: 14, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text('Update', style: AppTextStyles.small(color: Colors.white, weight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 32, 24, 12),
-        child: Text(
-          title,
-          style: AppTextStyles.tiny(color: AppColors.spiritualGold)
-              .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassSection(List<Widget> children) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12), // Higher blur
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08), // Slightly more visible glass
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-          ),
-          child: Column(children: children),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSettingTile({
-    required String title,
-    required String value,
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return Pressable(
-      onTap: onTap,
-      // Full-width rows only need a hint of movement; a deep press on something
-      // this large reads as the whole screen lurching.
-      pressedScale: 0.985,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white70, size: 22),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: AppTextStyles.bodyLarge(),
-                  ),
-                  const SizedBox(height: 4),
-                  // The value animates when it changes, so picking a new option
-                  // in the dialog visibly lands on the row you came from.
-                  AnimatedSwitcher(
-                    duration: AppDurations.normal,
-                    child: Text(
-                      value,
-                      key: ValueKey(value),
-                      style: AppTextStyles.small(color: Colors.white54),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSwitchRow({
-    required String title,
-    String? subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    bool compact = false,
-  }) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 20, vertical: compact ? 12 : 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.bodyLarge()),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: AppTextStyles.small(color: Colors.white54)),
-                ]
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeColor: AppColors.spiritualGold,
-            activeTrackColor: AppColors.spiritualGold.withOpacity(0.3),
-            inactiveTrackColor: Colors.white10,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionTile({
-    required String title,
-    required IconData icon,
-    required VoidCallback onTap,
-    bool isDestructive = false,
-  }) {
-    final color = isDestructive ? AppColors.statusMissed : Colors.white70;
-
-    return Pressable(
-      onTap: onTap,
-      pressedScale: 0.985,
-      // Destructive actions get a firmer confirmation than an ordinary tap.
-      haptic: isDestructive ? PressableHaptic.medium : PressableHaptic.light,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                title,
-                style: AppTextStyles.bodyLarge(color: color),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      height: 1,
-      color: Colors.white.withOpacity(0.1),
+      ],
     );
   }
 
@@ -900,107 +631,361 @@ class SettingsScreenState extends State<SettingsScreen> {
     required String currentValue,
     required Function(int) onSelected,
   }) {
-    // Custom Celestial Modal Bottom Sheet
-    showModalBottomSheet(
+    showGlassSheet<void>(
       context: context,
-      backgroundColor: Colors.transparent, // Crucial for glass effect
-      isScrollControlled: true,
-      barrierColor: Colors.black.withOpacity(0.6), // Darken background
-      builder: (context) => ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Container(
-            padding: const EdgeInsets.only(top: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.10),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              border: Border.all(color: Colors.white.withOpacity(0.15)),
-            ),
-            child: SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+      title: title,
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+        itemCount: options.length,
+        itemBuilder: (context, index) {
+          final isSelected = options[index] == currentValue;
+          return Pressable(
+            haptic: PressableHaptic.selection,
+            pressedScale: 0.98,
+            onTap: () {
+              onSelected(index);
+              Navigator.pop(context);
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl, vertical: 16),
+              child: Row(
                 children: [
-                  // Drag Handle
-                  Container(
-                    margin: const EdgeInsets.only(top: 8, bottom: 24),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(2),
+                  Expanded(
+                    child: Text(
+                      options[index],
+                      style: AppTextStyles.body(
+                        color: isSelected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.8),
+                        weight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      ),
                     ),
                   ),
-
-                  // Title
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      children: [
-                        Text(title, style: AppTextStyles.h2()),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Options List
-                  Flexible(
-                    child: ListView.separated(
-                      shrinkWrap: true,
-                      physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.only(bottom: 24),
-                      itemCount: options.length,
-                      separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
-                      itemBuilder: (context, index) {
-                        final isSelected = options[index] == currentValue;
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              HapticService().selection();
-                              onSelected(index);
-                              Navigator.pop(context);
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      options[index],
-                                      style: isSelected
-                                          ? AppTextStyles.bodyLarge(color: AppColors.spiritualGold, weight: FontWeight.bold)
-                                          : AppTextStyles.bodyLarge(color: Colors.white70),
-                                    ),
-                                  ),
-                                  if (isSelected)
-                                    const Icon(Icons.check_circle, color: AppColors.spiritualGold, size: 20),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                  if (isSelected) const Icon(Icons.check_rounded, color: AppColors.spiritualGold, size: 20),
                 ],
               ),
             ),
-          ),
+          );
+        },
+      ),
+    );
+  }
+
+  String _getThemeDisplayName(WeatherTheme theme) {
+    switch (theme) {
+      case WeatherTheme.auto: return 'Live weather';
+      case WeatherTheme.clear: return 'Clear sky';
+      case WeatherTheme.cloudy: return 'Cloudy';
+      case WeatherTheme.rain: return 'Rain';
+      case WeatherTheme.thunderstorm: return 'Thunderstorm';
+      case WeatherTheme.snow: return 'Snow';
+      case WeatherTheme.fog: return 'Fog';
+    }
+  }
+}
+
+// =============================================================================
+// BUILDING BLOCKS
+// =============================================================================
+
+/// A rounded group of rows with hairline dividers between them. Frosted in
+/// Balanced and Smooth, a flat fill in Lite.
+class _GlassSection extends StatelessWidget {
+  final List<Widget> children;
+  final bool highlight;
+
+  const _GlassSection({required this.children, this.highlight = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppSpacing.radiusLg);
+    final blur = AppEffects.blur;
+
+    Widget body = AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: blur ? 0.08 : 0.11),
+        borderRadius: radius,
+        border: Border.all(
+          color: highlight
+              ? AppColors.spiritualGold.withValues(alpha: 0.6)
+              : Colors.white.withValues(alpha: 0.1),
+          width: highlight ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0)
+              Container(
+                margin: const EdgeInsets.only(left: 60),
+                height: 1,
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
+            children[i],
+          ],
+        ],
+      ),
+    );
+
+    if (blur) {
+      body = BackdropFilter(filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12), child: body);
+    }
+    return ClipRRect(borderRadius: radius, child: body);
+  }
+}
+
+/// The tinted square every row leads with.
+class _RowIcon extends StatelessWidget {
+  final IconData icon;
+  final Color tint;
+
+  const _RowIcon({required this.icon, required this.tint});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Icon(icon, size: 18, color: tint),
+    );
+  }
+}
+
+class _SettingRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? value;
+  final VoidCallback onTap;
+  final Color? tint;
+  final bool destructive;
+  final Widget? trailing;
+
+  const _SettingRow({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.value,
+    this.tint,
+    this.destructive = false,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      // Full-width rows only need a hint of movement.
+      pressedScale: 0.985,
+      haptic: destructive ? PressableHaptic.medium : PressableHaptic.light,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+        child: Row(
+          children: [
+            _RowIcon(icon: icon, tint: tint ?? Colors.white.withValues(alpha: 0.85)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.body(
+                      color: destructive ? AppColors.statusMissed : Colors.white,
+                      weight: FontWeight.w500,
+                    ),
+                  ),
+                  if (value != null)
+                    // The value animates when it changes, so picking a new
+                    // option visibly lands on the row you came from.
+                    AnimatedSwitcher(
+                      duration: AppDurations.normal,
+                      child: Text(
+                        value!,
+                        key: ValueKey(value),
+                        style: AppTextStyles.small(color: Colors.white54),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            trailing ??
+                (destructive
+                    ? const SizedBox.shrink()
+                    : const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 20)),
+          ],
         ),
       ),
     );
   }
-  String _getThemeDisplayName(WeatherTheme theme) {
-    switch (theme) {
-      case WeatherTheme.auto: return 'Dynamic (Live)';
-      case WeatherTheme.clear: return 'Clear Sky';
-      case WeatherTheme.cloudy: return 'Cloudy';
-      case WeatherTheme.rain: return 'Rainy';
-      case WeatherTheme.thunderstorm: return 'Thunderstorm';
-      case WeatherTheme.snow: return 'Snow';
-      case WeatherTheme.fog: return 'Foggy';
-    }
+}
+
+class _SwitchRow extends StatelessWidget {
+  final IconData? icon;
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  /// Nested under a parent row (the per-prayer alerts): no icon, indented.
+  final bool indent;
+
+  const _SwitchRow({
+    this.icon,
+    required this.title,
+    this.subtitle,
+    required this.value,
+    required this.onChanged,
+    this.indent = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(indent ? 60 : 14, indent ? 6 : 10, 8, indent ? 6 : 10),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            _RowIcon(icon: icon!, tint: Colors.white.withValues(alpha: 0.85)),
+            const SizedBox(width: 14),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: indent
+                      ? AppTextStyles.small(color: Colors.white.withValues(alpha: 0.85))
+                      : AppTextStyles.body(weight: FontWeight.w500),
+                ),
+                if (subtitle != null)
+                  Text(subtitle!, style: AppTextStyles.small(color: Colors.white54)),
+              ],
+            ),
+          ),
+          Switch.adaptive(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: AppColors.spiritualGold,
+            activeTrackColor: AppColors.spiritualGold.withValues(alpha: 0.3),
+            inactiveTrackColor: Colors.white10,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lite / Balanced / Smooth as an inline segmented control, with a line
+/// underneath saying what the chosen level does.
+class _PerformanceModePicker extends StatelessWidget {
+  final PerformanceMode mode;
+  final ValueChanged<PerformanceMode> onChanged;
+
+  const _PerformanceModePicker({required this.mode, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _RowIcon(icon: Icons.speed_rounded, tint: Colors.white.withValues(alpha: 0.85)),
+              const SizedBox(width: 14),
+              Text('Performance', style: AppTextStyles.body(weight: FontWeight.w500)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.18),
+              borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+            ),
+            child: Row(
+              children: [
+                for (final m in PerformanceMode.values)
+                  Expanded(
+                    child: Pressable(
+                      haptic: PressableHaptic.selection,
+                      pressedScale: 0.95,
+                      onTap: () {
+                        if (m != mode) onChanged(m);
+                      },
+                      child: AnimatedContainer(
+                        duration: AppDurations.normal,
+                        curve: Curves.easeOutCubic,
+                        padding: const EdgeInsets.symmetric(vertical: 9),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: m == mode ? AppColors.spiritualGold.withValues(alpha: 0.18) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(9),
+                          border: Border.all(
+                            color: m == mode ? AppColors.spiritualGold.withValues(alpha: 0.45) : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          m.label,
+                          style: AppTextStyles.small(
+                            color: m == mode ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.6),
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AnimatedSwitcher(
+            duration: AppDurations.normal,
+            child: Text(
+              mode.description,
+              key: ValueKey(mode),
+              style: AppTextStyles.small(color: Colors.white54),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SheetButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _SheetButton({required this.label, required this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? Colors.white;
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.97,
+      child: Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: c.withValues(alpha: color == null ? 0.06 : 0.16),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+          border: Border.all(color: c.withValues(alpha: color == null ? 0.1 : 0.45)),
+        ),
+        child: Text(label, style: AppTextStyles.button(color: c)),
+      ),
+    );
   }
 }

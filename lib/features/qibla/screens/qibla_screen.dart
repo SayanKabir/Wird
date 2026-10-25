@@ -326,7 +326,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
         Text(
           "${_heading.round()}°",
           style: const TextStyle(
-            fontFamily: 'JetBrains Mono',
+            fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
             fontSize: 64,
             fontWeight: FontWeight.w200,
             color: Colors.white,
@@ -481,10 +481,11 @@ class _CardinalPainter extends CustomPainter {
 
       textPainter.text = TextSpan(
         text: directions[i],
-        style: TextStyle(
-          fontFamily: 'Inter',
+        // TextPainter doesn't inherit the app font, so take it from the
+        // shared styles rather than naming a family that isn't registered.
+        style: AppTextStyles.body(weight: FontWeight.bold).copyWith(
+          shadows: const [],
           fontSize: isNorth ? size.width * 0.075 : size.width * 0.06, // Scales text seamlessly
-          fontWeight: FontWeight.bold,
           color: isNorth ? AppColors.statusMissed : Colors.white.withValues(alpha: 0.9),
         ),
       );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'core/constants/colors.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/notification_service.dart';
@@ -162,7 +163,11 @@ class WirdApp extends StatelessWidget {
         surface: AppColors.cardBackground,
         error: AppColors.statusMissed,
       ),
-      fontFamily: 'Inter',
+      // Inter everywhere, including Text widgets that set no style of their
+      // own and Material components (buttons, dialogs, text fields). The old
+      // fontFamily: 'Inter' named a family that isn't bundled — google_fonts
+      // registers it under its own names — so those fell back to Roboto/SF.
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,

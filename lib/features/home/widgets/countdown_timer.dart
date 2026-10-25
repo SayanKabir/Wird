@@ -53,7 +53,7 @@ class CountdownTimer extends StatelessWidget {
   TextStyle _getTextStyle(bool isUrgent, bool isVeryUrgent) {
     // Monospaced font for numbers to prevent jitter
     final baseStyle = const TextStyle(
-      fontFamily: 'JetBrains Mono',
+      fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
       fontWeight: FontWeight.w500,
     );
 
@@ -220,7 +220,7 @@ class _TimeSeparator extends StatelessWidget {
       child: Text(
         ":",
         style: AppTextStyles.h2(color: color.withOpacity(0.5)).copyWith(
-          fontFamily: 'JetBrains Mono',
+          fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
           fontSize: 32,
         ),
       ),
@@ -251,7 +251,7 @@ class _TimeUnit extends StatelessWidget {
         Text(
           value.toString().padLeft(2, '0'),
           style: TextStyle(
-            fontFamily: 'JetBrains Mono', // Monospaced for stability
+            fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
             fontSize: 56, // Huge hero size
             fontWeight: FontWeight.w300, // Light weight
             color: color,

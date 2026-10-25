@@ -695,7 +695,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Text(label, style: AppTextStyles.small(color: Colors.white54)),
           Text(
               value,
-              style: AppTextStyles.small(color: Colors.white).copyWith(fontFamily: 'JetBrains Mono')
+              style: AppTextStyles.tabular(AppTextStyles.small(color: Colors.white))
           ),
         ],
       ),

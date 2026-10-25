@@ -18,9 +18,9 @@ class AppSpacing {
   static const double xl = 24;
   static const double xxl = 32;
 
-  /// Horizontal page margin: 24 on most phones, easing to 16 on narrow ones.
+  /// Horizontal page margin: 24, or 16 on very narrow phones.
   static double gutter(BuildContext context) =>
-      (MediaQuery.sizeOf(context).width * 0.06).clamp(16.0, 24.0);
+      MediaQuery.sizeOf(context).width < 360 ? 16 : 24;
 
   /// Space above a page title, below the status bar.
   static const double pageTop = 24;

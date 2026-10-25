@@ -516,7 +516,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
             Text(
               '${_selectedTasbih!.currentCount}',
               style: const TextStyle(
-                fontFamily: 'JetBrains Mono',
+                fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
                 fontSize: 72,
                 fontWeight: FontWeight.w200,
                 color: Colors.white,
@@ -526,7 +526,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
             Text(
               '/ ${_selectedTasbih!.targetCount}',
               style: TextStyle(
-                fontFamily: 'JetBrains Mono',
+                fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
                 fontSize: 18,
                 color: Colors.white.withValues(alpha: 0.4),
               ),

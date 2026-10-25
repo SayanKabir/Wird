@@ -6,8 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
+import '../../../core/constants/spacing.dart';
 import '../../../models/sunnah.dart';
-import '../../../widgets/common/glass_container.dart';
 import '../../tasbih/screens/tasbih_screen.dart';
 import '../bloc/sunnah_bloc.dart';
 import '../widgets/sunnah_category_block.dart';
@@ -123,7 +123,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
 
     final size = MediaQuery.sizeOf(context);
     final bool isSmallPhone = size.width < 360;
-    final double hPad = (size.width * 0.05).clamp(16.0, 24.0);
+    final double hPad = AppSpacing.gutter(context);
 
     final showWeeklySunnah = weeklySunnah != null &&
         filteredSunnahs.any((sunnah) => sunnah.id == weeklySunnah.id);
@@ -152,7 +152,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
         // 1. Header Section (Sleek Inline Design)
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(hPad, (size.height * 0.03).clamp(16.0, 24.0), hPad, 16),
+            padding: AppSpacing.header(context),
             child: const PageHeader(
               overline: 'THE PROPHETIC PATH',
               title: 'Sunnah',
@@ -648,10 +648,10 @@ class _SunnahScreenState extends State<SunnahScreen> {
                                 sunnah.arabic!,
                                 textDirection: TextDirection.rtl,
                                 textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontFamily: 'Amiri',
-                                  fontSize: isSmallPhone ? 24 : 28,
+                                style: AppTextStyles.arabic(
+                                  size: isSmallPhone ? 24 : 28,
                                   color: AppColors.spiritualGold.withValues(alpha: 0.9),
+                                ).copyWith(
                                   height: 1.8,
                                 ),
                               ),

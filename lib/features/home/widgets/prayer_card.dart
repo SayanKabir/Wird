@@ -220,7 +220,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
     return Text(
       AppFormatters.formatTime(widget.timeData!.startTime),
       style: TextStyle(
-        fontFamily: 'JetBrains Mono',
+        fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
         color: Colors.white.withOpacity(widget.isActive ? 1.0 : 0.8),
         fontWeight: FontWeight.w600,
         fontSize: 16,

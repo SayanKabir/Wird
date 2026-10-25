@@ -69,6 +69,17 @@ class AppTextStyles {
   static const TextStyle _uthmanicHafs = TextStyle(fontFamily: 'UthmanicHafs');
   static const TextStyle _indoPakNastaleeq = TextStyle(fontFamily: 'IndoPakNastaleeq');
 
+  /// Inter at an arbitrary size, through the same per-weight cache. For the
+  /// few places (the Quran reader's user-sized text) that can't use a step
+  /// of the scale above. Prefer the named styles everywhere else.
+  static TextStyle inter({
+    double? fontSize,
+    FontWeight fontWeight = FontWeight.w400,
+    Color? color,
+    double? height,
+  }) =>
+      _inter(fontWeight).copyWith(fontSize: fontSize, color: color, height: height);
+
   // ============================================
   // HEADING STYLES
   // ============================================

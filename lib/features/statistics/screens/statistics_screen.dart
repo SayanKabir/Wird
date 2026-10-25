@@ -8,13 +8,11 @@ import '../../../core/repositories/sunnah_progress_repository.dart';
 import '../../../core/repositories/tasbih_repository.dart';
 import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/prayer.dart';
-import '../../../models/prayer_status.dart';
 import '../../../models/sunnah_progress.dart';
 import '../../../models/tasbih.dart';
 import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../models/quran_progress.dart';
 import '../../../widgets/common/page_header.dart';
-import '../../../widgets/common/pressable.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/prayer_service.dart';
 
@@ -1143,24 +1141,11 @@ class AchievementsScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Pressable(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.arrow_back, color: Colors.white),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      // Was hand-rolled here with its own spacing; PageHeader
-                      // exists precisely to stop these copies drifting apart.
-                      const PageHeader(
+                      PageHeader(
                         overline: "MILESTONES",
                         title: "Achievements",
                         overlineColor: AppColors.spiritualGold,
+                        onBack: () => Navigator.pop(context),
                       ),
                       const SizedBox(height: 8),
                       Text(
