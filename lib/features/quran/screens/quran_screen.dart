@@ -370,20 +370,20 @@ class _QuranScreenState extends State<QuranScreen> {
                     AnimatedDefaultTextStyle(
                       duration: const Duration(milliseconds: 180),
                       style: AppTextStyles.body(
-                        color: _tab == tab ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                        color: _tab == tab ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.45),
                         weight: FontWeight.w600,
                       ),
                       child: Text(tab.label),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     AnimatedContainer(
                       duration: const Duration(milliseconds: 220),
                       curve: Curves.easeOutCubic,
-                      height: 2,
-                      width: _tab == tab ? 18 : 0,
+                      height: 3,
+                      width: _tab == tab ? 28 : 0,
                       decoration: BoxDecoration(
                         color: AppColors.spiritualGold,
-                        borderRadius: BorderRadius.circular(1),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ],

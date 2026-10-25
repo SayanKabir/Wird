@@ -537,36 +537,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildIndicatorIcon(int index, IconData icon, double width,
       double height, double size, int currentPage) {
     final isSelected = currentPage == index;
-    final color =
-        isSelected ? Colors.white : Colors.white.withValues(alpha: 0.3);
 
+    // The active tab sits in a gold-tinted pill. Colour and a soft glow alone
+    // weren't enough: over the bright Dhuhr/Asr sky the capsule turns pale
+    // and a white icon barely stood apart from the dimmed ones.
     return Pressable(
       onTap: () => _navToPage(index),
       // Navigation is a frequent, low-stakes tap — the lightest feedback.
       haptic: PressableHaptic.selection,
       pressedScale: 0.86,
-      child: AnimatedContainer(
-        duration: AppDurations.normal,
-        curve: Curves.easeOutBack,
+      child: SizedBox(
         width: width,
         height: height,
-        alignment: Alignment.center,
-        transform:
-            Matrix4.identity()..scale(isSelected ? 1.1 : 1.0), // Subtle pop
-        child: Icon(
-          icon,
-          size: size,
-          color: color,
-          // Add a subtle glow only to the active icon
-          shadows: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
+        child: Center(
+          child: AnimatedContainer(
+            duration: AppDurations.normal,
+            curve: Curves.easeOutCubic,
+            width: isSelected ? width - 4 : size + 8,
+            height: isSelected ? height - 8 : size + 8,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? AppColors.spiritualGold.withValues(alpha: 0.22)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(height),
+              border: Border.all(
+                color: isSelected
+                    ? AppColors.spiritualGold.withValues(alpha: 0.5)
+                    : Colors.transparent,
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Icon(
+              icon,
+              size: size,
+              color: isSelected
+                  ? AppColors.spiritualGold
+                  : Colors.white.withValues(alpha: 0.45),
+            ),
+          ),
         ),
       ),
     );
