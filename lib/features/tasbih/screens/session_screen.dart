@@ -206,6 +206,8 @@ class _SessionScreenState extends State<SessionScreen> {
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
+              // With reduce motion, steps simply cross-fade.
+              if (reduceMotionEnabled()) return FadeTransition(opacity: animation, child: child);
               final incoming = child.key == ValueKey(_step);
               final dir = (_movedForward ? 1 : -1) * (incoming ? 1 : -1);
               return FadeTransition(
@@ -303,7 +305,7 @@ class _SessionScreenState extends State<SessionScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.6, end: 1),
+                    tween: Tween(begin: reduceMotionEnabled() ? 1 : 0.6, end: 1),
                     duration: const Duration(milliseconds: 420),
                     curve: Curves.easeOutBack,
                     builder: (context, v, child) => Transform.scale(scale: v, child: child),
@@ -416,7 +418,7 @@ class _Beads extends StatelessWidget {
           // Re-keyed when filled so the pop plays once, as the bead lands.
           TweenAnimationBuilder<double>(
             key: ValueKey('$i${i < done}'),
-            tween: Tween(begin: i < done ? 1.3 : 1, end: 1),
+            tween: Tween(begin: i < done && !reduceMotionEnabled() ? 1.3 : 1, end: 1),
             duration: const Duration(milliseconds: 420),
             curve: Curves.elasticOut,
             builder: (context, scale, child) => Transform.scale(scale: scale, child: child),

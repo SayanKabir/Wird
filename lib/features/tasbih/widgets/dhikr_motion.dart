@@ -2,15 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../../core/constants/colors.dart';
-import '../../../core/services/storage_service.dart';
-
-bool _reduceMotion() {
-  try {
-    return StorageService().getSettings().reduceMotion;
-  } catch (_) {
-    return false;
-  }
-}
+import '../../../widgets/common/pressable.dart';
 
 // ─────────────────── Folding scroll ───────────────────
 
@@ -20,6 +12,10 @@ bool _reduceMotion() {
 ///
 /// The fold only applies on a side that has more content beyond it, so text
 /// at rest (scrolled to the top, or too short to scroll) sits flat.
+///
+/// With reduce motion on, nothing tilts: the edges with more content simply
+/// fade out (a static mask), so text still never ends in a hard cut, and the
+/// scroll stops without bouncing.
 ///
 /// Wrap text in [FoldText] (or single widgets in [Fold]) to take part: each
 /// word folds on its own, so a long paragraph curls away line by line.
@@ -34,7 +30,11 @@ class FoldingScrollView extends StatefulWidget {
 }
 
 class _FoldingScrollViewState extends State<FoldingScrollView> {
+  static const double _fade = 36;
+
   final ScrollController _controller = ScrollController();
+  bool _moreAbove = false;
+  bool _moreBelow = false;
 
   @override
   void dispose() {
@@ -42,15 +42,55 @@ class _FoldingScrollViewState extends State<FoldingScrollView> {
     super.dispose();
   }
 
+  bool _onMetrics(ScrollMetrics m) {
+    final above = m.pixels > 0.5;
+    final below = m.pixels < m.maxScrollExtent - 0.5;
+    if (above != _moreAbove || below != _moreBelow) {
+      setState(() {
+        _moreAbove = above;
+        _moreBelow = below;
+      });
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _FoldScope(
-      controller: _reduceMotion() ? null : _controller,
-      child: SingleChildScrollView(
-        controller: _controller,
-        physics: const BouncingScrollPhysics(),
-        padding: widget.padding,
-        child: widget.child,
+    final reduced = reduceMotionEnabled();
+    final scroll = SingleChildScrollView(
+      controller: _controller,
+      physics: reduced ? const ClampingScrollPhysics() : const BouncingScrollPhysics(),
+      padding: widget.padding,
+      child: widget.child,
+    );
+    if (!reduced) return _FoldScope(controller: _controller, child: scroll);
+
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (n) => _onMetrics(n.metrics),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (n) => _onMetrics(n.metrics),
+        child: _FoldScope(
+          controller: null,
+          child: ShaderMask(
+            blendMode: BlendMode.dstIn,
+            shaderCallback: (rect) {
+              final top = _moreAbove ? _fade / rect.height : 0.0;
+              final bottom = _moreBelow ? 1 - _fade / rect.height : 1.0;
+              return LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  _moreAbove ? Colors.transparent : Colors.black,
+                  Colors.black,
+                  Colors.black,
+                  _moreBelow ? Colors.transparent : Colors.black,
+                ],
+                stops: [0, top, bottom, 1],
+              ).createShader(rect);
+            },
+            child: scroll,
+          ),
+        ),
       ),
     );
   }
@@ -241,7 +281,7 @@ class _RippleTapAreaState extends State<RippleTapArea> with TickerProviderStateM
   void _down(TapDownDetails d) {
     widget.onTap();
     setState(() => _pressed = true);
-    if (_reduceMotion()) return;
+    if (reduceMotionEnabled()) return;
 
     final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
     final ripple = _Ripple(d.localPosition, controller);
@@ -278,7 +318,7 @@ class _RippleTapAreaState extends State<RippleTapArea> with TickerProviderStateM
           fit: StackFit.expand,
           children: [
             AnimatedScale(
-              scale: _pressed ? 0.975 : 1,
+              scale: _pressed && !reduceMotionEnabled() ? 0.975 : 1,
               duration: const Duration(milliseconds: 90),
               curve: Curves.easeOut,
               child: widget.child,
@@ -336,6 +376,7 @@ class TickingNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (reduceMotionEnabled()) return Text('$value', style: style);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
       switchInCurve: Curves.easeOutCubic,

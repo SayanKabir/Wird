@@ -48,16 +48,20 @@ class Pressable extends StatefulWidget {
 
 enum PressableHaptic { none, selection, light, medium, heavy }
 
+/// Whether the user has turned on "Reduce motion" in Settings. Read at build
+/// time, so screens opened after the toggle pick it up.
+bool reduceMotionEnabled() {
+  try {
+    return StorageService().getSettings().reduceMotion;
+  } catch (_) {
+    return false;
+  }
+}
+
 class _PressableState extends State<Pressable> {
   bool _pressed = false;
 
-  bool get _reduceMotion {
-    try {
-      return StorageService().getSettings().reduceMotion;
-    } catch (_) {
-      return false;
-    }
-  }
+  bool get _reduceMotion => reduceMotionEnabled();
 
   void _setPressed(bool value) {
     if (_pressed == value) return;

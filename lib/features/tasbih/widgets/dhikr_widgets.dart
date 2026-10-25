@@ -29,6 +29,7 @@ class DhikrBackdrop extends StatelessWidget {
         final settings = StorageService().getSettings();
         return CelestialBackground(
           prayerPeriod: _period(prayerState),
+          reduceMotion: settings.reduceMotion,
           weatherCondition: _condition(settings.weatherTheme),
           cloudCoverage: _clouds(settings.weatherTheme),
           latitude: settings.location?.latitude ?? 0.0,
@@ -253,9 +254,10 @@ class DhikrRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final full = progress >= 1;
+    final still = reduceMotionEnabled();
     return TweenAnimationBuilder<double>(
       key: ValueKey(full ? pulseKey : null),
-      tween: Tween(begin: full ? 1.06 : 1, end: 1),
+      tween: Tween(begin: full && !still ? 1.06 : 1, end: 1),
       duration: const Duration(milliseconds: 520),
       curve: Curves.elasticOut,
       builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
@@ -264,7 +266,7 @@ class DhikrRing extends StatelessWidget {
         height: size,
         child: TweenAnimationBuilder<double>(
           tween: Tween(end: progress.clamp(0.0, 1.0)),
-          duration: const Duration(milliseconds: 200),
+          duration: still ? Duration.zero : const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
           builder: (context, value, _) => CustomPaint(
             painter: _RingPainter(value, stroke: size < 160 ? 7 : 10),
