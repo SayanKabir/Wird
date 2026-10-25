@@ -599,6 +599,20 @@ class SettingsScreenState extends State<SettingsScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: _buildGlassSection([
+                  _buildSettingTile(
+                    title: "Performance Mode",
+                    value: PerformanceMode.fromKey(_settings.performanceMode).description,
+                    icon: Icons.speed_rounded,
+                    onTap: () => _showSelectionDialog(
+                      title: 'Performance Mode',
+                      options: [for (final m in PerformanceMode.values) m.label],
+                      currentValue: PerformanceMode.fromKey(_settings.performanceMode).label,
+                      onSelected: (index) => _saveSettings(_settings.copyWith(
+                        performanceMode: PerformanceMode.values[index].key,
+                      )),
+                    ),
+                  ),
+                  _buildDivider(),
                   _buildSwitchRow(
                     title: "Haptic Feedback",
                     subtitle: "Subtle vibration on taps and selections",

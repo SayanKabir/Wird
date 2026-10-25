@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
+import '../../core/constants/effects.dart';
+
 /// A reusable container that implements the glassmorphism effect
 class GlassContainer extends StatelessWidget {
   final Widget child;
@@ -35,7 +37,9 @@ class GlassContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final effectiveColor = color ?? Colors.white;
-    final shouldBlur = blur > 0;
+    // Lite mode drops the blur; a touch more fill keeps the surface legible.
+    final shouldBlur = blur > 0 && AppEffects.blur;
+    final fill = shouldBlur || blur == 0 ? opacity : (opacity + 0.06).clamp(0.0, 1.0);
 
     Widget glassContent = Container(
       width: width,
@@ -43,7 +47,7 @@ class GlassContainer extends StatelessWidget {
       margin: margin,
       decoration: BoxDecoration(
         // Use a semi-transparent overlay for the glass effect
-        color: effectiveColor.withValues(alpha: opacity),
+        color: effectiveColor.withValues(alpha: fill),
         shape: shape,
         borderRadius:
             shape == BoxShape.circle ? null : BorderRadius.circular(borderRadius),

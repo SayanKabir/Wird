@@ -457,6 +457,11 @@ class AppSettings extends Equatable {
   @HiveField(24, defaultValue: 'latin')
   final String quranTransliterationScript;
 
+  /// Visual effects budget: 'lite', 'balanced' or 'smooth'. See
+  /// [PerformanceMode] and AppEffects for what each level turns on.
+  @HiveField(25, defaultValue: 'smooth')
+  final String performanceMode;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -483,6 +488,7 @@ class AppSettings extends Equatable {
     this.quranSelectedScript = QuranScript.indopak,
     this.hapticsEnabled = true,
     this.quranTransliterationScript = 'latin',
+    this.performanceMode = 'smooth',
   });
 
   /// Default settings
@@ -517,6 +523,7 @@ class AppSettings extends Equatable {
     QuranScript? quranSelectedScript,
     bool? hapticsEnabled,
     String? quranTransliterationScript,
+    String? performanceMode,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -544,6 +551,7 @@ class AppSettings extends Equatable {
       quranSelectedScript: quranSelectedScript ?? this.quranSelectedScript,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       quranTransliterationScript: quranTransliterationScript ?? this.quranTransliterationScript,
+      performanceMode: performanceMode ?? this.performanceMode,
     );
   }
 
@@ -573,7 +581,31 @@ class AppSettings extends Equatable {
     quranSelectedScript,
     hapticsEnabled,
     quranTransliterationScript,
+    performanceMode,
   ];
+}
+
+/// How much visual work the app does. Stored on [AppSettings.performanceMode]
+/// by [key] so adding a level never needs a new Hive adapter.
+enum PerformanceMode {
+  /// Flat surfaces, a still sky and no entrance animations. For older phones
+  /// and for saving battery.
+  lite('lite', 'Lite', 'Flat surfaces and a still sky. Easiest on battery and older phones.'),
+
+  /// Frosted glass and the living sky, without the entrance animations.
+  balanced('balanced', 'Balanced', 'Frosted glass and the living sky, with fewer animations.'),
+
+  /// Everything on: glass, the animated sky and soft entrance motion.
+  smooth('smooth', 'Smooth', 'Every effect on, with soft motion as pages appear.');
+
+  const PerformanceMode(this.key, this.label, this.description);
+
+  final String key;
+  final String label;
+  final String description;
+
+  static PerformanceMode fromKey(String key) => PerformanceMode.values
+      .firstWhere((m) => m.key == key, orElse: () => PerformanceMode.smooth);
 }
 
 /// Streak data

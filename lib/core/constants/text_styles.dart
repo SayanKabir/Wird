@@ -1,11 +1,29 @@
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/settings.dart';
 
 /// Wird App Typography - Text Styles
-/// 
-/// Uses Inter font for primary text (via Google Fonts)
-/// Arabic text uses Amiri or system Arabic font
+///
+/// One family, one scale. Inter carries all Latin text; Arabic UI text uses
+/// Amiri and Quran text uses the bundled mushaf fonts (see [arabic]).
+///
+/// | Style        | Size | Use                                            |
+/// |--------------|------|------------------------------------------------|
+/// | h1           | 32   | Page titles (via PageHeader)                   |
+/// | h2           | 24   | Sheet and dialog titles, hero numbers          |
+/// | h3           | 20   | Card titles                                    |
+/// | bodyLarge    | 18   | Emphasised single lines                        |
+/// | body         | 16   | Row titles, paragraphs                         |
+/// | small        | 14   | Secondary lines, values                        |
+/// | tiny         | 12   | Metadata, captions                             |
+/// | sectionLabel | 12   | Spaced caps above a group of rows              |
+///
+/// Numbers that tick or sit in columns (times, counters, dates) go through
+/// [tabular] so their digits keep the same width. Pages used to reach for
+/// 'JetBrains Mono' for this, a font the app never bundled, so those numbers
+/// silently fell back to the platform font and looked out of place.
 class AppTextStyles {
   AppTextStyles._();
 
@@ -250,6 +268,19 @@ class AppTextStyles {
     color: color ?? Colors.white.withOpacity(0.9),
     height: 1.2,
     letterSpacing: 0.5,
+  );
+
+  /// Section label - spaced capitals above a group of rows or cards.
+  static TextStyle sectionLabel({Color? color}) => _inter(FontWeight.w700).copyWith(
+    fontSize: 12,
+    color: color ?? Colors.white.withOpacity(0.5),
+    height: 1.2,
+    letterSpacing: 2,
+  );
+
+  /// Same glyphs, fixed-width digits, so a ticking time doesn't jitter.
+  static TextStyle tabular(TextStyle style) => style.copyWith(
+    fontFeatures: const [FontFeature.tabularFigures()],
   );
 
   /// Overline - Small caps style labels

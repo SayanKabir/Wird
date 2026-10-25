@@ -5,6 +5,9 @@ import 'dart:ui';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/constants/text_styles.dart';
+import '../../../core/constants/effects.dart';
+import '../widgets/exit_prompt.dart';
+import '../../quran/screens/surah_reading_screen.dart';
 import '../../../core/utils/hijri_date.dart';
 import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/prayer.dart';
@@ -52,6 +55,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Index of [SettingsScreen] within the PageView below.
   static const int _settingsPageIndex = 0;
+
+  /// Index of the Quran tab and of the dashboard within the PageView below.
+  static const int _quranPageIndex = 1;
+  static const int _homePageIndex = 2;
+
+  /// Guards against a second back press stacking another exit sheet.
+  bool _exitPromptOpen = false;
 
   /// Lets the dashboard ask the settings page to scroll to a given section.
   final GlobalKey<SettingsScreenState> _settingsKey =
@@ -206,6 +216,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     HapticService().light();
   }
 
+  /// System back on the home shell. From another tab it returns to the
+  /// dashboard first; on the dashboard it asks before leaving, with a nudge
+  /// to stay for a little Quran or dhikr.
+  Future<void> _handleBack() async {
+    if (_currentPage.value != _homePageIndex) {
+      _navToPage(_homePageIndex);
+      return;
+    }
+    if (_exitPromptOpen) return;
+    _exitPromptOpen = true;
+    final choice = await showExitPrompt(context);
+    _exitPromptOpen = false;
+    if (!mounted || choice == null) return;
+
+    switch (choice) {
+      case ExitChoiceLeave():
+        leaveApp();
+      case ExitChoiceStay(:final nudge):
+        _followNudge(nudge);
+    }
+  }
+
+  void _followNudge(ExitNudge nudge) {
+    switch (nudge.action) {
+      case ExitNudgeAction.dhikr:
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const TasbihScreen()),
+        );
+      case ExitNudgeAction.quran:
+        final surahId = nudge.surahId;
+        if (surahId == null) {
+          _navToPage(_quranPageIndex);
+          return;
+        }
+        final prayerState = context.read<PrayerBloc>().state;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SurahReadingScreen(
+              surahId: surahId,
+              prayerPeriod: prayerState is PrayerLoaded
+                  ? prayerState.prayerPeriod
+                  : PrayerPeriod.isha,
+            ),
+          ),
+        );
+    }
+  }
+
   void _navToPage(int index) {
     _pageController.animateToPage(
       index,
@@ -347,10 +405,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         : 0,
                 // The background widgets have always supported this, but nothing
                 // ever supplied it, so the setting had no effect.
-                reduceMotion: settings.reduceMotion,
+                // Lite mode and Reduce Motion both still the sky.
+                reduceMotion: !AppEffects.ambientMotion,
                 latitude: _latitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
-                child: Scaffold(
+                child: PopScope(
+                  canPop: false,
+                  onPopInvokedWithResult: (didPop, _) {
+                    if (!didPop) _handleBack();
+                  },
+                  child: Scaffold(
                   resizeToAvoidBottomInset: false,
                   backgroundColor: Colors.transparent,
                   extendBody: true,
@@ -403,6 +467,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                     ],
                   ),
+                  ),
                 ),
               );
             }
@@ -428,12 +493,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: ClipRRect(
           borderRadius: BorderRadius.circular(32), // High curvature for capsule shape
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            // Lite mode: a zero-sigma filter is skipped by the engine, and the
+            // darker fill below keeps the capsule readable without it.
+            filter: AppEffects.blur
+                ? ImageFilter.blur(sigmaX: 15, sigmaY: 15)
+                : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
             child: Container(
               height: containerHeight,
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.4), // Darker for contrast
+                color: Colors.black.withValues(alpha: AppEffects.blur ? 0.4 : 0.7), // Darker for contrast
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
                   color: Colors.white.withValues(alpha: 0.08), // Subtle glass edge

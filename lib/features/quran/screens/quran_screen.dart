@@ -20,42 +20,48 @@ import 'surah_reading_screen.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/glass_sheet.dart';
+import '../../../core/constants/spacing.dart';
 
-enum _QuranTab { surah, juz, revelation, saved }
+enum _QuranTab { surah, juz, saved }
 
 enum _SurahFilter { all, makki, madani, offline }
 
-enum _SurahSort { mushaf, longest, shortest, name }
+enum _SurahSort { mushaf, revelation, longest, shortest, name }
 
 extension on _QuranTab {
   String get label => switch (this) {
         _QuranTab.surah => 'Surah',
         _QuranTab.juz => 'Juz',
-        _QuranTab.revelation => 'Revelation',
         _QuranTab.saved => 'Saved',
       };
 }
 
 extension on _SurahFilter {
   String get label => switch (this) {
-        _SurahFilter.all => 'All',
+        _SurahFilter.all => 'All surahs',
         _SurahFilter.makki => 'Makki',
         _SurahFilter.madani => 'Madani',
-        _SurahFilter.offline => 'Offline',
+        _SurahFilter.offline => 'Saved offline',
       };
 }
 
 extension on _SurahSort {
   String get label => switch (this) {
         _SurahSort.mushaf => 'Mushaf order',
+        _SurahSort.revelation => 'Revelation order',
         _SurahSort.longest => 'Most ayahs',
         _SurahSort.shortest => 'Fewest ayahs',
         _SurahSort.name => 'Name A–Z',
       };
 }
 
-/// Main Quran tab – browse by surah, juz or revelation order, jump straight
-/// to an ayah ("2:255"), and search the text, modelled on quran.com.
+/// Main Quran tab – browse by surah or juz, jump straight to an ayah
+/// ("2:255"), and search the text, modelled on quran.com.
+///
+/// Kept deliberately quiet: one search field, three tabs, and a single options
+/// button that holds the filters and sort orders (revelation order lives
+/// there too). The list rows show only what helps pick a surah.
 class QuranScreen extends StatefulWidget {
   const QuranScreen({super.key});
 
@@ -199,10 +205,8 @@ class _QuranScreenState extends State<QuranScreen> {
   }
 
   Widget _buildContent(BuildContext context, QuranLoaded state) {
-    final size = MediaQuery.sizeOf(context);
-    // Dynamically calculate horizontal padding (shrinks on small phones, max 24 on large)
-    final double hPad = (size.width * 0.05).clamp(16.0, 24.0);
-    final bottomPad = MediaQuery.of(context).padding.bottom + 100;
+    final double hPad = AppSpacing.gutter(context);
+    final bottomPad = AppSpacing.navClearance(context);
     final searching = _searchQuery.trim().isNotEmpty;
 
     final List<Widget> slivers;
@@ -213,7 +217,7 @@ class _QuranScreenState extends State<QuranScreen> {
         if (state.lastRead != null)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: AppSpacing.lg),
               child: _ContinueReadingCard(
                 surahName: state.lastRead!.surahName ?? 'Surah ${state.lastRead!.surahId}',
                 surahId: state.lastRead!.surahId,
@@ -242,7 +246,7 @@ class _QuranScreenState extends State<QuranScreen> {
           children: [
             // Header
             Padding(
-              padding: EdgeInsets.fromLTRB(hPad, (size.height * 0.03).clamp(16.0, 24.0), hPad, 0),
+              padding: AppSpacing.header(context),
               child: const PageHeader(
                 overline: 'THE NOBLE',
                 title: 'Quran',
@@ -250,11 +254,9 @@ class _QuranScreenState extends State<QuranScreen> {
               ),
             ),
 
-            SizedBox(height: (size.height * 0.02).clamp(16.0, 24.0)),
-
             _buildSearchBar(hPad),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.lg),
 
             Expanded(
               child: CustomScrollView(
@@ -298,7 +300,7 @@ class _QuranScreenState extends State<QuranScreen> {
               if (ref != null) _openSurah(context, ref.surah, verse: ref.verse);
             },
             decoration: InputDecoration(
-              hintText: 'Surah, 2:255, juz 30, or any word',
+              hintText: 'Search surahs, ayahs or 2:255',
               hintStyle: AppTextStyles.body(
                 color: Colors.white.withValues(alpha: 0.4),
               ),
@@ -344,48 +346,153 @@ class _QuranScreenState extends State<QuranScreen> {
     );
   }
 
+  bool get _optionsActive => _filter != _SurahFilter.all || _sort != _SurahSort.mushaf;
+
   Widget _buildTabBar(double hPad) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 4, hPad, 12),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
-        ),
-        child: Row(
-          children: [
-            for (final tab in _QuranTab.values)
-              Expanded(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (_tab == tab) return;
-                    HapticService().selection();
-                    setState(() => _tab = tab);
-                  },
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
-                    curve: Curves.easeOutCubic,
-                    padding: const EdgeInsets.symmetric(vertical: 9),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: _tab == tab ? AppColors.spiritualGold.withValues(alpha: 0.16) : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
+      padding: EdgeInsets.fromLTRB(hPad, 0, hPad - 8, AppSpacing.sm),
+      child: Row(
+        children: [
+          for (final tab in _QuranTab.values)
+            Pressable(
+              haptic: PressableHaptic.none,
+              pressedScale: 0.94,
+              onTap: () {
+                if (_tab == tab) return;
+                HapticService().selection();
+                setState(() => _tab = tab);
+              },
+              child: Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.xl, top: 6, bottom: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 180),
+                      style: AppTextStyles.body(
+                        color: _tab == tab ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                        weight: FontWeight.w600,
+                      ),
+                      child: Text(tab.label),
                     ),
-                    child: Text(
-                      tab.label,
-                      style: AppTextStyles.small(
-                        color: _tab == tab ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.55),
-                        weight: _tab == tab ? FontWeight.w600 : FontWeight.w500,
+                    const SizedBox(height: 4),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      height: 2,
+                      width: _tab == tab ? 18 : 0,
+                      decoration: BoxDecoration(
+                        color: AppColors.spiritualGold,
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const Spacer(),
+          if (_tab == _QuranTab.surah)
+            Pressable(
+              onTap: _showListOptions,
+              pressedScale: 0.88,
+              child: Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      Icons.tune_rounded,
+                      size: 20,
+                      color: _optionsActive ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.55),
+                    ),
+                    if (_optionsActive)
+                      Positioned(
+                        right: -3,
+                        top: -3,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: const BoxDecoration(
+                            color: AppColors.spiritualGold,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Filters and sort orders for the surah list, in one sheet instead of a
+  /// permanent row of pills.
+  void _showListOptions() {
+    showGlassSheet<void>(
+      context: context,
+      title: 'Show & sort',
+      child: StatefulBuilder(
+        builder: (context, setSheetState) {
+          void update(VoidCallback change) {
+            HapticService().selection();
+            setState(change);
+            setSheetState(() {});
+          }
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.sm, AppSpacing.xl, AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('SHOW', style: AppTextStyles.sectionLabel()),
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.sm,
+                  children: [
+                    for (final f in _SurahFilter.values)
+                      _OptionChip(
+                        label: f == _SurahFilter.offline ? '${f.label} · ${_offlineSurahs.length}' : f.label,
+                        selected: _filter == f,
+                        onTap: () => update(() => _filter = f),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Text('SORT BY', style: AppTextStyles.sectionLabel()),
+                const SizedBox(height: AppSpacing.sm),
+                for (final o in _SurahSort.values)
+                  Pressable(
+                    haptic: PressableHaptic.none,
+                    pressedScale: 0.98,
+                    onTap: () => update(() => _sort = o),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              o.label,
+                              style: AppTextStyles.body(
+                                color: _sort == o ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.8),
+                                weight: _sort == o ? FontWeight.w600 : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                          if (_sort == o)
+                            const Icon(Icons.check_rounded, size: 20, color: AppColors.spiritualGold),
+                        ],
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -393,8 +500,7 @@ class _QuranScreenState extends State<QuranScreen> {
   List<Widget> _buildTab(QuranLoaded state, double hPad) {
     switch (_tab) {
       case _QuranTab.surah:
-      case _QuranTab.revelation:
-        return _buildSurahTab(state, hPad, byRevelation: _tab == _QuranTab.revelation);
+        return _buildSurahTab(state, hPad);
       case _QuranTab.juz:
         return [
           SliverList(
@@ -414,8 +520,8 @@ class _QuranScreenState extends State<QuranScreen> {
     }
   }
 
-  List<Widget> _buildSurahTab(QuranLoaded state, double hPad, {required bool byRevelation}) {
-    var surahs = state.surahs.where((s) {
+  List<Widget> _buildSurahTab(QuranLoaded state, double hPad) {
+    final surahs = state.surahs.where((s) {
       final makki = s.revelationPlace.toLowerCase() == 'makkah';
       return switch (_filter) {
         _SurahFilter.all => true,
@@ -425,59 +531,53 @@ class _QuranScreenState extends State<QuranScreen> {
       };
     }).toList();
 
-    if (byRevelation) {
-      surahs.sort((a, b) => a.revelationOrder.compareTo(b.revelationOrder));
-    } else {
-      switch (_sort) {
-        case _SurahSort.mushaf:
-          break;
-        case _SurahSort.longest:
-          surahs.sort((a, b) => b.versesCount.compareTo(a.versesCount));
-        case _SurahSort.shortest:
-          surahs.sort((a, b) => a.versesCount.compareTo(b.versesCount));
-        case _SurahSort.name:
-          surahs.sort((a, b) => SurahSearch.fold(a.nameTransliteration).compareTo(SurahSearch.fold(b.nameTransliteration)));
-      }
+    switch (_sort) {
+      case _SurahSort.mushaf:
+        break;
+      case _SurahSort.revelation:
+        surahs.sort((a, b) => a.revelationOrder.compareTo(b.revelationOrder));
+      case _SurahSort.longest:
+        surahs.sort((a, b) => b.versesCount.compareTo(a.versesCount));
+      case _SurahSort.shortest:
+        surahs.sort((a, b) => a.versesCount.compareTo(b.versesCount));
+      case _SurahSort.name:
+        surahs.sort((a, b) => SurahSearch.fold(a.nameTransliteration).compareTo(SurahSearch.fold(b.nameTransliteration)));
     }
+    final byRevelation = _sort == _SurahSort.revelation;
 
     return [
-      SliverToBoxAdapter(
-        child: SizedBox(
-          height: 36,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            children: [
-              for (final f in _SurahFilter.values)
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: _FilterPill(
-                    label: f == _SurahFilter.offline ? 'Offline · ${_offlineSurahs.length}' : f.label,
-                    icon: f == _SurahFilter.offline ? Icons.offline_pin_rounded : null,
-                    selected: _filter == f,
-                    onTap: () {
-                      HapticService().selection();
-                      setState(() => _filter = f);
-                    },
-                  ),
-                ),
-              if (!byRevelation) _buildSortButton(),
-            ],
-          ),
-        ),
-      ),
-      if (byRevelation)
+      // Only says anything when the list isn't the plain mushaf order, so the
+      // default view stays a clean list.
+      if (_optionsActive)
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(hPad + 4, 12, hPad, 0),
-            child: Text(
-              'Surahs in the order they were revealed to the Prophet ﷺ',
-              style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.45)),
+            padding: EdgeInsets.fromLTRB(hPad, 0, hPad, AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    [
+                      if (_filter != _SurahFilter.all) _filter.label,
+                      if (_sort != _SurahSort.mushaf) _sort.label,
+                    ].join(' · '),
+                    style: AppTextStyles.small(color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+                  ),
+                ),
+                Pressable(
+                  onTap: () => setState(() {
+                    _filter = _SurahFilter.all;
+                    _sort = _SurahSort.mushaf;
+                  }),
+                  haptic: PressableHaptic.selection,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                    child: Text('Clear', style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.55))),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-      const SliverToBoxAdapter(child: SizedBox(height: 12)),
       if (surahs.isEmpty)
         SliverToBoxAdapter(
           child: _EmptyHint(
@@ -496,7 +596,6 @@ class _QuranScreenState extends State<QuranScreen> {
                 surah: surah,
                 horizontalPadding: hPad,
                 badge: byRevelation ? surah.revelationOrder : surah.id,
-                caption: byRevelation ? 'Surah ${surah.id}' : null,
                 isOffline: _offlineSurahs.contains(surah.id),
                 onTap: () {
                   FocusScope.of(context).unfocus(); // Dismiss keyboard on tap
@@ -508,36 +607,6 @@ class _QuranScreenState extends State<QuranScreen> {
           ),
         ),
     ];
-  }
-
-  Widget _buildSortButton() {
-    return PopupMenuButton<_SurahSort>(
-      initialValue: _sort,
-      color: const Color(0xFF1C1F2E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      onSelected: (s) {
-        HapticService().selection();
-        setState(() => _sort = s);
-      },
-      itemBuilder: (_) => [
-        for (final s in _SurahSort.values)
-          PopupMenuItem(
-            value: s,
-            child: Text(
-              s.label,
-              style: AppTextStyles.small(
-                color: s == _sort ? AppColors.spiritualGold : Colors.white,
-                weight: s == _sort ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ),
-      ],
-      child: _FilterPill(
-        label: _sort.label,
-        icon: Icons.swap_vert_rounded,
-        selected: _sort != _SurahSort.mushaf,
-      ),
-    );
   }
 
   List<Widget> _buildSavedTab(QuranLoaded state, double hPad) {
@@ -726,39 +795,37 @@ class _QuranScreenState extends State<QuranScreen> {
 
 // ─────────────────── Small building blocks ───────────────────
 
-class _FilterPill extends StatelessWidget {
+class _OptionChip extends StatelessWidget {
   final String label;
-  final IconData? icon;
   final bool selected;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
-  const _FilterPill({required this.label, required this.selected, this.icon, this.onTap});
+  const _OptionChip({required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.65);
-    final pill = AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: selected ? AppColors.spiritualGold.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: selected ? AppColors.spiritualGold.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08),
-          width: 0.5,
+    return Pressable(
+      onTap: onTap,
+      haptic: PressableHaptic.none,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+        decoration: BoxDecoration(
+          color: selected ? AppColors.spiritualGold.withValues(alpha: 0.16) : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? AppColors.spiritualGold.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.small(
+            color: selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.75),
+            weight: selected ? FontWeight.w600 : FontWeight.w500,
+          ),
         ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[Icon(icon, size: 14, color: color), const SizedBox(width: 6)],
-          Text(label, style: AppTextStyles.small(color: color, weight: selected ? FontWeight.w600 : FontWeight.w500)),
-        ],
-      ),
     );
-    if (onTap == null) return pill;
-    return GestureDetector(onTap: onTap, child: pill);
   }
 }
 
@@ -994,17 +1061,12 @@ class _JuzCardState extends State<_JuzCard> {
     final segments = QuranMeta.juzSegments(widget.juz);
     final first = segments.first;
     final last = segments.last;
-    final isSmallPhone = MediaQuery.sizeOf(context).width < 360;
-
-    return Container(
-      margin: EdgeInsets.fromLTRB(widget.horizontalPadding, 0, widget.horizontalPadding, 10),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      margin: EdgeInsets.symmetric(horizontal: widget.horizontalPadding - 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _expanded ? AppColors.spiritualGold.withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.06),
-          width: 0.5,
-        ),
+        color: _expanded ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
       ),
       child: Column(
         children: [
@@ -1013,24 +1075,18 @@ class _JuzCardState extends State<_JuzCard> {
             onLongPress: () => setState(() => _expanded = !_expanded),
             pressedScale: 0.98,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: isSmallPhone ? 14 : 16, vertical: isSmallPhone ? 12 : 14),
+              padding: const EdgeInsets.fromLTRB(12, 12, 6, 12),
               child: Row(
                 children: [
-                  Container(
-                    width: isSmallPhone ? 32 : 36,
-                    height: isSmallPhone ? 32 : 36,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: AppColors.spiritualGold.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2), width: 0.5),
-                    ),
+                  SizedBox(
+                    width: 32,
                     child: Text(
                       '${widget.juz}',
-                      style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.w600),
+                      style: AppTextStyles.tabular(
+                        AppTextStyles.small(color: Colors.white.withValues(alpha: 0.4), weight: FontWeight.w500),
+                      ),
                     ),
                   ),
-                  SizedBox(width: isSmallPhone ? 10 : 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1142,30 +1198,22 @@ class _BookmarkTile extends StatelessWidget {
       direction: DismissDirection.endToStart,
       onDismissed: (_) => onDelete(),
       background: Container(
-        margin: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 10),
-        padding: const EdgeInsets.only(right: 20),
+        padding: EdgeInsets.only(right: horizontalPadding),
         alignment: Alignment.centerRight,
-        decoration: BoxDecoration(
-          color: AppColors.statusMissed.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(16),
-        ),
+        color: AppColors.statusMissed.withValues(alpha: 0.15),
         child: const Icon(Icons.delete_outline_rounded, color: AppColors.statusMissed),
       ),
       child: Pressable(
         onTap: onTap,
         pressedScale: 0.975,
-        child: Container(
-          margin: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 10),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
-          ),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 12),
           child: Row(
             children: [
-              const Icon(Icons.bookmark_rounded, color: AppColors.spiritualGold, size: 20),
-              const SizedBox(width: 14),
+              const SizedBox(
+                width: 32,
+                child: Icon(Icons.bookmark_rounded, color: AppColors.spiritualGold, size: 18),
+              ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1183,7 +1231,7 @@ class _BookmarkTile extends StatelessWidget {
                 ),
               ),
               if (surah != null)
-                Text(surah!.nameArabic, style: AppTextStyles.arabic(color: AppColors.spiritualGold, size: 16)),
+                Text(surah!.nameArabic, style: AppTextStyles.arabic(color: AppColors.spiritualGold.withValues(alpha: 0.9), size: 20)),
             ],
           ),
         ),
@@ -1211,90 +1259,46 @@ class _ContinueReadingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final bool isSmallPhone = size.width < 360;
-
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 4),
-      child: GestureDetector(
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+      child: Pressable(
         onTap: onTap,
-        // See the search bar above: blurring the smooth celestial gradient
-        // behind this card buys nothing visually and costs an offscreen
-        // gaussian pass per frame. The gradient fill below carries the look.
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-              padding: EdgeInsets.all(isSmallPhone ? 14.0 : 16.0), // Responsive padding
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.spiritualGold.withValues(alpha: 0.12),
-                    AppColors.spiritualGold.withValues(alpha: 0.04),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: AppColors.spiritualGold.withValues(alpha: 0.2),
-                  width: 0.5,
+        pressedScale: 0.98,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          decoration: BoxDecoration(
+            color: AppColors.spiritualGold.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+            border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.bookmark_rounded, color: AppColors.spiritualGold, size: 18),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: 'Continue  ',
+                        style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.55)),
+                      ),
+                      TextSpan(
+                        text: surahName,
+                        style: AppTextStyles.body(weight: FontWeight.w600),
+                      ),
+                      TextSpan(
+                        text: '  $surahId:$verseNumber',
+                        style: AppTextStyles.small(color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+                      ),
+                    ],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(isSmallPhone ? 8.0 : 10.0),
-                    decoration: BoxDecoration(
-                      color: AppColors.spiritualGold.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.menu_book_rounded,
-                      color: AppColors.spiritualGold,
-                      size: isSmallPhone ? 18 : 20,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Continue Reading',
-                          style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.6))
-                              .copyWith(letterSpacing: 1),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          surahName,
-                          style: AppTextStyles.body(color: AppColors.spiritualGold)
-                              .copyWith(fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          'Verse $verseNumber',
-                          style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.7)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
+              Icon(Icons.chevron_right_rounded, color: Colors.white.withValues(alpha: 0.5), size: 22),
+            ],
           ),
         ),
       ),
@@ -1304,16 +1308,19 @@ class _ContinueReadingCard extends StatelessWidget {
 
 // ─────────────────── Surah List Tile ───────────────────
 
+/// A flat surah row: number, name with a one-line caption, Arabic name.
+///
+/// Rows used to be individual bordered cards carrying the translation,
+/// ayah count, Makki/Madani label, an emoji and an offline badge all at
+/// once. Revelation place now lives in the Show & sort filter, so the row only
+/// keeps what helps you pick a surah at a glance.
 class _SurahListTile extends StatelessWidget {
   final Surah surah;
   final double horizontalPadding;
   final VoidCallback onTap;
 
-  /// Number in the circle: the surah number, or its revelation order.
+  /// Number on the left: the surah number, or its revelation order.
   final int badge;
-
-  /// Optional extra caption after the ayah count (e.g. "Surah 96").
-  final String? caption;
   final bool isOffline;
 
   const _SurahListTile({
@@ -1321,69 +1328,34 @@ class _SurahListTile extends StatelessWidget {
     required this.horizontalPadding,
     required this.onTap,
     required this.badge,
-    this.caption,
     this.isOffline = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final bool isSmallPhone = size.width < 360;
-    final isMakki = surah.revelationPlace.toLowerCase() == 'makkah';
-
     return Pressable(
       onTap: onTap,
-      pressedScale: 0.975,
-      child: Container(
-        margin: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 10),
-        padding: EdgeInsets.symmetric(
-            horizontal: isSmallPhone ? 14 : 16,
-            vertical: isSmallPhone ? 12 : 14
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: 0.06),
-            width: 0.5,
-          ),
-        ),
+      pressedScale: 0.98,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 12),
         child: Row(
           children: [
-            // Responsive Surah Number Badge
-            Container(
-              width: isSmallPhone ? 32 : 36,
-              height: isSmallPhone ? 32 : 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  width: 0.5,
-                ),
-              ),
+            SizedBox(
+              width: 32,
               child: Text(
                 '$badge',
-                style: AppTextStyles.small(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  weight: FontWeight.w600,
+                style: AppTextStyles.tabular(
+                  AppTextStyles.small(color: Colors.white.withValues(alpha: 0.4), weight: FontWeight.w500),
                 ),
               ),
             ),
-            SizedBox(width: isSmallPhone ? 10 : 14),
-
-            // Name & Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     surah.nameTransliteration,
-                    style: AppTextStyles.body(
-                      color: Colors.white,
-                      weight: FontWeight.w600,
-                    ),
+                    style: AppTextStyles.body(weight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1392,70 +1364,25 @@ class _SurahListTile extends StatelessWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          surah.nameTranslation,
-                          style: AppTextStyles.tiny(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
+                          '${surah.nameTranslation} · ${surah.versesCount} ayahs',
+                          style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: CircleAvatar(radius: 2, backgroundColor: Colors.white.withValues(alpha: 0.3)),
-                      ),
-                      Text(
-                        caption != null ? '${surah.versesCount} Ayahs · $caption' : '${surah.versesCount} Ayahs',
-                        style: AppTextStyles.tiny(
-                          color: Colors.white.withValues(alpha: 0.5),
-                        ),
-                        // Don't shrink the verses count label
-                        maxLines: 1,
-                      ),
                       if (isOffline) ...[
                         const SizedBox(width: 6),
-                        Icon(Icons.offline_pin_rounded, size: 12, color: AppColors.spiritualGold.withValues(alpha: 0.6)),
+                        Icon(Icons.download_done_rounded, size: 12, color: Colors.white.withValues(alpha: 0.35)),
                       ],
                     ],
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(width: 8),
-
-            // Arabic Name + Revelation Icon
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  surah.nameArabic,
-                  style: AppTextStyles.arabic(
-                    color: AppColors.spiritualGold,
-                    size: isSmallPhone ? 16 : 18, // Scales down gracefully
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Opacity(
-                      opacity: 0.45,
-                      child: Text(
-                        isMakki ? '🕋' : '🕌',
-                        style: TextStyle(fontSize: isSmallPhone ? 10 : 11, height: 1.0),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      isMakki ? 'Makki' : 'Madani',
-                      style: AppTextStyles.tiny(
-                        color: Colors.white.withValues(alpha: 0.35),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            const SizedBox(width: AppSpacing.md),
+            Text(
+              surah.nameArabic,
+              style: AppTextStyles.arabic(color: AppColors.spiritualGold.withValues(alpha: 0.9), size: 20),
             ),
           ],
         ),
