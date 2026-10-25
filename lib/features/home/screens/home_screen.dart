@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,9 +34,14 @@ import '../../../core/repositories/sunnah_repository.dart';
 import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/pressable.dart';
-import '../../tasbih/screens/tasbih_screen.dart';
+import '../../tasbih/screens/session_screen.dart';
+import '../../tasbih/screens/dhikr_hub_screen.dart';
+import '../../../core/services/device_profile.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/glass_snackbar.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/app_route.dart';
+import '../../../core/constants/radii.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -45,7 +51,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   final PageController _pageController = PageController(initialPage: 2);
   final NotificationService _notificationService = NotificationService();
   final WeatherService _weatherService = WeatherService();
@@ -56,9 +63,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// Index of [SettingsScreen] within the PageView below.
   static const int _settingsPageIndex = 0;
 
-  /// Index of the Quran tab and of the dashboard within the PageView below.
+  /// Index of the Quran tab within the PageView below.
   static const int _quranPageIndex = 1;
-  static const int _homePageIndex = 2;
 
   /// Guards against a second back press stacking another exit sheet.
   bool _exitPromptOpen = false;
@@ -74,6 +80,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// animation, which is precisely when a hitch is most visible.
   final ValueNotifier<int> _currentPage = ValueNotifier<int>(2);
 
+  /// Index of the dashboard, where the sun or moon is shown in full.
+  static const int _homePageIndex = 2;
+
+  /// How visible the sun or moon is: full on the dashboard, dimmed on other
+  /// tabs so it doesn't glare through their cards. Follows the page position,
+  /// so it fades with the finger during a swipe. A notifier so only the
+  /// celestial body repaints, not the whole home tree.
+  final ValueNotifier<double> _celestialOpacity = ValueNotifier<double>(1);
+
+  /// Fades the pages in after jumping to a distant tab.
+  late final AnimationController _jumpFade = AnimationController(
+    vsync: this,
+    duration: AppDurations.tabFade,
+    value: 1,
+  );
+
+  /// Direction of the last jump, for the small slide that goes with the fade.
+  double _jumpDirection = 1;
+
+  /// Where the tab highlight sits, in page units. Follows the page while it
+  /// moves (swipes, neighbouring slides); for a jump to a distant tab, where
+  /// the page itself teleports, [_highlightGlide] carries it across instead.
+  final ValueNotifier<double> _highlightPage = ValueNotifier<double>(2);
+  late final AnimationController _highlightGlide = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+  );
+  Animation<double>? _highlightTween;
+
+  /// Keeps the highlight where it is while a jumped-to page builds its
+  /// first frame.
+  bool _highlightHeld = false;
+
   bool _showPermissionWarning = false;
   WeatherData? _weather;
   Timer? _weatherTimer;
@@ -83,6 +122,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pageController.addListener(_onPageScroll);
+    _highlightGlide.addListener(() {
+      final tween = _highlightTween;
+      if (tween != null) _highlightPage.value = tween.value;
+    });
     _checkPermissions();
     _fetchWeather();
     _autoDetectLocation();
@@ -163,6 +207,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _fetchWeather();
     GlassSnackBar.show(
       context,
+      bottomMargin: GlassSnackBar.aboveNavBar,
       message: 'Location updated to ${moved.displayName}',
       icon: Icons.location_on_rounded,
     );
@@ -205,6 +250,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _pageController.dispose();
     _currentPage.dispose();
+    _celestialOpacity.dispose();
+    _jumpFade.dispose();
+    _highlightPage.dispose();
+    _highlightGlide.dispose();
     _weatherTimer?.cancel();
     _debugService.overriddenWeather.removeListener(_onDebugChanged);
     _debugService.overriddenMoonPhase.removeListener(_onDebugChanged);
@@ -242,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     switch (nudge.action) {
       case ExitNudgeAction.dhikr:
         Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const TasbihScreen()),
+          MaterialPageRoute(builder: (_) => const DhikrHubScreen()),
         );
       case ExitNudgeAction.quran:
         final surahId = nudge.surahId;
@@ -264,12 +313,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _navToPage(int index) {
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutQuart,
-    );
+  void _onPageScroll() {
+    if (!_pageController.hasClients) return;
+    final page = _pageController.page ?? _homePageIndex.toDouble();
+    final away = (page - _homePageIndex).abs().clamp(0.0, 1.0);
+    _celestialOpacity.value = 1 - 0.75 * away;
+    if (!_highlightGlide.isAnimating && !_highlightHeld) _highlightPage.value = page;
+  }
+
+  /// Carries the highlight from where it is to [index] on its own.
+  void _glideHighlight(int index) {
+    if (motionStill()) {
+      _highlightPage.value = index.toDouble();
+      return;
+    }
+    _highlightTween = Tween<double>(begin: _highlightPage.value, end: index.toDouble())
+        .animate(CurvedAnimation(parent: _highlightGlide, curve: AppCurves.emphasized));
+    _highlightGlide.forward(from: 0);
+  }
+
+  /// Neighbouring tabs slide over. Distant ones don't fly past every page in
+  /// between: the view jumps there and the new page fades in with a small
+  /// shift in the direction of travel.
+  Future<void> _navToPage(int index) async {
+    if (!_pageController.hasClients) return;
+    final from = (_pageController.page ?? _currentPage.value.toDouble()).round();
+    if (from == index) return;
+    if ((index - from).abs() == 1) {
+      await _pageController.animateToPage(index, duration: AppDurations.tabSlide, curve: AppCurves.emphasized);
+      return;
+    }
+    // A tab opened for the first time can take a few hundred milliseconds to
+    // build its first frame. Starting the glide and fade before that frame
+    // meant both ran out during it and looked instant, so jump, wait for the
+    // new page to be on screen, then animate.
+    _highlightHeld = true;
+    if (!motionStill()) _jumpFade.value = 0;
+    _pageController.jumpToPage(index);
+    _jumpDirection = index > from ? 1 : -1;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    _highlightHeld = false;
+    _glideHighlight(index);
+    if (motionStill()) return;
+    await _jumpFade.forward(from: 0);
   }
 
   /// Tapping the dashboard weather widget slides over to Settings (page 0) and
@@ -277,11 +364,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   /// the user at the top of a long settings list to hunt for it.
   Future<void> _openWeatherSettings() async {
     HapticService().light();
-    await _pageController.animateToPage(
-      _settingsPageIndex,
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutQuart,
-    );
+    await _navToPage(_settingsPageIndex);
     if (!mounted) return;
     await _settingsKey.currentState?.revealWeatherSection();
   }
@@ -405,10 +488,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         : 0,
                 // The background widgets have always supported this, but nothing
                 // ever supplied it, so the setting had no effect.
-                // Lite mode and Reduce Motion both still the sky.
-                reduceMotion: !AppEffects.ambientMotion,
+                reduceMotion: motionStill(),
+                lite: lighterVisuals(),
                 latitude: _latitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
+                celestialOpacity: _celestialOpacity,
                 child: PopScope(
                   canPop: false,
                   onPopInvokedWithResult: (didPop, _) {
@@ -420,7 +504,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   extendBody: true,
                   body: Stack(
                     children: [
-                      PageView(
+                      _JumpFade(
+                        animation: _jumpFade,
+                        direction: () => _jumpDirection,
+                        child: PageView(
                         controller: _pageController,
                         onPageChanged: _onPageChanged,
                         physics: const BouncingScrollPhysics(),
@@ -440,6 +527,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           const QiblaScreen(), // 5
                           const StatisticsScreen(), // 6
                         ],
+                      ),
                       ),
                       // Floating Navigation Capsule
                       Positioned(
@@ -492,12 +580,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.only(bottom: 4),
       child: ClipRRect(
           borderRadius: BorderRadius.circular(32), // High curvature for capsule shape
-          child: BackdropFilter(
-            // Lite mode: a zero-sigma filter is skipped by the engine, and the
-            // darker fill below keeps the capsule readable without it.
-            filter: AppEffects.blur
-                ? ImageFilter.blur(sigmaX: 15, sigmaY: 15)
-                : ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+          child: AppBackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
               height: containerHeight,
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -516,7 +600,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                 ],
               ),
-              child: Row(
+              child: Stack(
+                alignment: Alignment.centerLeft,
+                children: [
+                  // A softly lit capsule behind the current icon. It follows
+                  // the page during swipes, glides across on taps, and
+                  // stretches a little mid-move so it reads as travelling.
+                  ValueListenableBuilder<double>(
+                    valueListenable: _highlightPage,
+                    builder: (context, page, _) {
+                      final p = page.clamp(0.0, 6.0);
+                      // One stretch per move: across the whole glide on a
+                      // tap, or between the two icons during a swipe.
+                      final transit = _highlightGlide.isAnimating
+                          ? math.sin(_highlightGlide.value * math.pi)
+                          : math.sin((p - p.floorToDouble()) * math.pi);
+                      final w = iconWidth - 6 + 10 * transit;
+                      return Transform.translate(
+                        offset: Offset(p * iconWidth + (iconWidth - w) / 2, 0),
+                        child: _TabHighlight(width: w, height: iconHeight - 6),
+                      );
+                    },
+                  ),
+                  Row(
                 mainAxisSize: MainAxisSize.min, // Hug contents
                 children: [
                   _buildIndicatorIcon(0, Icons.tune_rounded, iconWidth, iconHeight, iconSize, currentPage), // Settings
@@ -528,6 +634,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   _buildIndicatorIcon(6, Icons.bar_chart_rounded, iconWidth, iconHeight, iconSize, currentPage), // Stats
                 ],
               ),
+                ],
+              ),
             ),
           ),
       ),
@@ -537,38 +645,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _buildIndicatorIcon(int index, IconData icon, double width,
       double height, double size, int currentPage) {
     final isSelected = currentPage == index;
+    final color =
+        isSelected ? Colors.white : Colors.white.withValues(alpha: 0.38);
 
-    // The active tab sits in a soft white pill. Colour and a soft glow alone
-    // weren't enough: over the bright Dhuhr/Asr sky the capsule turns pale
-    // and a white icon barely stood apart from the dimmed ones.
     return Pressable(
       onTap: () => _navToPage(index),
       // Navigation is a frequent, low-stakes tap — the lightest feedback.
       haptic: PressableHaptic.selection,
-      pressedScale: 0.86,
+      pressedScale: 0.88,
       child: SizedBox(
         width: width,
         height: height,
         child: Center(
-          child: AnimatedContainer(
+          // The highlight marks the selection; the icon only brightens.
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: color),
             duration: AppDurations.normal,
-            curve: Curves.easeOutCubic,
-            width: isSelected ? width - 4 : size + 8,
-            height: isSelected ? height - 8 : size + 8,
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? Colors.white.withValues(alpha: 0.2)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(height),
-            ),
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              size: size,
-              color: isSelected
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.45),
-            ),
+            curve: AppCurves.emphasized,
+            builder: (context, c, _) => Icon(icon, size: size, color: c),
           ),
         ),
       ),
@@ -582,7 +676,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
+          child: AppBackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -637,8 +731,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     child: const Text("Fix"),
                   ),
                   const SizedBox(width: 8),
-                  InkWell(
+                  Pressable(
                     onTap: () => setState(() => _showPermissionWarning = false),
+                    pressedScale: 0.85,
                     child: const Icon(
                       Icons.close,
                       color: Colors.white54,
@@ -848,7 +943,7 @@ class _DashboardView extends StatelessWidget {
               // Start Glassmorphism implementation
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
+                child: AppBackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
@@ -1000,32 +1095,12 @@ class _DashboardView extends StatelessWidget {
         : null;
 
     Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
-        reverseTransitionDuration: const Duration(milliseconds: 400),
-        pageBuilder:
-            (context, animation, secondaryAnimation) => IslamicCalendarScreen(
+      AppRoute(
+        builder: (context) => IslamicCalendarScreen(
               initialDate: date,
               prayerPeriod: prayerPeriod,
               maghribTime: maghribTime,
             ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-
-          return FadeTransition(
-            opacity: curvedAnimation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.12),
-                end: Offset.zero,
-              ).animate(curvedAnimation),
-              child: child,
-            ),
-          );
-        },
       ),
     );
   }
@@ -1054,7 +1129,7 @@ class _DashboardView extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.card),
           border: Border.all(color: accent.withValues(alpha: 0.3)),
         ),
         child: Row(
@@ -1100,7 +1175,7 @@ class _DashboardView extends StatelessWidget {
             begin: Alignment.centerLeft,
             end: Alignment.centerRight,
           ),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.card),
           border: Border.all(color: accent.withValues(alpha: 0.25)),
         ),
         child: Row(
@@ -1179,7 +1254,7 @@ class _DashboardView extends StatelessWidget {
         AnimatedSwitcher(
           duration: AppDurations.weatherFade,
           switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          switchOutCurve: AppCurves.exit,
           transitionBuilder: (child, animation) => FadeTransition(
             opacity: animation,
             child: ScaleTransition(
@@ -1200,7 +1275,7 @@ class _DashboardView extends StatelessWidget {
         AnimatedSwitcher(
           duration: AppDurations.weatherFade,
           switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
+          switchOutCurve: AppCurves.exit,
           child: Text(
             temperature,
             key: ValueKey(temperature),
@@ -1246,7 +1321,9 @@ class _CurrentPrayerSection extends StatelessWidget {
     final timeData = state.prayerTimes[prayer];
 
 
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.98,
+      haptic: PressableHaptic.none,
       onTap:
           !isCompleted
               ? () {
@@ -1304,7 +1381,32 @@ class _CurrentPrayerSection extends StatelessWidget {
             const SizedBox(height: 16),
 
             if (isCompleted)
-              Column(
+              // Marking the prayer is a moment worth a beat: the pills settle
+              // in from slightly small, under a gold glow that fades away.
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: motionStill() ? 1 : 0, end: 1),
+                duration: const Duration(milliseconds: 520),
+                curve: Curves.linear,
+                builder: (context, t, child) {
+                  final pop = AppCurves.settle.transform((t / 0.65).clamp(0.0, 1.0));
+                  final glow = (1 - t) * (lighterVisuals() ? 0 : 1);
+                  return Opacity(
+                    opacity: AppCurves.emphasized.transform((t / 0.4).clamp(0.0, 1.0)),
+                    child: Transform.scale(
+                      scale: 0.9 + 0.1 * pop,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadii.pill),
+                          boxShadow: glow > 0
+                              ? [BoxShadow(color: AppColors.spiritualGold.withValues(alpha: 0.35 * glow), blurRadius: 28)]
+                              : null,
+                        ),
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1339,13 +1441,15 @@ class _CurrentPrayerSection extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      GestureDetector(
+                      Pressable(
+                        pressedScale: 0.95,
+                        haptic: PressableHaptic.none,
                         onTap: () {
                           HapticService().selection();
                           Navigator.push(
                             context,
-                            MaterialPageRoute(
-                              builder: (_) => const TasbihScreen(initialFlow: 'after_prayer'),
+                            AppRoute(
+                              builder: (_) => const SessionScreen(sessionId: 'after_prayer'),
                             ),
                           );
                         },
@@ -1384,7 +1488,9 @@ class _CurrentPrayerSection extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   // Jamaah toggle pill
-                  GestureDetector(
+                  Pressable(
+                    pressedScale: 0.95,
+                    haptic: PressableHaptic.none,
                     onTap: () {
                       HapticService().selection();
                       context.read<PrayerBloc>().add(
@@ -1435,6 +1541,7 @@ class _CurrentPrayerSection extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
               )
             else
               Column(
@@ -1649,4 +1756,60 @@ String _formatTime(DateTime time) {
       time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
   final minute = time.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+/// The fade and small slide that bring in a distant tab after a jump. At rest
+/// (value 1) it costs nothing.
+class _JumpFade extends StatelessWidget {
+  final Animation<double> animation;
+  final double Function() direction;
+  final Widget child;
+
+  const _JumpFade({required this.animation, required this.direction, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        // Always the same two wrappers so the PageView below keeps its state;
+        // at full opacity Opacity paints straight through with no layer.
+        final t = AppCurves.emphasized.transform(animation.value);
+        return Opacity(
+          opacity: t,
+          child: Transform.translate(
+            offset: Offset(24 * (1 - t) * direction(), 0),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The tab highlight: a capsule lit from above with a hairline edge, so it
+/// reads as a piece of glass resting in the bar rather than a grey blot.
+class _TabHighlight extends StatelessWidget {
+  final double width;
+  final double height;
+
+  const _TabHighlight({required this.width, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withValues(alpha: 0.16), Colors.white.withValues(alpha: 0.06)],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14), width: 0.5),
+      ),
+    );
+  }
 }

@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/achievement_service.dart';
-import '../../../core/services/storage_service.dart';
 import '../../../core/repositories/sunnah_progress_repository.dart';
+import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/repositories/tasbih_repository.dart';
 import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/prayer.dart';
 import '../../../models/sunnah_progress.dart';
 import '../../../models/tasbih.dart';
+import '../../tasbih/bloc/tasbih_bloc.dart';
 import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../models/quran_progress.dart';
 import '../../../widgets/common/page_header.dart';
+import '../../../widgets/common/pressable.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/prayer_service.dart';
+import '../../../widgets/common/app_route.dart';
+import '../../../core/constants/radii.dart';
+import '../../../widgets/common/count_up_text.dart';
 
 // -----------------------------------------------------------------------------
 // MAIN STATISTICS SCREEN
@@ -28,7 +34,11 @@ class StatisticsScreen extends StatefulWidget {
 }
 
 class _StatisticsScreenState extends State<StatisticsScreen> {
-  final StorageService _storageService = StorageService();
+  /// Numbers count up the first time Statistics is opened in a session,
+  /// then simply show on later visits.
+  static bool _countedUpThisSession = false;
+  final bool _countUp = !_countedUpThisSession;
+
   final AchievementService _achievementService = AchievementService();
   final SunnahProgressRepository _sunnahProgressRepo = SunnahProgressRepository();
   final TasbihRepository _tasbihRepo = TasbihRepository();
@@ -43,6 +53,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   void initState() {
     super.initState();
     _loadExtraData();
+    _countedUpThisSession = true;
   }
 
   Future<void> _loadExtraData() async {
@@ -61,26 +72,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   // ─── Shared section header ───
-  Widget _sectionHeader(String label, Color accent) {
+  /// Section label in the same style as the Quran and Sunnah tabs.
+  Widget _sectionHeader(String label) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 14),
-      child: Row(
-        children: [
-          Container(
-            width: 3,
-            height: 16,
-            decoration: BoxDecoration(
-              color: accent,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: AppTextStyles.tiny(color: accent)
-                .copyWith(letterSpacing: 2.5, fontWeight: FontWeight.w700),
-          ),
-        ],
+      padding: const EdgeInsets.fromLTRB(28, 28, 24, 12),
+      child: Text(
+        label,
+        style: AppTextStyles.tiny(color: AppColors.spiritualGold.withValues(alpha: 0.8))
+            .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -91,7 +90,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
       child: Container(
         height: 0.5,
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
       ),
     );
   }
@@ -105,7 +104,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       backgroundColor: Colors.transparent,
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppColors.activeGlow,
+          color: AppColors.spiritualGold,
           onRefresh: _loadExtraData,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(
@@ -154,7 +153,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     value: "${stats['weekPercentage']}%",
                     unit: "COMPLETION",
                     icon: Icons.pie_chart_rounded,
-                    color: AppColors.activeGlow,
+                    color: AppColors.spiritualGold,
                   ),
                 ],
               ),
@@ -183,7 +182,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             SliverToBoxAdapter(child: _sectionDivider()),
 
             // ─── By Prayer Section ───
-            SliverToBoxAdapter(child: _sectionHeader("BY PRAYER", AppColors.streakFire)),
+            SliverToBoxAdapter(child: _sectionHeader("BY PRAYER")),
 
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -252,19 +251,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     if (p == null) return [];
 
     return [
-      SliverToBoxAdapter(child: _sectionHeader("SUNNAH PROGRESS", const Color(0xFF73D38A))),
-
-      // Streak + Level hero
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _buildSunnahHero(p),
-        ),
-      ),
+      SliverToBoxAdapter(child: _sectionHeader("SUNNAH PROGRESS")),
 
       // Metrics grid
       SliverPadding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
         sliver: SliverGrid.count(
           crossAxisCount: 2,
           mainAxisSpacing: 14,
@@ -272,18 +263,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           childAspectRatio: 1.25,
           children: [
             _buildGlassMetricCard(
-              title: "Unique Sunnahs",
-              value: "${p.uniqueSunnahsPracticed}",
-              unit: "PRACTICED",
-              icon: Icons.explore_rounded,
-              color: const Color(0xFF73D38A),
-            ),
-            _buildGlassMetricCard(
-              title: "Total Actions",
-              value: "${p.totalPracticeActions}",
-              unit: "PRACTICES",
-              icon: Icons.trending_up_rounded,
-              color: AppColors.activeGlow,
+              title: "Current Streak",
+              value: "${p.liveStreak()}",
+              unit: "DAYS",
+              icon: Icons.local_fire_department_rounded,
+              color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
               title: "Best Streak",
@@ -293,11 +277,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
-              title: "Badges",
-              value: "${p.unlockedBadges.length}",
-              unit: "UNLOCKED",
-              icon: Icons.military_tech_rounded,
-              color: const Color(0xFFE0A8FF),
+              title: "Sunnahs Kept",
+              value: "${p.uniqueSunnahsPracticed}",
+              unit: "DIFFERENT",
+              icon: Icons.explore_rounded,
+              color: AppColors.spiritualGold,
+            ),
+            _buildGlassMetricCard(
+              title: "Times Kept",
+              value: "${p.totalPracticeActions}",
+              unit: "IN ALL",
+              icon: Icons.trending_up_rounded,
+              color: AppColors.spiritualGold,
             ),
           ],
         ),
@@ -319,10 +310,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final q = _quranProgress;
     if (q == null) return [];
 
-    const quranAccent = Color(0xFF64B5F6);
 
     return [
-      SliverToBoxAdapter(child: _sectionHeader("QURAN READING", quranAccent)),
+      SliverToBoxAdapter(child: _sectionHeader("QURAN READING")),
 
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
@@ -337,21 +327,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               value: "${q.totalVersesRead}",
               unit: "VERSES",
               icon: Icons.menu_book_rounded,
-              color: quranAccent,
+              color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
               title: "Days Read",
               value: "${q.daysRead}",
               unit: "DAYS",
               icon: Icons.event_available_rounded,
-              color: const Color(0xFF9CCC65),
+              color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
               title: "Current Streak",
               value: "${q.currentStreak}",
               unit: "DAYS",
               icon: Icons.local_fire_department_rounded,
-              color: AppColors.streakFire,
+              color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
               title: "Best Streak",
@@ -368,14 +358,18 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   // ─── Tasbih section slivers ───
   List<Widget> _tasbihSlivers() {
-    final tasbihs = _tasbihs;
+    // Prefer the live counters so counting elsewhere shows up here at once.
+    final live = context.watch<TasbihBloc>().state;
+    final tasbihs = live is TasbihLoaded ? live.tasbihs : _tasbihs;
     if (tasbihs == null || tasbihs.isEmpty) return [];
 
     final totalLifetime = tasbihs.fold<int>(0, (sum, t) => sum + t.totalCount);
-    final mostRecited = tasbihs.reduce((a, b) => a.totalCount > b.totalCount ? a : b);
+    final totalToday = tasbihs.fold<int>(0, (sum, t) => sum + t.todayCount());
+    final visible = TasbihRepository.visibleCounters(tasbihs);
+    final mostRecited = (visible.isEmpty ? tasbihs : visible).reduce((a, b) => a.totalCount > b.totalCount ? a : b);
 
     return [
-      SliverToBoxAdapter(child: _sectionHeader("TASBIH & DHIKR", AppColors.activeGlow)),
+      SliverToBoxAdapter(child: _sectionHeader("TASBIH & DHIKR")),
 
       // Total lifetime + active counters
       SliverPadding(
@@ -391,14 +385,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               value: _formatCount(totalLifetime),
               unit: "BEADS",
               icon: Icons.all_inclusive_rounded,
-              color: AppColors.activeGlow,
+              color: AppColors.spiritualGold,
             ),
             _buildGlassMetricCard(
-              title: "Active Counters",
-              value: "${tasbihs.length}",
-              unit: "TASBIHS",
-              icon: Icons.grid_view_rounded,
-              color: const Color(0xFF73D38A),
+              title: "Today",
+              value: _formatCount(totalToday),
+              unit: "DHIKR",
+              icon: Icons.today_rounded,
+              color: AppColors.spiritualGold,
             ),
           ],
         ),
@@ -421,7 +415,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     if (next == null) return [];
 
     return [
-      SliverToBoxAdapter(child: _sectionHeader("UPCOMING", const Color(0xFFFFD580))),
+      SliverToBoxAdapter(child: _sectionHeader("UPCOMING")),
       SliverToBoxAdapter(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -443,26 +437,26 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.streakFire.withOpacity(0.15),
-              AppColors.streakFire.withOpacity(0.05),
+              AppColors.spiritualGold.withValues(alpha: 0.15),
+              AppColors.spiritualGold.withValues(alpha: 0.05),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.streakFire.withOpacity(0.2)),
+          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.streakFire.withOpacity(0.2),
+                color: AppColors.spiritualGold.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.local_fire_department_rounded,
-                color: AppColors.streakFire,
+                color: AppColors.spiritualGold,
                 size: 28,
               ),
             ),
@@ -480,15 +474,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.baseline,
                     textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text(
+                      CountUpText(
                         "$streak",
+                        animate: _countUp,
                         style: AppTextStyles.h2(color: Colors.white),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         streak == 1 ? "Day" : "Days",
                         style: AppTextStyles.body(
-                            color: AppColors.streakFire.withOpacity(0.9)
+                            color: AppColors.spiritualGold.withValues(alpha: 0.9)
                         ),
                       ),
                     ],
@@ -500,13 +495,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: AppColors.streakFire.withOpacity(0.15),
+                  color: AppColors.spiritualGold.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.streakFire.withOpacity(0.3)),
+                  border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   "Active",
-                  style: AppTextStyles.small(color: AppColors.streakFire, weight: FontWeight.bold),
+                  style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold),
                 ),
               ),
           ],
@@ -528,9 +523,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         // Reduced padding to ensure fit
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,8 +538,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 // Added FittedBox to scale text if number is huge
                 FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Text(
+                  child: CountUpText(
                     value,
+                    animate: _countUp,
                     style: AppTextStyles.h2().copyWith(height: 1.0),
                   ),
                 ),
@@ -565,12 +561,14 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final unlockedCount = achievements.where((a) => a.isUnlocked).length;
     final totalCount = achievements.length;
 
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.98,
+      haptic: PressableHaptic.none,
       onTap: () {
         HapticService().light();
         Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => AchievementsScreen(achievements: achievements))
+            AppRoute(builder: (context) => AchievementsScreen(achievements: achievements))
         );
       },
       child: ClipRRect(
@@ -580,21 +578,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                AppColors.spiritualGold.withOpacity(0.15),
-                AppColors.spiritualGold.withOpacity(0.05),
+                AppColors.spiritualGold.withValues(alpha: 0.15),
+                AppColors.spiritualGold.withValues(alpha: 0.05),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.spiritualGold.withOpacity(0.2)),
+            border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
           ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.spiritualGold.withOpacity(0.2),
+                  color: AppColors.spiritualGold.withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.star_rounded, color: AppColors.spiritualGold),
@@ -628,9 +626,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       margin: EdgeInsets.only(bottom: isLast ? 0 : 12),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
+        color: Colors.white.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Row(
         children: [
@@ -639,7 +637,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             height: 40,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
             child: Text(prayer.icon, style: const TextStyle(fontSize: 20)),
@@ -663,17 +661,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.streakFire.withOpacity(0.15),
+                color: AppColors.spiritualGold.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.streakFire.withOpacity(0.3)),
+                border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.local_fire_department_rounded, size: 14, color: AppColors.streakFire),
+                  const Icon(Icons.local_fire_department_rounded, size: 14, color: AppColors.spiritualGold),
                   const SizedBox(width: 4),
                   Text(
                       "$streak",
-                      style: AppTextStyles.small(color: AppColors.streakFire, weight: FontWeight.bold)
+                      style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold)
                   ),
                 ],
               ),
@@ -691,9 +689,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -712,7 +710,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildOverviewItem(String label, String value, Color color) {
     return Column(
       children: [
-        Text(value, style: AppTextStyles.h2(color: color)),
+        CountUpText(value, animate: _countUp, style: AppTextStyles.h2(color: color)),
         const SizedBox(height: 4),
         Text(label, style: AppTextStyles.tiny(color: Colors.white30)),
       ],
@@ -727,24 +725,24 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.activeGlow.withOpacity(0.15),
-              AppColors.activeGlow.withOpacity(0.05),
+              AppColors.spiritualGold.withValues(alpha: 0.15),
+              AppColors.spiritualGold.withValues(alpha: 0.05),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.activeGlow.withOpacity(0.2)),
+          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.activeGlow.withOpacity(0.2),
+                color: AppColors.spiritualGold.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.workspace_premium_rounded, color: AppColors.activeGlow),
+              child: const Icon(Icons.workspace_premium_rounded, color: AppColors.spiritualGold),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -757,7 +755,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   ),
                   Text(
                     prayerName,
-                    style: AppTextStyles.h3(color: AppColors.activeGlow),
+                    style: AppTextStyles.h3(color: AppColors.spiritualGold),
                   ),
                 ],
               ),
@@ -765,17 +763,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.streakFire.withOpacity(0.15),
+                color: AppColors.spiritualGold.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.streakFire.withOpacity(0.3)),
+                border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.local_fire_department_rounded, size: 16, color: AppColors.streakFire),
+                  const Icon(Icons.local_fire_department_rounded, size: 16, color: AppColors.spiritualGold),
                   const SizedBox(width: 4),
                   Text(
                     "$streak days",
-                    style: AppTextStyles.small(color: AppColors.streakFire, weight: FontWeight.bold),
+                    style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -788,74 +786,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
   // ─────────────── Sunnah Widgets ───────────────
 
-  Widget _buildSunnahHero(SunnahProgress p) {
-    const sunnahAccent = Color(0xFF73D38A);
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              sunnahAccent.withOpacity(0.15),
-              sunnahAccent.withOpacity(0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: sunnahAccent.withOpacity(0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: sunnahAccent.withOpacity(0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.auto_awesome_rounded,
-                color: sunnahAccent,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Level ${p.level}",
-                    style: AppTextStyles.h2(color: Colors.white),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "${p.totalPoints} pts  •  ${p.currentStreak} day streak",
-                    style: AppTextStyles.tiny(color: sunnahAccent),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
-              ),
-              child: Text(
-                "Rank",
-                style: AppTextStyles.small(color: Colors.white70, weight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildTopSunnahsList(SunnahProgress p) {
     final sorted = p.practiceCountsBySunnah.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -866,15 +796,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Most Practiced",
+              "Most Kept",
               style: AppTextStyles.small(color: Colors.white54),
             ),
             const SizedBox(height: 12),
@@ -889,8 +819,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 margin: EdgeInsets.only(bottom: isLast ? 0 : 8),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
-                  borderRadius: BorderRadius.circular(14),
+                  color: Colors.white.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(AppRadii.control),
                 ),
                 child: Row(
                   children: [
@@ -900,8 +830,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: rank <= 3
-                            ? AppColors.spiritualGold.withOpacity(0.15)
-                            : Colors.white.withOpacity(0.05),
+                            ? AppColors.spiritualGold.withValues(alpha: 0.15)
+                            : Colors.white.withValues(alpha: 0.05),
                         shape: BoxShape.circle,
                       ),
                       child: Text(
@@ -915,7 +845,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     Expanded(
                       child: Text(
                         name,
-                        style: AppTextStyles.body(color: Colors.white.withOpacity(0.85)),
+                        style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.85)),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -923,12 +853,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF73D38A).withOpacity(0.1),
+                        color: AppColors.spiritualGold.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         "$count×",
-                        style: AppTextStyles.tiny(color: const Color(0xFF73D38A))
+                        style: AppTextStyles.tiny(color: AppColors.spiritualGold)
                             .copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -952,21 +882,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              AppColors.activeGlow.withOpacity(0.15),
-              AppColors.activeGlow.withOpacity(0.05),
+              AppColors.spiritualGold.withValues(alpha: 0.15),
+              AppColors.spiritualGold.withValues(alpha: 0.05),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.activeGlow.withOpacity(0.2)),
+          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.activeGlow.withOpacity(0.2),
+                color: AppColors.spiritualGold.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: const Text("📿", style: TextStyle(fontSize: 24)),
@@ -979,7 +909,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   Text("Most Recited", style: AppTextStyles.tiny(color: Colors.white54)),
                   Text(
                     tasbih.name,
-                    style: AppTextStyles.h3(color: AppColors.activeGlow),
+                    style: AppTextStyles.h3(color: AppColors.spiritualGold),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -989,13 +919,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.activeGlow.withOpacity(0.15),
+                color: AppColors.spiritualGold.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.activeGlow.withOpacity(0.3)),
+                border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
               ),
               child: Text(
                 _formatCount(tasbih.totalCount),
-                style: AppTextStyles.small(color: AppColors.activeGlow, weight: FontWeight.bold),
+                style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold),
               ),
             ),
           ],
@@ -1017,21 +947,21 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              accent.withOpacity(0.15),
-              accent.withOpacity(0.05),
+              accent.withValues(alpha: 0.15),
+              accent.withValues(alpha: 0.05),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: accent.withOpacity(0.2)),
+          border: Border.all(color: accent.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: accent.withOpacity(0.2),
+                color: accent.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: accent),
@@ -1057,9 +987,9 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
-                color: accent.withOpacity(0.15),
+                color: accent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: accent.withOpacity(0.3)),
+                border: Border.all(color: accent.withValues(alpha: 0.3)),
               ),
               child: Column(
                 children: [
@@ -1069,7 +999,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   ),
                   Text(
                     "days",
-                    style: AppTextStyles.tiny(color: accent.withOpacity(0.7)),
+                    style: AppTextStyles.tiny(color: accent.withValues(alpha: 0.7)),
                   ),
                 ],
               ),
@@ -1089,7 +1019,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   String _cleanSunnahId(String id) {
-    // Convert snake_case ID to Title Case
+    try {
+      final match = context
+          .read<SunnahRepository>()
+          .getAllSunnahsSync()
+          .where((s) => s.id == id);
+      if (match.isNotEmpty) return match.first.title;
+    } catch (_) {
+      // No repository in scope; fall back to prettifying the id.
+    }
     return id
         .replaceAll('_', ' ')
         .split(' ')
@@ -1225,9 +1163,9 @@ class _AchievementCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.spiritualGold.withOpacity(0.1),
+          color: AppColors.spiritualGold.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.spiritualGold.withOpacity(0.3)),
+          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
           // No glow: these were the only two boxShadows in the app, which is
           // part of why this screen read as foreign. The gold fill and border
           // already mark a badge as unlocked without them.
@@ -1273,9 +1211,9 @@ class _LockedAchievementTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.03),
+          color: Colors.white.withValues(alpha: 0.03),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1285,7 +1223,7 @@ class _LockedAchievementTile extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: Colors.white.withValues(alpha: 0.05),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(item.icon, color: Colors.white30, size: 20),
@@ -1318,9 +1256,9 @@ class _LockedAchievementTile extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
                         value: item.progress,
-                        backgroundColor: Colors.white.withOpacity(0.1),
+                        backgroundColor: Colors.white.withValues(alpha: 0.1),
                         valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.spiritualGold.withOpacity(0.6),
+                          AppColors.spiritualGold.withValues(alpha: 0.6),
                         ),
                         minHeight: 4,
                       ),
@@ -1329,7 +1267,7 @@ class _LockedAchievementTile extends StatelessWidget {
                   const SizedBox(width: 12),
                   Text(
                     item.progressText,
-                    style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.4)),
+                    style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.4)),
                   ),
                 ],
               ),

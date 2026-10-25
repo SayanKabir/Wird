@@ -7,6 +7,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/text_styles.dart';
 import '../../core/services/location_service.dart';
 import 'glass_snackbar.dart';
+import 'app_backdrop_filter.dart';
 
 /// Follow-up when device location is still off after [LocationService]
 /// asked for it.
@@ -15,12 +16,15 @@ import 'glass_snackbar.dart';
 /// "Turn on location" dialog, so we only leave a quiet snackbar with a
 /// shortcut to settings. iOS can't show that system dialog at all, so there
 /// we explain and offer to open Settings.
-Future<void> showLocationOffPrompt(BuildContext context) async {
+/// Pass [aboveNavBar] when shown from a home tab, so the snackbar clears
+/// the floating tab bar.
+Future<void> showLocationOffPrompt(BuildContext context, {bool aboveNavBar = false}) async {
   if (Platform.isAndroid) {
     GlassSnackBar.show(
       context,
       message: 'Location is off. Turn it on to detect your city.',
       isError: true,
+      bottomMargin: aboveNavBar ? GlassSnackBar.aboveNavBar : 24,
       action: SnackBarAction(
         label: 'Settings',
         textColor: AppColors.spiritualGold,
@@ -38,8 +42,9 @@ Future<void> showLocationOffPrompt(BuildContext context) async {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
+        child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          fallbackTint: AppBackdropFilter.sheetTint,
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(

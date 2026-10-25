@@ -16,8 +16,6 @@ import 'features/settings/screens/settings_screen.dart';
 import 'features/sunnah/bloc/sunnah_bloc.dart';
 import 'core/repositories/sunnah_repository.dart';
 import 'core/repositories/sunnah_progress_repository.dart';
-import 'features/azkar/bloc/azkar_bloc.dart';
-import 'core/repositories/azkar_repository.dart';
 import 'features/tasbih/bloc/tasbih_bloc.dart';
 import 'features/quran/bloc/quran_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -30,6 +28,7 @@ import 'models/surah.dart';
 import 'models/verse.dart';
 import 'models/quran_bookmark.dart';
 import 'models/quran_progress.dart';
+import 'core/services/device_profile.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -37,6 +36,9 @@ void main() async {
   // Initialize services
   final storageService = StorageService();
   await storageService.init();
+
+  // Decides the default for Reduce motion on this device.
+  await DeviceProfile.instance.init();
 
   final notificationService = NotificationService();
   await notificationService.init();
@@ -105,7 +107,6 @@ class WirdApp extends StatelessWidget {
       providers: [
         RepositoryProvider.value(value: sunnahRepository),
         RepositoryProvider(create: (context) => SunnahProgressRepository()),
-        RepositoryProvider(create: (context) => AzkarRepository()),
         RepositoryProvider(create: (context) => TasbihRepository()),
         RepositoryProvider.value(value: quranRepository),
         BlocProvider<PrayerBloc>(
@@ -116,11 +117,6 @@ class WirdApp extends StatelessWidget {
             repository: context.read<SunnahRepository>(),
             progressRepository: context.read<SunnahProgressRepository>(),
           )..add(LoadSunnahs()),
-        ),
-        BlocProvider<AzkarBloc>(
-          create: (context) => AzkarBloc(
-            repository: context.read<AzkarRepository>(),
-          )..add(LoadAzkarCategories()),
         ),
         BlocProvider<TasbihBloc>(
           create: (context) => TasbihBloc(

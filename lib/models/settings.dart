@@ -393,7 +393,9 @@ class AppSettings extends Equatable {
   @HiveField(8)
   final bool dynamicBackground;
 
-  /// Whether to reduce motion for accessibility
+  /// Whether to reduce motion. Only meaningful once [reduceMotionUserSet]
+  /// is true; until then the app decides from the device (see
+  /// DeviceProfile), so read the effective value via lighterVisuals()/motionMode().
   @HiveField(9)
   final bool reduceMotion;
 
@@ -457,14 +459,19 @@ class AppSettings extends Equatable {
   @HiveField(24, defaultValue: 'latin')
   final String quranTransliterationScript;
 
-  /// Visual effects budget: 'lite', 'balanced' or 'smooth'. See
-  /// [PerformanceMode] and AppEffects for what each level turns on.
+  /// True once the user has flipped Reduce motion themselves; from then on
+  /// their [reduceMotion] choice wins over the device-based default.
+  @HiveField(25, defaultValue: false)
+  final bool reduceMotionUserSet;
+  /// Visual effects budget: 'auto', 'lite', 'balanced' or 'smooth'. Auto
+  /// follows the device profile and Reduce motion (see motionMode); the other
+  /// three are manual overrides. See [PerformanceMode] and AppEffects.
   ///
   /// Field 25 is taken: the tasbih-rework branch stores a bool
   /// (reduceMotionUserSet) there, and phones that ran that build still have
   /// it on disk. Reading it as this String crashed Hive before the first
   /// frame, leaving the app on its splash screen.
-  @HiveField(26, defaultValue: 'smooth')
+  @HiveField(26, defaultValue: 'auto')
   final String performanceMode;
 
   const AppSettings({
@@ -493,7 +500,8 @@ class AppSettings extends Equatable {
     this.quranSelectedScript = QuranScript.indopak,
     this.hapticsEnabled = true,
     this.quranTransliterationScript = 'latin',
-    this.performanceMode = 'smooth',
+    this.reduceMotionUserSet = false,
+    this.performanceMode = 'auto',
   });
 
   /// Default settings
@@ -528,6 +536,7 @@ class AppSettings extends Equatable {
     QuranScript? quranSelectedScript,
     bool? hapticsEnabled,
     String? quranTransliterationScript,
+    bool? reduceMotionUserSet,
     String? performanceMode,
   }) {
     return AppSettings(
@@ -556,6 +565,7 @@ class AppSettings extends Equatable {
       quranSelectedScript: quranSelectedScript ?? this.quranSelectedScript,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       quranTransliterationScript: quranTransliterationScript ?? this.quranTransliterationScript,
+      reduceMotionUserSet: reduceMotionUserSet ?? this.reduceMotionUserSet,
       performanceMode: performanceMode ?? this.performanceMode,
     );
   }
@@ -586,6 +596,7 @@ class AppSettings extends Equatable {
     quranSelectedScript,
     hapticsEnabled,
     quranTransliterationScript,
+    reduceMotionUserSet,
     performanceMode,
   ];
 }
@@ -593,6 +604,10 @@ class AppSettings extends Equatable {
 /// How much visual work the app does. Stored on [AppSettings.performanceMode]
 /// by [key] so adding a level never needs a new Hive adapter.
 enum PerformanceMode {
+  /// Lighter visuals on weak phones and under Battery Saver, full effects
+  /// everywhere else. The default.
+  auto('auto', 'Auto', 'Matches this phone: lighter on weak devices and in Battery Saver.'),
+
   /// Flat surfaces, a still sky and no entrance animations. For older phones
   /// and for saving battery.
   lite('lite', 'Lite', 'Flat surfaces and a still sky. Easiest on battery and older phones.'),
@@ -610,7 +625,7 @@ enum PerformanceMode {
   final String description;
 
   static PerformanceMode fromKey(String key) => PerformanceMode.values
-      .firstWhere((m) => m.key == key, orElse: () => PerformanceMode.smooth);
+      .firstWhere((m) => m.key == key, orElse: () => PerformanceMode.auto);
 }
 
 /// Streak data

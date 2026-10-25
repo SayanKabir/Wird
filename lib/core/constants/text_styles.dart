@@ -92,6 +92,15 @@ class AppTextStyles {
     shadows: _shadows,
   );
 
+  /// Large light numerals for dhikr counters; tabular so digits don't shift
+  /// sideways as the count changes.
+  static TextStyle counter({Color? color, double size = 68}) => _inter(FontWeight.w300).copyWith(
+    fontSize: size,
+    color: color ?? Colors.white,
+    height: 1.1,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+
   /// H2 - Section headers (24px Semibold)
   static TextStyle h2({Color? color}) => _inter(FontWeight.w600).copyWith(
     fontSize: 24,

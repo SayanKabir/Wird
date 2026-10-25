@@ -1,10 +1,20 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../models/tasbih.dart';
-import '../../models/tasbih_flow.dart';
+import '../dhikr/dhikr_catalog.dart';
 
 class TasbihRepository {
   static const String _boxName = 'tasbihBox';
+  static const String _sessionBoxName = 'dhikr_sessions';
+
+  static const Map<String, (String, int)> _builtIns = {
+    'subhanallah': ('SubhanAllah', 33),
+    'alhamdulillah': ('Alhamdulillah', 33),
+    'allahuakbar': ('Allahu Akbar', 34),
+    'astaghfirullah': ('Astaghfirullah', 100),
+    'la_ilaha_illallah': ('La ilaha illallah', 100),
+    'salawat': ('Salawat', 100),
+  };
 
   Future<Box<Tasbih>> _getBox() async {
     if (!Hive.isBoxOpen(_boxName)) {
@@ -15,119 +25,43 @@ class TasbihRepository {
 
   Future<void> init() async {
     await _getBox();
+    if (!Hive.isBoxOpen(_sessionBoxName)) {
+      await Hive.openBox<dynamic>(_sessionBoxName);
+    }
   }
 
+  /// Every stored counter, including retired ones (their totals still count
+  /// towards lifetime dhikr). Built-ins are backfilled if missing.
   Future<List<Tasbih>> getAllTasbihs() async {
     final box = await _getBox();
-    final defaults = _defaultTasbihs();
-
-    // Backfill missing defaults for existing users and initialize for first-time users.
-    for (final preset in defaults) {
-      if (!box.containsKey(preset.id)) {
-        await box.put(preset.id, preset);
+    final now = DateTime.now();
+    for (final entry in _builtIns.entries) {
+      if (!box.containsKey(entry.key)) {
+        await box.put(
+          entry.key,
+          Tasbih(id: entry.key, name: entry.value.$1, targetCount: entry.value.$2, lastUpdated: now),
+        );
       }
     }
-
-    // Return in stable order: defaults first, then custom entries.
-    final values = box.values.toList();
-    final defaultIndex = <String, int>{
-      for (int i = 0; i < defaults.length; i++) defaults[i].id: i,
-    };
-
-    values.sort((a, b) {
-      final ai = defaultIndex[a.id];
-      final bi = defaultIndex[b.id];
-      if (ai != null && bi != null) return ai.compareTo(bi);
-      if (ai != null) return -1;
-      if (bi != null) return 1;
-      return a.name.compareTo(b.name);
-    });
-
-    return values;
+    return box.values.toList();
   }
 
-  List<Tasbih> _defaultTasbihs() {
-    final now = DateTime.now();
-
+  /// The counters the hub lists: built-ins in catalog order, then the user's
+  /// own in the order they were added. Retired session steps and the
+  /// placeholder "Dhikr" entries the old screen saved are left out.
+  static List<Tasbih> visibleCounters(List<Tasbih> all) {
+    final byId = {for (final t in all) t.id: t};
+    final custom = all
+        .where((t) =>
+            !DhikrCatalog.isBuiltIn(t.id) &&
+            !DhikrCatalog.retiredCounterIds.contains(t.id) &&
+            t.name != 'Dhikr')
+        .toList()
+      ..sort((a, b) => a.id.compareTo(b.id));
     return [
-      Tasbih(
-        id: 'morning_azkar',
-        name: 'Morning Azkar',
-        targetCount: 100,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'evening_azkar',
-        name: 'Evening Azkar',
-        targetCount: 100,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'before_sleep_azkar',
-        name: 'Before Sleep Azkar',
-        targetCount: 100,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'subhanallah',
-        name: 'SubhanAllah',
-        targetCount: 33,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'alhamdulillah',
-        name: 'Alhamdulillah',
-        targetCount: 33,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'allahuakbar',
-        name: 'Allahu Akbar',
-        targetCount: 34,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'astaghfirullah',
-        name: 'Astaghfirullah',
-        targetCount: 100,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'allahumma_antassalam',
-        name: 'Allahumma Antas-Salam',
-        targetCount: 1,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'ayatul_kursi',
-        name: 'Ayatul Kursi',
-        targetCount: 1,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'la_ilaha_illallah',
-        name: 'La ilaha illallah',
-        targetCount: 100,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'tasbih_completion',
-        name: 'Tasbih Completion',
-        targetCount: 1,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'muawwidhat',
-        name: 'Al-Mu\'awwidhat',
-        targetCount: 1,
-        lastUpdated: now,
-      ),
-      Tasbih(
-        id: 'salawat',
-        name: 'Salawat',
-        targetCount: 100,
-        lastUpdated: now,
-      ),
+      for (final id in DhikrCatalog.builtInCounterIds)
+        if (byId[id] != null) byId[id]!,
+      ...custom,
     ];
   }
 
@@ -140,149 +74,64 @@ class TasbihRepository {
     final box = await _getBox();
     await box.delete(id);
   }
+}
 
-  // =========================================================================
-  // MULTI-PHASE FLOWS
-  // =========================================================================
+/// Where the user is in each guided session today. Stored as a plain map so
+/// no adapter is needed:
+/// `{sessionId: {'day': 'yyyy-mm-dd', 'at': millis, 'step': int, 'count': int, 'done': bool}}`.
+/// A position resumes only on the same day and within [_resumeWindow], so an
+/// after-prayer session left at Dhuhr doesn't reappear half-done at Asr.
+class DhikrSessionStore {
+  static const String _boxName = 'dhikr_sessions';
+  static const Duration _resumeWindow = Duration(hours: 2);
 
-  /// Lookup a predefined multi-phase flow by its ID.
-  /// Returns `null` for unknown flow IDs.
-  TasbihFlow? getFlow(String flowId) {
-    return _predefinedFlows[flowId];
+  Box<dynamic>? get _box => Hive.isBoxOpen(_boxName) ? Hive.box<dynamic>(_boxName) : null;
+
+  Map? _today(String sessionId, DateTime now) {
+    final raw = _box?.get(sessionId);
+    if (raw is! Map || raw['day'] != Tasbih.dateKey(now)) return null;
+    return raw;
   }
 
-  /// All available flow IDs.
-  List<String> get availableFlowIds => _predefinedFlows.keys.toList();
+  bool isDoneToday(String sessionId, {DateTime? now}) =>
+      _today(sessionId, now ?? DateTime.now())?['done'] == true;
 
-  static final Map<String, TasbihFlow> _predefinedFlows = {
-    'fatimah': const TasbihFlow(
-      id: 'fatimah',
-      name: 'Tasbih of Fatimah (RA)',
-      phases: [
-        TasbihFlowPhase(
-          tasbihId: 'subhanallah',
-          label: 'SubhanAllah',
-          target: 33,
-          arabic: 'سُبْحَانَ اللَّهِ',
-          transliteration: 'SubhanAllah',
-          translation: 'Glory be to Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'alhamdulillah',
-          label: 'Alhamdulillah',
-          target: 33,
-          arabic: 'الْحَمْدُ لِلَّهِ',
-          transliteration: 'Alhamdulillah',
-          translation: 'Praise be to Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'allahuakbar',
-          label: 'Allahu Akbar',
-          target: 34,
-          arabic: 'اللَّهُ أَكْبَرُ',
-          transliteration: 'Allahu Akbar',
-          translation: 'Allah is the Greatest',
-        ),
-      ],
-    ),
-    'after_prayer': const TasbihFlow(
-      id: 'after_prayer',
-      name: 'After-Prayer Dhikr',
-      phases: [
-        TasbihFlowPhase(
-          tasbihId: 'astaghfirullah',
-          label: 'Istighfar',
-          target: 3,
-          arabic: 'أَسْتَغْفِرُ اللَّهَ',
-          translation: 'I seek the forgiveness of Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'allahumma_antassalam',
-          label: 'Allahumma Antas-Salam',
-          target: 1,
-          arabic: 'اللَّهُمَّ أَنْتَ السَّلَامُ، وَمِنْكَ السَّلَامُ، تَبَارَكْتَ يَا ذَا الْجَلَالِ وَالْإِكْرَامِ',
-          transliteration: 'Allahumma Antas-Salam wa minkas-salam, tabarakta ya Dhal-Jalali wal-Ikram',
-          translation: 'O Allah, You are Peace and from You comes peace. Blessed are You, O Owner of majesty and honor',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'ayatul_kursi',
-          label: 'Ayatul Kursi',
-          target: 1,
-          arabic: 'اللَّهُ لَا إِلَـٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ...',
-          translation: 'Allah! There is no deity except Him, the Ever-Living, the Sustainer of [all] existence...',
-          virtue: 'There is nothing standing between a reciter of this and entering Paradise except death.',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'subhanallah',
-          label: 'SubhanAllah',
-          target: 33,
-          arabic: 'سُبْحَانَ اللَّهِ',
-          transliteration: 'SubhanAllah',
-          translation: 'Glory be to Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'alhamdulillah',
-          label: 'Alhamdulillah',
-          target: 33,
-          arabic: 'الْحَمْدُ لِلَّهِ',
-          transliteration: 'Alhamdulillah',
-          translation: 'Praise be to Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'allahuakbar',
-          label: 'Allahu Akbar',
-          target: 33,
-          arabic: 'اللَّهُ أَكْبَرُ',
-          transliteration: 'Allahu Akbar',
-          translation: 'Allah is the Greatest',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'tasbih_completion',
-          label: 'Tahlil',
-          target: 1,
-          arabic: 'لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ',
-          transliteration: 'La ilaha illallahu wahdahu la sharika lahu, lahul-mulku wa lahul-hamdu wa Huwa \'ala kulli shay\'in Qadir',
-          translation: 'None has the right to be worshipped except Allah, alone, without partner...',
-          virtue: 'Said to complete the 100th remembrance after the 33x Tasbih, forgiving sins even if they are like the foam of the sea.',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'muawwidhat',
-          label: 'Al-Mu\'awwidhat',
-          target: 1,
-          arabic: 'قُلْ هُوَ اللَّهُ أَحَدٌ... \nقُلْ أَعُوذُ بِرَبِّ الْفَلَقِ... \nقُلْ أَعُوذُ بِرَبِّ النَّاسِ...',
-          translation: 'Recitation of Surah Al-Ikhlas, Al-Falaq, and An-Nas',
-        ),
-      ],
-    ),
-    'before_sleep': const TasbihFlow(
-      id: 'before_sleep',
-      name: 'Before Sleep Azkar',
-      phases: [
-        TasbihFlowPhase(
-          tasbihId: 'subhanallah',
-          label: 'SubhanAllah',
-          target: 33,
-          arabic: 'سُبْحَانَ اللَّهِ',
-          transliteration: 'SubhanAllah',
-          translation: 'Glory be to Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'alhamdulillah',
-          label: 'Alhamdulillah',
-          target: 33,
-          arabic: 'الْحَمْدُ لِلَّهِ',
-          transliteration: 'Alhamdulillah',
-          translation: 'Praise be to Allah',
-        ),
-        TasbihFlowPhase(
-          tasbihId: 'allahuakbar',
-          label: 'Allahu Akbar',
-          target: 34,
-          arabic: 'اللَّهُ أَكْبَرُ',
-          transliteration: 'Allahu Akbar',
-          translation: 'Allah is the Greatest',
-        ),
-      ],
-    ),
-  };
+  /// Today's unfinished position, or null if not started (or finished).
+  (int step, int count)? resumePoint(String sessionId, {DateTime? now}) {
+    final at = now ?? DateTime.now();
+    final raw = _today(sessionId, at);
+    if (raw == null) return null;
+    final savedAt = raw['at'] as int?;
+    if (savedAt == null || at.millisecondsSinceEpoch - savedAt > _resumeWindow.inMilliseconds) return null;
+    final step = raw['step'] as int? ?? 0;
+    final count = raw['count'] as int? ?? 0;
+    if (step == 0 && count == 0) return null;
+    return (step, count);
+  }
+
+  /// [done] overrides today's completion flag; by default it's kept.
+  Future<void> savePosition(String sessionId, int step, int count, {DateTime? now, bool? done}) async {
+    final at = now ?? DateTime.now();
+    final wasDone = done ?? isDoneToday(sessionId, now: at);
+    await _box?.put(sessionId, {
+      'day': Tasbih.dateKey(at),
+      'at': at.millisecondsSinceEpoch,
+      'step': step,
+      'count': count,
+      'done': wasDone,
+    });
+  }
+
+  /// Records today's completion and clears the position, so the next start
+  /// begins at the first step.
+  Future<void> markDone(String sessionId, {DateTime? now}) async {
+    final at = now ?? DateTime.now();
+    await _box?.put(sessionId, {
+      'day': Tasbih.dateKey(at),
+      'at': at.millisecondsSinceEpoch,
+      'step': 0,
+      'count': 0,
+      'done': true,
+    });
+  }
 }

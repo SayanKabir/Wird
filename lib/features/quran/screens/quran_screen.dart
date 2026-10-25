@@ -22,6 +22,8 @@ import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_sheet.dart';
 import '../../../core/constants/spacing.dart';
+import '../../../widgets/common/app_route.dart';
+import '../../../core/constants/radii.dart';
 
 enum _QuranTab { surah, juz, saved }
 
@@ -250,7 +252,6 @@ class _QuranScreenState extends State<QuranScreen> {
               child: const PageHeader(
                 overline: 'THE NOBLE',
                 title: 'Quran',
-                overlineColor: AppColors.spiritualGold,
               ),
             ),
 
@@ -762,32 +763,13 @@ class _QuranScreenState extends State<QuranScreen> {
         : PrayerPeriod.isha;
 
     Navigator.of(context).push(
-      PageRouteBuilder(
-        transitionDuration: const Duration(milliseconds: 500),
-        reverseTransitionDuration: const Duration(milliseconds: 400),
-        pageBuilder: (context, animation, secondaryAnimation) =>
-            SurahReadingScreen(
+      AppRoute(
+        builder: (context) => SurahReadingScreen(
               surahId: surahId,
               surahName: surahName,
               prayerPeriod: prayerPeriod,
               initialVerse: verse,
             ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          final curvedAnimation = CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOutCubic,
-          );
-          return FadeTransition(
-            opacity: curvedAnimation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.08),
-                end: Offset.zero,
-              ).animate(curvedAnimation),
-              child: child,
-            ),
-          );
-        },
       ),
     ).then((_) => _refreshOffline());
   }
@@ -906,7 +888,7 @@ class _JumpCard extends StatelessWidget {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(AppRadii.group),
           border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.25), width: 0.5),
         ),
         child: Row(
@@ -1104,7 +1086,9 @@ class _JuzCardState extends State<_JuzCard> {
                       ],
                     ),
                   ),
-                  GestureDetector(
+                  Pressable(
+                    pressedScale: 0.97,
+                    haptic: PressableHaptic.none,
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
                       HapticService().selection();
@@ -1133,8 +1117,8 @@ class _JuzCardState extends State<_JuzCard> {
                     child: Column(
                       children: [
                         for (final seg in segments)
-                          InkWell(
-                            borderRadius: BorderRadius.circular(10),
+                          Pressable(
+                            pressedScale: 0.98,
                             onTap: () => widget.onOpen(seg.surah, seg.fromVerse),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -1472,7 +1456,7 @@ class _QuranErrorView extends StatelessWidget {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(AppRadii.card),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 ),

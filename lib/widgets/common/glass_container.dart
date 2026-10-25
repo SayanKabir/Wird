@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'app_backdrop_filter.dart';
 
 import '../../core/constants/effects.dart';
 
@@ -64,7 +65,7 @@ class GlassContainer extends StatelessWidget {
     );
 
     if (shouldBlur) {
-      glassContent = BackdropFilter(
+      glassContent = AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: glassContent,
       );

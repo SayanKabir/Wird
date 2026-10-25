@@ -1,6 +1,8 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../../../core/constants/durations.dart';
 import 'package:wird2/core/constants/colors.dart';
 import 'package:wird2/core/services/prayer_service.dart';
 import 'package:wird2/core/utils/moon_phase_utils.dart';
@@ -11,6 +13,13 @@ import 'package:wird2/features/home/widgets/weather_overlay.dart';
 class CelestialBackground extends StatefulWidget {
   final PrayerPeriod prayerPeriod;
   final bool reduceMotion;
+
+  /// Lighter visuals: the sky keeps moving but steps at a lower rate.
+  final bool lite;
+
+  /// How visible the sun or moon is (1 = full). Lets a screen dim it without
+  /// rebuilding the whole background.
+  final ValueListenable<double>? celestialOpacity;
   final Widget child;
   final WeatherCondition weatherCondition;
   final int cloudCoverage;
@@ -23,6 +32,8 @@ class CelestialBackground extends StatefulWidget {
     required this.prayerPeriod,
     required this.child,
     this.reduceMotion = false,
+    this.lite = false,
+    this.celestialOpacity,
     this.weatherCondition = WeatherCondition.clear,
     this.cloudCoverage = 0,
     this.latitude = 0.0,
@@ -172,6 +183,21 @@ class _CelestialBackgroundState extends State<CelestialBackground>
     return Alignment.lerp(start, end, t)!;
   }
 
+  Widget _dimmable(Widget body) {
+    final opacity = widget.celestialOpacity;
+    if (opacity == null) return body;
+    return ValueListenableBuilder<double>(
+      valueListenable: opacity,
+      child: body,
+      builder: (context, value, child) => AnimatedOpacity(
+        opacity: value,
+        duration: AppDurations.tabFade,
+        curve: AppCurves.emphasized,
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -204,11 +230,13 @@ class _CelestialBackgroundState extends State<CelestialBackground>
               if (widget.showCelestialBody)
                 Align(
                   alignment: _calculateCelestialAlignment(_animation.value),
-                  child: _CelestialBody(
-                    prayerPeriod: widget.fixedMoonPhase != null ? PrayerPeriod.isha : widget.prayerPeriod,
-                    reduceMotion: widget.reduceMotion,
-                    latitude: widget.latitude,
-                    fixedMoonPhase: widget.fixedMoonPhase,
+                  child: _dimmable(
+                    _CelestialBody(
+                      prayerPeriod: widget.fixedMoonPhase != null ? PrayerPeriod.isha : widget.prayerPeriod,
+                      reduceMotion: widget.reduceMotion,
+                      latitude: widget.latitude,
+                      fixedMoonPhase: widget.fixedMoonPhase,
+                    ),
                   ),
                 ),
 
@@ -217,6 +245,7 @@ class _CelestialBackgroundState extends State<CelestialBackground>
                 condition: widget.weatherCondition,
                 cloudCoverage: widget.cloudCoverage,
                 reduceMotion: widget.reduceMotion,
+                lite: widget.lite,
                 isNight: _isNightTime(widget.prayerPeriod),
               ),
 

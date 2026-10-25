@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../core/constants/colors.dart';
+import '../../../core/constants/durations.dart';
 import '../../../core/constants/effects.dart';
 import '../../../core/constants/spacing.dart';
 import '../../../core/constants/text_styles.dart';
@@ -102,11 +103,13 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
         _focusedMonth.year == _today.year;
     final animate = AppEffects.entranceMotion;
 
+    // Shared entrance timing: the route already fades the screen in, so the
+    // cards follow a short stagger behind it.
     Widget enter(Widget child, int order) => animate
         ? child
             .animate()
-            .fadeIn(delay: (order * 70).ms, duration: 380.ms)
-            .slideY(begin: 0.04, curve: Curves.easeOutCubic)
+            .fadeIn(delay: AppDurations.stagger * order, duration: 280.ms, curve: AppCurves.emphasized)
+            .slideY(begin: 0.04, delay: AppDurations.stagger * order, duration: 280.ms, curve: AppCurves.emphasized)
         : child;
 
     return Container(

@@ -1,23 +1,25 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
+import '../../../core/dhikr/dhikr_catalog.dart';
 import '../../../core/constants/spacing.dart';
 import '../../../models/sunnah.dart';
-import '../../tasbih/screens/tasbih_screen.dart';
-import '../bloc/sunnah_bloc.dart';
-import '../widgets/sunnah_category_block.dart';
-import '../widgets/sunnah_other_header.dart';
-import '../widgets/sunnah_tile.dart';
-import '../widgets/sunnah_weekly_card.dart';
-import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../../models/sunnah_progress.dart';
 import '../../../widgets/common/page_header.dart';
-import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/premium_flowing_loader.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../home/bloc/prayer_bloc.dart';
+import '../../tasbih/dhikr_nav.dart';
+import '../bloc/sunnah_bloc.dart';
+import '../widgets/sunnah_check.dart';
+import '../widgets/sunnah_detail_sheet.dart';
+import '../widgets/sunnah_format.dart';
+import '../../../core/constants/radii.dart';
 
+/// The Sunnah tab: this week's sunnah, the few the user has chosen to keep
+/// (ticked off day by day), and the library to choose them from.
 class SunnahScreen extends StatefulWidget {
   const SunnahScreen({super.key});
 
@@ -26,20 +28,12 @@ class SunnahScreen extends StatefulWidget {
 }
 
 class _SunnahScreenState extends State<SunnahScreen> {
-  // --- State Variables ---
-  final Set<String> _expandedCategories = <String>{};
+  /// Library filter; null shows every category.
+  String? _category;
 
-  // Filter States
-  final Set<SunnahFrequency> _selectedFrequencies = <SunnahFrequency>{};
-  final Set<SunnahDifficulty> _selectedDifficulties = <SunnahDifficulty>{};
-  final Set<String> _selectedCategories = <String>{};
-  bool _expandAll = false;
-  bool _tasbihOnly = false;
-
-  // Caching
-  _SunnahViewCache? _viewCache;
-  List<Sunnah>? _cachedSunnahsRef;
-  String? _cachedWeeklyId;
+  List<Sunnah>? _sortedFor;
+  List<Sunnah> _sorted = const [];
+  List<String> _categories = const [];
 
   @override
   Widget build(BuildContext context) {
@@ -49,972 +43,597 @@ class _SunnahScreenState extends State<SunnahScreen> {
         bottom: false,
         child: BlocBuilder<SunnahBloc, SunnahState>(
           builder: (context, state) {
-            if (state is SunnahLoading) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const PremiumFlowingLoader(size: 50.0, color: AppColors.spiritualGold),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Loading Sunnahs...',
-                      style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.7), weight: FontWeight.w500).copyWith(letterSpacing: 1.2),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            if (state is SunnahError) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.cloud_off_rounded, color: Colors.white.withValues(alpha: 0.4), size: 48),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Unable to load Sunnahs',
-                        style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.8), weight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        state.message,
-                        style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.5)),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton.icon(
-                        onPressed: () => context.read<SunnahBloc>().add(LoadSunnahs()),
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: const Text('Retry'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white.withValues(alpha: 0.1),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }
-
-            if (state is SunnahLoaded) {
-              return _buildLoadedState(context, state);
-            }
-
-            return const SizedBox.shrink();
+            if (state is SunnahLoaded) return _buildLoaded(context, state);
+            if (state is SunnahError) return _buildError(context);
+            return const Center(
+              child: PremiumFlowingLoader(size: 50.0, color: AppColors.spiritualGold),
+            );
           },
         ),
       ),
     );
   }
 
-  Widget _buildLoadedState(BuildContext context, SunnahLoaded state) {
-    final viewCache = _getOrBuildViewCache(state);
-    final progress = state.progress;
-    final filteredSunnahs = _applyFilters(state.sunnahs, viewCache);
-    final weeklySunnah = state.weeklySunnah;
+  /// Library order: by category, then as listed in the data. Cached per list.
+  void _prepareLibrary(List<Sunnah> sunnahs) {
+    if (identical(_sortedFor, sunnahs)) return;
+    final indexed = sunnahs.asMap().entries.toList()
+      ..sort((a, b) {
+        final c = SunnahFormat.categoryIndex(a.value.category)
+            .compareTo(SunnahFormat.categoryIndex(b.value.category));
+        return c != 0 ? c : a.key.compareTo(b.key);
+      });
+    _sorted = indexed.map((e) => e.value).toList(growable: false);
+    _categories = <String>{for (final s in _sorted) s.category}.toList(growable: false);
+    _sortedFor = sunnahs;
+  }
 
+  Widget _buildLoaded(BuildContext context, SunnahLoaded state) {
+    _prepareLibrary(state.sunnahs);
     final size = MediaQuery.sizeOf(context);
-    final bool isSmallPhone = size.width < 360;
-    final double hPad = AppSpacing.gutter(context);
-
-    final showWeeklySunnah = weeklySunnah != null &&
-        filteredSunnahs.any((sunnah) => sunnah.id == weeklySunnah.id);
-
-    late final List<Sunnah> remaining;
-    late final Map<String, List<Sunnah>> grouped;
-    late final List<MapEntry<String, List<Sunnah>>> groupedEntries;
-
-    if (!_hasActiveFilters && showWeeklySunnah) {
-      remaining = viewCache.remaining;
-      grouped = viewCache.grouped;
-      groupedEntries = viewCache.groupedEntries;
-    } else {
-      remaining = filteredSunnahs
-          .where((sunnah) => sunnah.id != weeklySunnah?.id)
-          .toList(growable: false);
-      grouped = _groupSunnahsByCategory(remaining);
-      groupedEntries = grouped.entries.toList(growable: false);
-    }
-
-    _expandedCategories.removeWhere((category) => !grouped.containsKey(category));
+    final hPad = AppSpacing.gutter(context);
+    final progress = state.progress;
+    final practice = state.practice;
+    final doneCount = practice.where((s) => progress.isPracticedToday(s.id)).length;
+    final library = _category == null
+        ? _sorted
+        : _sorted.where((s) => s.category == _category).toList(growable: false);
 
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
-        // 1. Header Section (Sleek Inline Design)
         SliverToBoxAdapter(
           child: Padding(
             padding: AppSpacing.header(context),
             child: const PageHeader(
               overline: 'THE PROPHETIC PATH',
               title: 'Sunnah',
-              overlineColor: AppColors.spiritualGold,
             ),
           ),
         ),
 
-        // 2. Weekly Sunnah Card
-        if (showWeeklySunnah)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 24),
-              child: SunnahWeeklyCard(
-                sunnah: weeklySunnah,
-                weekLabel: _weekLabel(),
-                isDhikrLinked: _tasbihLaunchForSunnah(weeklySunnah) != null,
-                categoryIcon: _iconForCategory(weeklySunnah.category),
-                difficultyLabel: _difficultyLabel(weeklySunnah.difficulty),
-                frequencyLabel: _frequencyLabel(weeklySunnah.frequency),
-                isPracticedToday: progress.isPracticedToday(weeklySunnah.id),
-                onPracticeTap: () => _markSunnahPracticed(context, weeklySunnah),
-                onReadDetailsTap: () => _openSunnahSheet(context, weeklySunnah),
-                onOpenTasbihTap: () => _openTasbih(context, sunnah: weeklySunnah),
-                onSkipTap: () => context.read<SunnahBloc>().add(SkipWeeklySunnah()),
-              ),
-            ),
-          ),
-
-        // 3. List Header & Filters
         SliverToBoxAdapter(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 16),
-            child: SunnahOtherHeader(
-              count: remaining.length,
-              expandAll: _expandAll,
-              activeFilterCount: _activeFilterCount,
-              activeFilterTags: _activeFilterTags(),
-              onToggleExpandAll: () => _toggleExpandAll(grouped),
-              onOpenFilters: () => _openFilterSheet(context, viewCache, isSmallPhone),
-              onRemoveTag: _handleRemoveTag,
-            ),
+            padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 12),
+            child: const _DhikrCard(),
           ),
         ),
 
-        // 4. Content or Empty State
-        if (remaining.isEmpty)
+        if (state.weeklySunnah != null)
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: hPad),
-              child: Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.filter_list_off_rounded, color: Colors.white.withValues(alpha: 0.3), size: 40),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No Sunnahs match your filters.',
-                      style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.8)),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    TextButton.icon(
-                      onPressed: _clearAllFilters,
-                      icon: const Icon(Icons.clear_all_rounded, size: 18),
-                      label: const Text('Clear Filters'),
-                      style: TextButton.styleFrom(foregroundColor: AppColors.spiritualGold),
-                    )
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          SliverPadding(
-            padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 0),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final entry = groupedEntries[index];
-                final category = entry.key;
-                final sunnahs = entry.value;
-
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: RepaintBoundary(
-                    child: SunnahCategoryBlock(
-                      category: category,
-                      sunnahs: sunnahs,
-                      isExpanded: _isCategoryExpanded(category),
-                      typeSummary: _sectionTypeSummary(sunnahs),
-                      icon: _iconForCategory(category),
-                      onToggle: () => _toggleCategory(category),
-                      tileBuilder: (sunnah) {
-                        return SunnahTile(
-                          sunnah: sunnah,
-                          subtitle: _tileSubtitle(sunnah),
-                          isDhikrLinked: _tasbihLaunchForSunnah(sunnah) != null,
-                          isPracticedToday: progress.isPracticedToday(sunnah.id),
-                          difficultyColor: _difficultyColor(sunnah.difficulty),
-                          difficultyLabel: _difficultyLabel(sunnah.difficulty),
-                          frequencyLabel: _frequencyLabel(sunnah.frequency),
-                          shortReference: _shortReference(sunnah.reference['hadith']),
-                          categoryIcon: _iconForCategory(sunnah.category),
-                          onTap: () => _openSunnahSheet(context, sunnah),
-                        );
-                      },
-                    ),
-                  ),
-                );
-              }, childCount: groupedEntries.length),
+              child: _WeeklyCard(sunnah: state.weeklySunnah!, progress: progress),
             ),
           ),
 
-        SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom + 80)),
+        SliverToBoxAdapter(
+          child: _SectionLabel(
+            text: 'YOUR PRACTICE',
+            horizontalPadding: hPad,
+            trailing: practice.isEmpty ? null : '$doneCount of ${practice.length} today',
+          ),
+        ),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: hPad),
+            child: practice.isEmpty
+                ? const _PracticeEmpty()
+                : _PracticeList(sunnahs: practice, progress: progress),
+          ),
+        ),
+
+        SliverToBoxAdapter(child: _SectionLabel(text: 'LIBRARY', horizontalPadding: hPad)),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 36,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(horizontal: hPad),
+              children: [
+                _CategoryPill(
+                  label: 'All',
+                  selected: _category == null,
+                  onTap: () => setState(() => _category = null),
+                ),
+                for (final c in _categories)
+                  _CategoryPill(
+                    label: SunnahFormat.shortCategory(c),
+                    selected: _category == c,
+                    onTap: () => setState(() => _category = c),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+        SliverPadding(
+          padding: EdgeInsets.symmetric(horizontal: hPad),
+          sliver: SliverList.builder(
+            itemCount: library.length,
+            itemBuilder: (context, i) => _LibraryRow(
+              sunnah: library[i],
+              showCategory: _category == null,
+              inPractice: progress.isInPractice(library[i].id),
+              doneToday: progress.isPracticedToday(library[i].id),
+            ),
+          ),
+        ),
+
+        SliverPadding(padding: EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom + 100)),
       ],
     );
   }
 
-  // --- Logic for Filters & Tags ---
-
-  void _handleRemoveTag(String tag) {
-    setState(() {
-      for (final freq in SunnahFrequency.values) {
-        if (_frequencyLabel(freq) == tag) {
-          _selectedFrequencies.remove(freq);
-          return;
-        }
-      }
-      for (final diff in SunnahDifficulty.values) {
-        if (_difficultyLabel(diff) == tag) {
-          _selectedDifficulties.remove(diff);
-          return;
-        }
-      }
-      if (tag == 'Tasbih-linked') {
-        _tasbihOnly = false;
-        return;
-      }
-      if (_selectedCategories.contains(tag)) {
-        _selectedCategories.remove(tag);
-      }
-    });
-  }
-
-  void _clearAllFilters() {
-    setState(() {
-      _selectedFrequencies.clear();
-      _selectedDifficulties.clear();
-      _selectedCategories.clear();
-      _tasbihOnly = false;
-    });
-  }
-
-  _SunnahViewCache _getOrBuildViewCache(SunnahLoaded state) {
-    final weeklyId = state.weeklySunnah?.id;
-    if (_viewCache != null &&
-        identical(_cachedSunnahsRef, state.sunnahs) &&
-        _cachedWeeklyId == weeklyId) {
-      return _viewCache!;
-    }
-
-    final remaining = state.sunnahs
-        .where((sunnah) => sunnah.id != state.weeklySunnah?.id)
-        .toList(growable: false);
-    final grouped = _groupSunnahsByCategory(remaining);
-    final groupedEntries = grouped.entries.toList(growable: false);
-    final availableCategories = groupedEntries.map((entry) => entry.key).toList(growable: false);
-    final tasbihLaunchById = <String, _TasbihLaunch?>{
-      for (final sunnah in state.sunnahs)
-        sunnah.id: _tasbihLaunchForSunnahDirect(sunnah),
-    };
-
-    final next = _SunnahViewCache(
-      remaining: remaining,
-      grouped: grouped,
-      groupedEntries: groupedEntries,
-      availableCategories: availableCategories,
-      tasbihLaunchById: tasbihLaunchById,
-    );
-    _viewCache = next;
-    _cachedSunnahsRef = state.sunnahs;
-    _cachedWeeklyId = weeklyId;
-    return next;
-  }
-
-  bool get _hasActiveFilters =>
-      _selectedFrequencies.isNotEmpty ||
-          _selectedDifficulties.isNotEmpty ||
-          _selectedCategories.isNotEmpty ||
-          _tasbihOnly;
-
-  int get _activeFilterCount {
-    var count = 0;
-    if (_selectedFrequencies.isNotEmpty) count++;
-    if (_selectedDifficulties.isNotEmpty) count++;
-    if (_selectedCategories.isNotEmpty) count++;
-    if (_tasbihOnly) count++;
-    return count;
-  }
-
-  List<String> _activeFilterTags() {
-    final tags = <String>[];
-    tags.addAll(_selectedFrequencies.map(_frequencyLabel));
-    tags.addAll(_selectedDifficulties.map(_difficultyLabel));
-    tags.addAll(_selectedCategories);
-    if (_tasbihOnly) tags.add('Tasbih-linked');
-    return tags;
-  }
-
-  void _markSunnahPracticed(BuildContext context, Sunnah sunnah) {
-    HapticService().medium();
-    final currentState = context.read<SunnahBloc>().state;
-    var alreadyPracticed = false;
-    if (currentState is SunnahLoaded) {
-      alreadyPracticed = currentState.progress.isPracticedToday(sunnah.id);
-    }
-
-    context.read<SunnahBloc>().add(MarkSunnahPracticed(sunnahId: sunnah.id));
-    _showAppSnackBar(
-      context,
-      message: alreadyPracticed
-          ? '${sunnah.title} already tracked today.'
-          : '${sunnah.title} tracked. Points added.',
-      icon: alreadyPracticed
-          ? Icons.info_outline_rounded
-          : Icons.local_fire_department_rounded,
-    );
-  }
-
-  List<Sunnah> _applyFilters(List<Sunnah> all, _SunnahViewCache viewCache) {
-    if (!_hasActiveFilters) return all;
-    return all.where((sunnah) => _matchesFilters(sunnah, viewCache)).toList(growable: false);
-  }
-
-  bool _matchesFilters(Sunnah sunnah, _SunnahViewCache viewCache) {
-    if (_selectedFrequencies.isNotEmpty && !_selectedFrequencies.contains(sunnah.frequency)) return false;
-    if (_selectedDifficulties.isNotEmpty && !_selectedDifficulties.contains(sunnah.difficulty)) return false;
-    if (_selectedCategories.isNotEmpty && !_selectedCategories.contains(sunnah.category)) return false;
-    if (_tasbihOnly && viewCache.tasbihLaunchById[sunnah.id] == null) return false;
-    return true;
-  }
-
-  // --- UI: Filter Sheet ---
-
-  Future<void> _openFilterSheet(BuildContext context, _SunnahViewCache viewCache, bool isSmallPhone) async {
-    HapticService().light();
-    final tempFrequencies = Set<SunnahFrequency>.from(_selectedFrequencies);
-    final tempDifficulties = Set<SunnahDifficulty>.from(_selectedDifficulties);
-    final tempCategories = Set<String>.from(_selectedCategories);
-    var tempTasbihOnly = _tasbihOnly;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                child: Container(
-                  padding: EdgeInsets.fromLTRB(isSmallPhone ? 20 : 24, 12, isSmallPhone ? 20 : 24, 40),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.15), width: 0.5)),
-                  ),
-                  child: SafeArea(
-                    top: false,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Center(
-                            child: Container(
-                              width: 40, height: 4,
-                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('Filter Sunnahs', style: AppTextStyles.h2(color: Colors.white)),
-                              if (tempFrequencies.isNotEmpty || tempDifficulties.isNotEmpty || tempCategories.isNotEmpty || tempTasbihOnly)
-                                TextButton(
-                                  onPressed: () {
-                                    HapticService().light();
-                                    setModalState(() {
-                                      tempFrequencies.clear();
-                                      tempDifficulties.clear();
-                                      tempCategories.clear();
-                                      tempTasbihOnly = false;
-                                    });
-                                  },
-                                  style: TextButton.styleFrom(foregroundColor: AppColors.spiritualGold),
-                                  child: const Text('Reset'),
-                                ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          _filterSectionLabel('Frequency'),
-                          Wrap(
-                            spacing: 8, runSpacing: 8,
-                            children: SunnahFrequency.values.map((f) => _buildFilterChip(
-                              label: _frequencyLabel(f),
-                              selected: tempFrequencies.contains(f),
-                              onSelected: (s) {
-                                HapticService().selection();
-                                setModalState(() => s ? tempFrequencies.add(f) : tempFrequencies.remove(f));
-                              },
-                            )).toList(),
-                          ),
-
-                          const SizedBox(height: 24),
-                          _filterSectionLabel('Difficulty'),
-                          Wrap(
-                            spacing: 8, runSpacing: 8,
-                            children: SunnahDifficulty.values.map((d) => _buildFilterChip(
-                              label: _difficultyLabel(d),
-                              selected: tempDifficulties.contains(d),
-                              onSelected: (s) {
-                                HapticService().selection();
-                                setModalState(() => s ? tempDifficulties.add(d) : tempDifficulties.remove(d));
-                              },
-                            )).toList(),
-                          ),
-
-                          const SizedBox(height: 24),
-                          _filterSectionLabel('Categories'),
-                          Wrap(
-                            spacing: 8, runSpacing: 8,
-                            children: viewCache.availableCategories.map((c) => _buildFilterChip(
-                              label: c,
-                              selected: tempCategories.contains(c),
-                              onSelected: (s) {
-                                HapticService().selection();
-                                setModalState(() => s ? tempCategories.add(c) : tempCategories.remove(c));
-                              },
-                            )).toList(),
-                          ),
-
-                          const SizedBox(height: 24),
-                          _filterSectionLabel('Features'),
-                          _buildFilterChip(
-                            label: 'Tasbih-linked only',
-                            selected: tempTasbihOnly,
-                            onSelected: (s) {
-                              HapticService().selection();
-                              setModalState(() => tempTasbihOnly = s);
-                            },
-                          ),
-
-                          const SizedBox(height: 40),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                HapticService().light();
-                                setState(() {
-                                  _selectedFrequencies..clear()..addAll(tempFrequencies);
-                                  _selectedDifficulties..clear()..addAll(tempDifficulties);
-                                  _selectedCategories..clear()..addAll(tempCategories);
-                                  _tasbihOnly = tempTasbihOnly;
-                                });
-                                Navigator.of(sheetContext).pop();
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.spiritualGold.withValues(alpha: 0.2),
-                                foregroundColor: AppColors.spiritualGold,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  side: BorderSide(color: AppColors.spiritualGold.withValues(alpha: 0.4), width: 0.5),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: Text('Apply Filters', style: AppTextStyles.body(color: AppColors.spiritualGold).copyWith(fontWeight: FontWeight.bold)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+  Widget _buildError(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              "Sunnahs couldn't load",
+              style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.85), weight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            Pressable(
+              onTap: () => context.read<SunnahBloc>().add(LoadSunnahs()),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(AppRadii.pill),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 0.5),
                 ),
+                child: Text('Try again', style: AppTextStyles.small(color: Colors.white, weight: FontWeight.w600)),
               ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
+}
 
-  // --- UI: Details Sheet ---
+// ─────────────────── Dhikr ───────────────────
 
-  void _openSunnahSheet(BuildContext context, Sunnah sunnah) {
-    HapticService().light();
-    final isDhikrLinked = _tasbihLaunchForSunnah(sunnah) != null;
-    final detailText = _detailDescription(sunnah);
-    final currentState = context.read<SunnahBloc>().state;
-    final practicedToday =
-        currentState is SunnahLoaded &&
-            currentState.progress.isPracticedToday(sunnah.id);
+/// Compact way into the dhikr section: tapping the card opens the hub, the
+/// play button starts the session that suits the time of day.
+class _DhikrCard extends StatefulWidget {
+  const _DhikrCard();
 
-    final size = MediaQuery.sizeOf(context);
-    final isSmallPhone = size.width < 360;
+  @override
+  State<_DhikrCard> createState() => _DhikrCardState();
+}
 
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (sheetContext) {
-        return ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-            child: Container(
-              padding: EdgeInsets.fromLTRB(isSmallPhone ? 20 : 24, 12, isSmallPhone ? 20 : 24, 40),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.15), width: 0.5)),
-              ),
-              child: SafeArea(
-                top: false,
-                child: SingleChildScrollView(
+class _DhikrCardState extends State<_DhikrCard> {
+  // Which session is "now" can change after one is finished; refresh on return.
+  Future<void> _open(Future<void> Function() push) async {
+    await push();
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<PrayerBloc, PrayerState>(
+      buildWhen: (a, b) => a.runtimeType != b.runtimeType || (a is PrayerLoaded && b is PrayerLoaded && a.prayerPeriod != b.prayerPeriod),
+      builder: (context, _) {
+        final now = DhikrCatalog.session(DhikrNav.nowSessionId(context))!;
+        return Pressable(
+          onTap: () => _open(() => DhikrNav.openHub(context)),
+          pressedScale: 0.98,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(AppRadii.group),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Center(
-                        child: Container(
-                          width: 40, height: 4,
-                          decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2)),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // Category Tag
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.spiritualGold.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3), width: 0.5),
-                            ),
-                            child: Text(
-                              sunnah.category.toUpperCase(),
-                              style: AppTextStyles.tiny(color: AppColors.spiritualGold).copyWith(letterSpacing: 1.0, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      Text(sunnah.title, style: AppTextStyles.h2(color: Colors.white).copyWith(fontSize: isSmallPhone ? 20 : 24)),
-                      const SizedBox(height: 16),
-
-                      _buildMetaRow(sunnah),
-                      const SizedBox(height: 24),
-
-                      // Description
+                      Text('Dhikr', style: AppTextStyles.body(color: Colors.white, weight: FontWeight.w600)),
                       Text(
-                        detailText,
-                        style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.9)).copyWith(height: 1.6),
-                      ),
-
-                      // Elegant Arabic Section
-                      if (sunnah.arabic != null) ...[
-                        const SizedBox(height: 24),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.03),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                sunnah.arabic!,
-                                textDirection: TextDirection.rtl,
-                                textAlign: TextAlign.center,
-                                style: AppTextStyles.arabic(
-                                  size: isSmallPhone ? 24 : 28,
-                                  color: AppColors.spiritualGold.withValues(alpha: 0.9),
-                                ).copyWith(
-                                  height: 1.8,
-                                ),
-                              ),
-                              if (sunnah.translation != null) ...[
-                                const SizedBox(height: 16),
-                                Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 40),
-                                  height: 1,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(colors: [Colors.transparent, Colors.white.withValues(alpha: 0.2), Colors.transparent]),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  '“${sunnah.translation!}”',
-                                  textAlign: TextAlign.center,
-                                  style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7)).copyWith(fontStyle: FontStyle.italic),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-
-                      const SizedBox(height: 24),
-
-                      // Reference
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.menu_book_rounded, color: Colors.white.withValues(alpha: 0.4), size: 18),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _referenceText(sunnah),
-                              style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 40),
-
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.of(sheetContext).pop();
-                                _markSunnahPracticed(context, sunnah);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: practicedToday
-                                    ? AppColors.statusOnTime.withValues(alpha: 0.15)
-                                    : Colors.white.withValues(alpha: 0.05),
-                                foregroundColor: practicedToday ? AppColors.statusOnTime : Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                  side: BorderSide(
-                                    color: practicedToday
-                                        ? AppColors.statusOnTime.withValues(alpha: 0.4)
-                                        : Colors.white.withValues(alpha: 0.1),
-                                    width: 0.5,
-                                  ),
-                                ),
-                                elevation: 0,
-                              ),
-                              icon: Icon(
-                                practicedToday ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded,
-                                size: 18,
-                              ),
-                              label: Text(
-                                practicedToday ? 'Done Today' : 'Mark Practiced',
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                          if (isDhikrLinked) const SizedBox(width: 12),
-                          if (isDhikrLinked)
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(sheetContext).pop();
-                                  _openTasbih(context, sunnah: sunnah);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.spiritualGold.withValues(alpha: 0.2),
-                                  foregroundColor: AppColors.spiritualGold,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16),
-                                    side: BorderSide(color: AppColors.spiritualGold.withValues(alpha: 0.4), width: 0.5),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                icon: const Icon(Icons.touch_app_rounded, size: 18),
-                                label: const Text(
-                                  'Start Tasbih',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                        ],
+                        'Now · ${now.name}',
+                        style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.6)),
                       ),
                     ],
                   ),
                 ),
-              ),
+                Semantics(
+                  button: true,
+                  label: 'Start ${now.name}',
+                  child: Pressable(
+                    onTap: () => _open(() => DhikrNav.openSession(context, now.id)),
+                    pressedScale: 0.88,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.spiritualGold.withValues(alpha: 0.16),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.play_arrow_rounded, size: 20, color: AppColors.spiritualGold),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
       },
     );
   }
+}
 
-  // --- Helper Widgets & Methods ---
+// ─────────────────── This week ───────────────────
 
-  Widget _filterSectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12, left: 4),
-      child: Text(
-        text.toUpperCase(),
-        style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)).copyWith(fontWeight: FontWeight.bold, letterSpacing: 1),
-      ),
-    );
-  }
+class _WeeklyCard extends StatelessWidget {
+  final Sunnah sunnah;
+  final SunnahProgress progress;
 
-  Widget _buildFilterChip({
-    required String label,
-    required bool selected,
-    required ValueChanged<bool> onSelected,
-  }) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      onSelected: onSelected,
-      showCheckmark: false, // Removed checkmark for cleaner look
-      selectedColor: AppColors.spiritualGold.withValues(alpha: 0.2),
-      backgroundColor: Colors.white.withValues(alpha: 0.05),
-      labelStyle: AppTextStyles.small(
-        color: selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.7),
-      ).copyWith(fontWeight: selected ? FontWeight.bold : FontWeight.normal),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: selected ? AppColors.spiritualGold.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.1),
-          width: 0.5,
+  const _WeeklyCard({required this.sunnah, required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final inPractice = progress.isInPractice(sunnah.id);
+    final reference = SunnahFormat.shortReference(sunnah);
+
+    return Pressable(
+      onTap: () => showSunnahDetailSheet(context, sunnah),
+      pressedScale: 0.98,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 6, 6),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppColors.spiritualGold.withValues(alpha: 0.12),
+              AppColors.spiritualGold.withValues(alpha: 0.04),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2), width: 0.5),
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          layoutBuilder: (current, previous) => Stack(
+            alignment: Alignment.topLeft,
+            children: [...previous, if (current != null) current],
+          ),
+          child: Column(
+            key: ValueKey(sunnah.id),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'This week',
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.6)).copyWith(letterSpacing: 1),
+                    ),
+                  ),
+                  Pressable(
+                    onTap: () => context.read<SunnahBloc>().add(SkipWeeklySunnah()),
+                    haptic: PressableHaptic.selection,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.refresh_rounded, size: 14, color: Colors.white.withValues(alpha: 0.55)),
+                          const SizedBox(width: 4),
+                          Text('Another', style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.55))),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 2),
+                    Text(
+                      sunnah.title,
+                      style: AppTextStyles.bodyLarge(color: AppColors.spiritualGold, weight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      SunnahFormat.description(sunnah),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.75)).copyWith(height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      reference,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)),
+                    ),
+                  ),
+                  if (inPractice)
+                    SunnahCheck(
+                      done: progress.isPracticedToday(sunnah.id),
+                      onTap: () => context.read<SunnahBloc>().add(ToggleSunnahToday(sunnah.id)),
+                    )
+                  else
+                    Pressable(
+                      onTap: () => context.read<SunnahBloc>().add(ToggleSunnahPractice(sunnah.id)),
+                      haptic: PressableHaptic.light,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 14, 10, 14),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.add_rounded, size: 16, color: AppColors.spiritualGold),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Add to my practice',
+                              style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
   }
+}
 
-  Widget _buildMetaRow(Sunnah sunnah) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        _metaPill(_difficultyLabel(sunnah.difficulty), _difficultyColor(sunnah.difficulty)),
-        _metaPill(_frequencyLabel(sunnah.frequency), Colors.white.withValues(alpha: 0.8)),
-      ],
-    );
-  }
+// ─────────────────── Your practice ───────────────────
 
-  Widget _metaPill(String label, Color color) {
+class _PracticeList extends StatelessWidget {
+  final List<Sunnah> sunnahs;
+  final SunnahProgress progress;
+
+  const _PracticeList({required this.sunnahs, required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.5),
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(AppRadii.group),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
       ),
-      child: Text(
-        label,
-        style: AppTextStyles.tiny(color: color).copyWith(fontWeight: FontWeight.w600),
+      child: Column(
+        children: [
+          for (var i = 0; i < sunnahs.length; i++) ...[
+            if (i > 0)
+              Divider(height: 1, thickness: 0.5, indent: 16, color: Colors.white.withValues(alpha: 0.07)),
+            _PracticeRow(sunnah: sunnahs[i], done: progress.isPracticedToday(sunnahs[i].id)),
+          ],
+        ],
       ),
     );
   }
+}
 
-  // --- Existing Utility Methods (Unchanged) ---
+class _PracticeRow extends StatelessWidget {
+  final Sunnah sunnah;
+  final bool done;
 
-  void _openTasbih(BuildContext context, {Sunnah? sunnah}) {
-    final launch = sunnah != null ? _tasbihLaunchForSunnah(sunnah) : null;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => TasbihScreen(
-          initialTasbihId: launch?.initialTasbihId,
-          initialQuery: launch?.initialQuery ?? sunnah?.title,
-          initialFlow: launch?.initialFlow,
-          sourceSunnah: sunnah,
+  const _PracticeRow({required this.sunnah, required this.done});
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: () => showSunnahDetailSheet(context, sunnah),
+      pressedScale: 0.98,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 4),
+        child: Row(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AnimatedDefaultTextStyle(
+                      duration: const Duration(milliseconds: 220),
+                      style: AppTextStyles.body(
+                        color: Colors.white.withValues(alpha: done ? 0.6 : 0.95),
+                        weight: FontWeight.w500,
+                      ),
+                      child: Text(sunnah.title, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      SunnahFormat.shortCategory(sunnah.category),
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.45)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SunnahCheck(
+              done: done,
+              semanticLabel: '${sunnah.title}, done today',
+              onTap: () => context.read<SunnahBloc>().add(ToggleSunnahToday(sunnah.id)),
+            ),
+          ],
         ),
       ),
     );
   }
+}
 
-  String _referenceText(Sunnah sunnah) {
-    final parts = <String>[sunnah.reference['book'] ?? 'Hadith Reference'];
-    if (sunnah.reference['hadith']?.isNotEmpty ?? false) parts.add(sunnah.reference['hadith']!);
-    if (sunnah.reference['narrator']?.isNotEmpty ?? false) parts.add('Narrated by ${sunnah.reference['narrator']}');
-    if (sunnah.reference['grade']?.isNotEmpty ?? false) parts.add('Grade: ${sunnah.reference['grade']}');
-    return parts.join(' • ');
-  }
+class _PracticeEmpty extends StatelessWidget {
+  const _PracticeEmpty();
 
-  String _shortReference(String? hadith) {
-    if (hadith == null || hadith.isEmpty) return 'Reference';
-    final collapsed = hadith.replaceAll(', ', ' · ');
-    return collapsed.length <= 26 ? collapsed : '${collapsed.substring(0, 23)}...';
-  }
-
-  String _tileSubtitle(Sunnah sunnah) {
-    final detail = _detailDescription(sunnah);
-    if (detail == sunnah.description) return detail;
-    final hadith = sunnah.reference['hadith'];
-    return (hadith != null && hadith.isNotEmpty) ? 'Hadith: $hadith' : detail;
-  }
-
-  String _detailDescription(Sunnah sunnah) {
-    final titleNorm = _normalizeText(sunnah.title);
-    final description = sunnah.description.trim();
-    if (_normalizeText(description).startsWith(titleNorm)) {
-      final hadith = sunnah.reference['hadith'];
-      return (hadith != null && hadith.isNotEmpty) ? 'Mentioned in $hadith.' : description;
-    }
-    return description;
-  }
-
-  String _normalizeText(String text) => text.toLowerCase().replaceAll(RegExp(r'[^a-z0-9 ]+'), '').replaceAll(RegExp(r'\s+'), ' ').trim();
-
-  void _showAppSnackBar(BuildContext context, {required String message, IconData? icon}) {
-    GlassSnackBar.show(
-      context,
-      message: message,
-      icon: icon,
-    );
-  }
-
-  String _weekLabel() {
-    final now = DateTime.now();
-    final monday = now.subtract(Duration(days: now.weekday - 1));
-    return 'Week of ${_formatDate(monday)}';
-  }
-
-  String _formatDate(DateTime date) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${months[date.month - 1]} ${date.day}, ${date.year}';
-  }
-
-  Map<String, List<Sunnah>> _groupSunnahsByCategory(List<Sunnah> sunnahs) {
-    final grouped = <String, List<Sunnah>>{};
-    for (final sunnah in sunnahs) {
-      grouped.putIfAbsent(sunnah.category, () => []).add(sunnah);
-    }
-    final sortedKeys = grouped.keys.toList()..sort((a, b) => _categorySortIndex(a).compareTo(_categorySortIndex(b)));
-    return {for (var k in sortedKeys) k: grouped[k]!..sort((a, b) => a.title.compareTo(b.title))};
-  }
-
-  bool _isCategoryExpanded(String category) => _expandAll || _expandedCategories.contains(category);
-
-  void _toggleCategory(String category) {
-    setState(() {
-      _expandAll = false;
-      _expandedCategories.contains(category) ? _expandedCategories.remove(category) : _expandedCategories.add(category);
-    });
-  }
-
-  void _toggleExpandAll(Map<String, List<Sunnah>> grouped) {
-    setState(() {
-      _expandAll = !_expandAll;
-      _expandAll ? _expandedCategories.addAll(grouped.keys) : _expandedCategories.clear();
-    });
-  }
-
-  String _sectionTypeSummary(List<Sunnah> sunnahs) {
-    final ordered = [SunnahFrequency.daily, SunnahFrequency.weekly, SunnahFrequency.monthly, SunnahFrequency.occasional];
-    final available = ordered.where((f) => sunnahs.any((s) => s.frequency == f)).map(_frequencyLabel).toList();
-    return available.isEmpty ? '${sunnahs.length} sunnahs' : '${sunnahs.length} sunnahs · ${available.join(', ')}';
-  }
-
-  int _categorySortIndex(String category) {
-    const order = {
-      'Dhikr & Azkar': -1, 'Eating & Drinking': 0, 'Personal Hygiene': 1, 'Social Etiquette': 2, 'Social Etiquette & Character': 2,
-      'Sleep & Waking': 3, 'Masjid & Prayer': 4, 'Fasting': 5, 'Family & Relationships': 6,
-      'Charity & Generosity': 7, 'Knowledge': 8, 'Knowledge & Dhikr': 8, 'Travel': 9, 'Miscellaneous': 10, 'Miscellaneous Daily Sunnahs': 10
-    };
-    return order[category] ?? 100;
-  }
-
-  IconData _iconForCategory(String category) {
-    switch (category) {
-      case 'Dhikr & Azkar': return Icons.fingerprint_rounded;
-      case 'Eating & Drinking': return Icons.restaurant_rounded;
-      case 'Personal Hygiene': return Icons.spa_outlined;
-      case 'Social Etiquette': case 'Social Etiquette & Character': return Icons.handshake_outlined;
-      case 'Sleep & Waking': return Icons.nightlight_round;
-      case 'Masjid & Prayer': return Icons.mosque_outlined;
-      case 'Fasting': return Icons.dark_mode_outlined;
-      case 'Family & Relationships': return Icons.family_restroom_outlined;
-      case 'Charity & Generosity': return Icons.volunteer_activism_outlined;
-      case 'Knowledge': case 'Knowledge & Dhikr': return Icons.menu_book_rounded;
-      case 'Travel': return Icons.flight_takeoff_rounded;
-      default: return Icons.auto_awesome_outlined;
-    }
-  }
-
-  String _difficultyLabel(SunnahDifficulty d) {
-    switch (d) { case SunnahDifficulty.easy: return 'Easy'; case SunnahDifficulty.medium: return 'Medium'; case SunnahDifficulty.advanced: return 'Advanced'; }
-  }
-
-  Color _difficultyColor(SunnahDifficulty d) {
-    switch (d) { case SunnahDifficulty.easy: return const Color(0xFF73D38A); case SunnahDifficulty.medium: return const Color(0xFFFFC266); case SunnahDifficulty.advanced: return const Color(0xFFFF8C8C); }
-  }
-
-  String _frequencyLabel(SunnahFrequency f) {
-    switch (f) { case SunnahFrequency.daily: return 'Daily'; case SunnahFrequency.weekly: return 'Weekly'; case SunnahFrequency.monthly: return 'Monthly'; case SunnahFrequency.occasional: return 'Occasional'; }
-  }
-
-  _TasbihLaunch? _tasbihLaunchForSunnah(Sunnah sunnah) {
-    final cached = _viewCache?.tasbihLaunchById[sunnah.id];
-    if (cached != null) return cached;
-    return _tasbihLaunchForSunnahDirect(sunnah);
-  }
-
-  static _TasbihLaunch? _tasbihLaunchForSunnahDirect(Sunnah sunnah) {
-    if (sunnah.tasbihId == null) return null;
-
-    String? flowId;
-    final titleLower = sunnah.title.toLowerCase();
-    if (titleLower.contains('fatimah')) {
-      flowId = 'fatimah';
-    } else if (titleLower.contains('before sleep') || titleLower.contains('before-sleep')) {
-      flowId = 'before_sleep';
-    } else if (titleLower.contains('after prayer') || titleLower.contains('after salah')) {
-      flowId = 'after_prayer';
-    }
-    return _TasbihLaunch(
-      initialTasbihId: sunnah.tasbihId!,
-      initialQuery: sunnah.title,
-      initialFlow: flowId,
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(AppRadii.group),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
+      ),
+      child: Text(
+        'Choose a few sunnahs to bring back into your days. Open any one from the library and add it to your practice, then tick it off as you go.',
+        style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)).copyWith(height: 1.5),
+      ),
     );
   }
 }
 
-class _TasbihLaunch {
-  final String initialTasbihId;
-  final String? initialQuery;
-  final String? initialFlow;
-  const _TasbihLaunch({required this.initialTasbihId, this.initialQuery, this.initialFlow});
-}
+// ─────────────────── Library ───────────────────
 
-class _SunnahViewCache {
-  final List<Sunnah> remaining;
-  final Map<String, List<Sunnah>> grouped;
-  final List<MapEntry<String, List<Sunnah>>> groupedEntries;
-  final List<String> availableCategories;
-  final Map<String, _TasbihLaunch?> tasbihLaunchById;
+class _LibraryRow extends StatelessWidget {
+  final Sunnah sunnah;
+  final bool showCategory;
+  final bool inPractice;
+  final bool doneToday;
 
-  const _SunnahViewCache({
-    required this.remaining,
-    required this.grouped,
-    required this.groupedEntries,
-    required this.availableCategories,
-    required this.tasbihLaunchById,
+  const _LibraryRow({
+    required this.sunnah,
+    required this.showCategory,
+    required this.inPractice,
+    required this.doneToday,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final reference = SunnahFormat.shortReference(sunnah);
+    final caption = showCategory
+        ? [SunnahFormat.shortCategory(sunnah.category), if (reference.isNotEmpty) reference].join(' · ')
+        : reference;
+
+    return Pressable(
+      onTap: () => showSunnahDetailSheet(context, sunnah),
+      pressedScale: 0.975,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    sunnah.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.95), weight: FontWeight.w500),
+                  ),
+                  if (caption.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.45)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (doneToday || inPractice) ...[
+              const SizedBox(width: 10),
+              Icon(
+                doneToday ? Icons.check_circle_rounded : Icons.bookmark_rounded,
+                size: 18,
+                color: AppColors.spiritualGold.withValues(alpha: doneToday ? 0.9 : 0.7),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _CategoryPill({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.65);
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Pressable(
+        onTap: onTap,
+        haptic: PressableHaptic.selection,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.spiritualGold.withValues(alpha: 0.14) : Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(AppRadii.pill),
+            border: Border.all(
+              color: selected ? AppColors.spiritualGold.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08),
+              width: 0.5,
+            ),
+          ),
+          child: Text(label, style: AppTextStyles.small(color: color, weight: selected ? FontWeight.w600 : FontWeight.w500)),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  final double horizontalPadding;
+  final String? trailing;
+
+  const _SectionLabel({required this.text, required this.horizontalPadding, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(horizontalPadding + 4, 28, horizontalPadding + 4, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              text,
+              style: AppTextStyles.tiny(color: AppColors.spiritualGold.withValues(alpha: 0.8))
+                  .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (trailing != null)
+            Text(trailing!, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.55))),
+        ],
+      ),
+    );
+  }
 }

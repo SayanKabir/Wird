@@ -7,7 +7,7 @@ import '../../../widgets/common/glass_snackbar.dart';
 import '../../../widgets/common/glass_sheet.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/constants/colors.dart';
-import '../../../core/constants/effects.dart';
+import '../../../core/services/device_profile.dart';
 import '../../../core/constants/spacing.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
@@ -151,7 +151,7 @@ class SettingsScreenState extends State<SettingsScreen> {
       context: context,
       title: 'Reset settings?',
       subtitle: 'Every preference goes back to its default. Your location, '
-          'prayer history and bookmarks are kept.',
+          'notification switches, prayer history and bookmarks are kept.',
       child: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.xl, AppSpacing.md, AppSpacing.xl, AppSpacing.xl),
         child: Builder(
@@ -179,22 +179,25 @@ class SettingsScreenState extends State<SettingsScreen> {
 
     if (confirmed != true || !mounted) return;
     HapticService().medium();
-    // Keep what isn't a preference: where the user is and that they've been
-    // through onboarding.
-    await _saveSettings(AppSettings(
+    // Restore preferences, but keep what isn't a preference: where the
+    // user is, that onboarding is done, and the notification switches
+    // (turning those on needs a permission prompt and schedules alarms).
+    // Reduce motion and Performance go back to the device-based default.
+    final restored = AppSettings.defaults().copyWith(
       location: _settings.location,
       onboardingCompleted: _settings.onboardingCompleted,
-    ));
-    if (!mounted) return;
-    try {
-      final sunnah = await context.read<SunnahRepository>().getWeeklySunnah();
-      await _notificationService.scheduleWeeklySunnahReminder(sunnah.title);
-      await _notificationService.scheduleSpecialDayNotification();
-    } catch (e) {
-      debugPrint('Error rescheduling reminders after reset: $e');
-    }
+      notificationsEnabled: _settings.notificationsEnabled,
+      sunnahNotificationsEnabled: _settings.sunnahNotificationsEnabled,
+      islamicEventsEnabled: _settings.islamicEventsEnabled,
+    );
+    await _saveSettings(restored);
     if (mounted) {
-      GlassSnackBar.show(context, message: 'Settings restored to defaults', icon: Icons.restore_rounded);
+      GlassSnackBar.show(
+        context,
+        message: 'Settings restored to defaults',
+        icon: Icons.restore_rounded,
+        bottomMargin: GlassSnackBar.aboveNavBar,
+      );
     }
   }
 
@@ -202,6 +205,7 @@ class SettingsScreenState extends State<SettingsScreen> {
     if (mounted) {
       GlassSnackBar.show(
         context,
+        bottomMargin: GlassSnackBar.aboveNavBar,
         message: message,
         isError: true,
       );
@@ -454,6 +458,7 @@ class SettingsScreenState extends State<SettingsScreen> {
               [
                 _PerformanceModePicker(
                   mode: mode,
+                  autoNote: mode == PerformanceMode.auto ? DeviceProfile.instance.reason : null,
                   onChanged: (m) => _saveSettings(_settings.copyWith(performanceMode: m.key)),
                 ),
                 _SettingRow(
@@ -475,12 +480,19 @@ class SettingsScreenState extends State<SettingsScreen> {
                   value: _settings.showWeatherWidget,
                   onChanged: (v) => _saveSettings(_settings.copyWith(showWeatherWidget: v)),
                 ),
+                // Only steers the Auto level; a manual Performance choice wins.
                 _SwitchRow(
                   icon: Icons.motion_photos_off_rounded,
                   title: 'Reduce motion',
-                  subtitle: 'Still the sky and skip animations',
-                  value: _settings.reduceMotion,
-                  onChanged: (v) => _saveSettings(_settings.copyWith(reduceMotion: v)),
+                  subtitle: _reduceMotionSubtitle(mode),
+                  value: lighterVisuals(),
+                  // Flipping it makes the choice the user's own, so the
+                  // device-based default stops applying.
+                  onChanged: mode == PerformanceMode.auto
+                      ? (v) => _saveSettings(
+                            _settings.copyWith(reduceMotion: v, reduceMotionUserSet: true),
+                          )
+                      : null,
                 ),
                 _SwitchRow(
                   icon: Icons.vibration_rounded,
@@ -515,6 +527,17 @@ class SettingsScreenState extends State<SettingsScreen> {
   }
 
   // --- Helper Methods ---
+
+  String _reduceMotionSubtitle(PerformanceMode mode) {
+    const base = 'Lighter animations and effects for smoother performance';
+    if (DeviceProfile.instance.animationsOff) {
+      return '$base. Kept to fades because system animations are off';
+    }
+    if (mode != PerformanceMode.auto) return 'Set by Performance: ${mode.label}';
+    if (_settings.reduceMotionUserSet) return base;
+    final reason = DeviceProfile.instance.reason;
+    return reason == null ? base : '$base. $reason';
+  }
 
   PrayerNotificationSettings _alertSettingsFor(Prayer prayer) =>
       _settings.notificationSettings[prayer.name] ??
@@ -699,7 +722,7 @@ class _GlassSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(AppSpacing.radiusLg);
-    final blur = AppEffects.blur;
+    final blur = !lighterVisuals();
 
     Widget body = AnimatedContainer(
       duration: const Duration(milliseconds: 350),
@@ -832,7 +855,9 @@ class _SwitchRow extends StatelessWidget {
   final String title;
   final String? subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+
+  /// Null shows the switch disabled.
+  final ValueChanged<bool>? onChanged;
 
   /// Nested under a parent row (the per-prayer alerts): no icon, indented.
   final bool indent;
@@ -890,7 +915,10 @@ class _PerformanceModePicker extends StatelessWidget {
   final PerformanceMode mode;
   final ValueChanged<PerformanceMode> onChanged;
 
-  const _PerformanceModePicker({required this.mode, required this.onChanged});
+  /// On Auto, why lighter visuals are currently on (e.g. Battery Saver).
+  final String? autoNote;
+
+  const _PerformanceModePicker({required this.mode, required this.onChanged, this.autoNote});
 
   @override
   Widget build(BuildContext context) {
@@ -929,16 +957,14 @@ class _PerformanceModePicker extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(vertical: 9),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: m == mode ? AppColors.spiritualGold.withValues(alpha: 0.18) : Colors.transparent,
+                          color: m == mode ? Colors.white.withValues(alpha: 0.16) : Colors.transparent,
                           borderRadius: BorderRadius.circular(9),
-                          border: Border.all(
-                            color: m == mode ? AppColors.spiritualGold.withValues(alpha: 0.45) : Colors.transparent,
-                          ),
                         ),
                         child: Text(
                           m.label,
+                          maxLines: 1,
                           style: AppTextStyles.small(
-                            color: m == mode ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.6),
+                            color: m == mode ? Colors.white : Colors.white.withValues(alpha: 0.55),
                             weight: FontWeight.w600,
                           ),
                         ),
@@ -952,8 +978,8 @@ class _PerformanceModePicker extends StatelessWidget {
           AnimatedSwitcher(
             duration: AppDurations.normal,
             child: Text(
-              mode.description,
-              key: ValueKey(mode),
+              autoNote == null ? mode.description : '${mode.description} $autoNote.',
+              key: ValueKey('$mode$autoNote'),
               style: AppTextStyles.small(color: Colors.white54),
             ),
           ),

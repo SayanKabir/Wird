@@ -1,6 +1,18 @@
 import 'package:equatable/equatable.dart';
 
+/// Everything the user has done with sunnahs, stored as a plain map in Hive.
+///
+/// The original fields (points, streaks, counts, last day per sunnah) are kept
+/// as they were so existing progress carries over. Fields added for the
+/// reworked section:
+/// - [practiceIds]: the handful of sunnahs the user has chosen to keep.
+/// - [practiceLog]: which sunnahs were done on which day, so a tick can be
+///   undone cleanly.
+/// - [streakBeforeToday], [longestBeforeToday], [lastDateBeforeToday]: the
+///   streak as it stood before today's first tick, restored if every tick of
+///   today is undone.
 class SunnahProgress extends Equatable {
+  /// No longer awarded or shown; kept only so old data round-trips unchanged.
   final int totalPoints;
   final int currentStreak;
   final int longestStreak;
@@ -8,6 +20,11 @@ class SunnahProgress extends Equatable {
   final String? lastPracticeDateKey;
   final Map<String, int> practiceCountsBySunnah;
   final Map<String, String> lastPracticedDayBySunnah;
+  final List<String> practiceIds;
+  final Map<String, List<String>> practiceLog;
+  final int? streakBeforeToday;
+  final int? longestBeforeToday;
+  final String? lastDateBeforeToday;
 
   const SunnahProgress({
     required this.totalPoints,
@@ -17,6 +34,11 @@ class SunnahProgress extends Equatable {
     this.lastPracticeDateKey,
     required this.practiceCountsBySunnah,
     required this.lastPracticedDayBySunnah,
+    this.practiceIds = const <String>[],
+    this.practiceLog = const <String, List<String>>{},
+    this.streakBeforeToday,
+    this.longestBeforeToday,
+    this.lastDateBeforeToday,
   });
 
   factory SunnahProgress.empty() {
@@ -30,49 +52,65 @@ class SunnahProgress extends Equatable {
     );
   }
 
-  int get level => (totalPoints ~/ 100) + 1;
-  int get pointsIntoLevel => totalPoints % 100;
-  double get levelProgress => pointsIntoLevel / 100.0;
   int get uniqueSunnahsPracticed => practiceCountsBySunnah.length;
 
   bool isPracticedToday(String sunnahId, {DateTime? now}) {
-    final key = _dateKey(now ?? DateTime.now());
+    final key = dateKey(now ?? DateTime.now());
     return lastPracticedDayBySunnah[sunnahId] == key;
   }
 
-  List<String> get unlockedBadges {
-    final badges = <String>[];
-    if (totalPracticeActions >= 1) badges.add('Starter');
-    if (currentStreak >= 7 || longestStreak >= 7) badges.add('7-Day Flame');
-    if (uniqueSunnahsPracticed >= 10) badges.add('Explorer');
-    if (currentStreak >= 30 || longestStreak >= 30) badges.add('Reviver');
-    if (totalPoints >= 1000) badges.add('Master');
-    return badges;
+  bool isInPractice(String sunnahId) => practiceIds.contains(sunnahId);
+
+  /// The streak as it should read right now: one whose last day is neither
+  /// today nor yesterday has already lapsed.
+  int liveStreak({DateTime? now}) {
+    final today = now ?? DateTime.now();
+    final last = lastPracticeDateKey;
+    if (last == null) return 0;
+    if (last == dateKey(today) ||
+        last == dateKey(today.subtract(const Duration(days: 1)))) {
+      return currentStreak;
+    }
+    return 0;
   }
 
+  /// Nullable fields take a closure so they can be explicitly cleared.
   SunnahProgress copyWith({
-    int? totalPoints,
     int? currentStreak,
     int? longestStreak,
     int? totalPracticeActions,
-    String? lastPracticeDateKey,
+    String? Function()? lastPracticeDateKey,
     Map<String, int>? practiceCountsBySunnah,
     Map<String, String>? lastPracticedDayBySunnah,
+    List<String>? practiceIds,
+    Map<String, List<String>>? practiceLog,
+    int? Function()? streakBeforeToday,
+    int? Function()? longestBeforeToday,
+    String? Function()? lastDateBeforeToday,
   }) {
     return SunnahProgress(
-      totalPoints: totalPoints ?? this.totalPoints,
+      totalPoints: totalPoints,
       currentStreak: currentStreak ?? this.currentStreak,
       longestStreak: longestStreak ?? this.longestStreak,
       totalPracticeActions: totalPracticeActions ?? this.totalPracticeActions,
-      lastPracticeDateKey: lastPracticeDateKey ?? this.lastPracticeDateKey,
+      lastPracticeDateKey:
+          lastPracticeDateKey != null ? lastPracticeDateKey() : this.lastPracticeDateKey,
       practiceCountsBySunnah:
           practiceCountsBySunnah ?? this.practiceCountsBySunnah,
       lastPracticedDayBySunnah:
           lastPracticedDayBySunnah ?? this.lastPracticedDayBySunnah,
+      practiceIds: practiceIds ?? this.practiceIds,
+      practiceLog: practiceLog ?? this.practiceLog,
+      streakBeforeToday:
+          streakBeforeToday != null ? streakBeforeToday() : this.streakBeforeToday,
+      longestBeforeToday:
+          longestBeforeToday != null ? longestBeforeToday() : this.longestBeforeToday,
+      lastDateBeforeToday:
+          lastDateBeforeToday != null ? lastDateBeforeToday() : this.lastDateBeforeToday,
     );
   }
 
-  static String _dateKey(DateTime date) {
+  static String dateKey(DateTime date) {
     return '${date.year}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
@@ -87,6 +125,11 @@ class SunnahProgress extends Equatable {
         lastPracticeDateKey,
         ..._sortedMapEntries(practiceCountsBySunnah),
         ..._sortedMapEntries(lastPracticedDayBySunnah),
+        practiceIds.join(','),
+        ..._sortedMapEntries(practiceLog.map((k, v) => MapEntry(k, v.join(',')))),
+        streakBeforeToday,
+        longestBeforeToday,
+        lastDateBeforeToday,
       ];
 
   static List<String> _sortedMapEntries(Map<String, Object> map) {
@@ -96,4 +139,3 @@ class SunnahProgress extends Equatable {
     return entries;
   }
 }
-

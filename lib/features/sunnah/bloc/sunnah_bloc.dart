@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/repositories/sunnah_progress_repository.dart';
@@ -16,7 +17,8 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
         _progressRepository = progressRepository,
         super(SunnahLoading()) {
     on<LoadSunnahs>(_onLoadSunnahs);
-    on<MarkSunnahPracticed>(_onMarkSunnahPracticed);
+    on<ToggleSunnahToday>(_onToggleToday);
+    on<ToggleSunnahPractice>(_onTogglePractice);
     on<SkipWeeklySunnah>(_onSkipWeeklySunnah);
   }
 
@@ -54,20 +56,34 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
     }
   }
 
-  Future<void> _onMarkSunnahPracticed(
-    MarkSunnahPracticed event,
+  Future<void> _onToggleToday(
+    ToggleSunnahToday event,
     Emitter<SunnahState> emit,
   ) async {
     final current = state;
     if (current is! SunnahLoaded) return;
 
     try {
-      final updatedProgress = await _progressRepository.markPracticed(
-        event.sunnahId,
-      );
-      emit(current.copyWith(progress: updatedProgress));
+      final updated = await _progressRepository.toggleToday(event.sunnahId);
+      emit(current.copyWith(progress: updated));
     } catch (e) {
-      emit(SunnahError(e.toString()));
+      // Keep the screen as it was; the tick simply doesn't land.
+      debugPrint('[SunnahBloc] toggleToday failed: $e');
+    }
+  }
+
+  Future<void> _onTogglePractice(
+    ToggleSunnahPractice event,
+    Emitter<SunnahState> emit,
+  ) async {
+    final current = state;
+    if (current is! SunnahLoaded) return;
+
+    try {
+      final updated = await _progressRepository.togglePractice(event.sunnahId);
+      emit(current.copyWith(progress: updated));
+    } catch (e) {
+      debugPrint('[SunnahBloc] togglePractice failed: $e');
     }
   }
 

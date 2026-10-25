@@ -1,42 +1,39 @@
 import '../../models/settings.dart';
+import '../services/device_profile.dart';
 import '../services/storage_service.dart';
 
-/// What the current [PerformanceMode] allows the UI to do.
+/// What the current visuals level allows the UI to do.
 ///
-/// Widgets ask here rather than reading the setting themselves, so what "Lite"
-/// means is decided in one place:
+/// The level itself comes from [motionMode], which weighs the device profile,
+/// Reduce motion and the Performance choice in Settings. This adds the one
+/// distinction motionMode doesn't make: Balanced keeps the full effects but
+/// skips entrance motion.
 ///
-/// | Mode     | Frosted glass | Living sky | Entrance motion |
-/// |----------|---------------|------------|-----------------|
-/// | Lite     | no            | no         | no              |
-/// | Balanced | yes           | yes        | no              |
-/// | Smooth   | yes           | yes        | yes             |
+/// | Level            | Frosted glass | Living sky | Entrance motion |
+/// |------------------|---------------|------------|-----------------|
+/// | Lite (or still)  | no            | no         | no              |
+/// | Balanced         | yes           | yes        | no              |
+/// | Smooth / Auto*   | yes           | yes        | yes             |
 ///
-/// The separate Reduce Motion switch is an accessibility preference and also
-/// stills the sky and entrance motion, whatever the mode.
+/// *Auto behaves as Lite on weak devices and under Battery Saver.
 class AppEffects {
   AppEffects._();
 
-  static AppSettings get _settings {
+  static PerformanceMode get mode {
     try {
-      return StorageService().getSettings();
+      return PerformanceMode.fromKey(StorageService().getSettings().performanceMode);
     } catch (_) {
-      return const AppSettings();
+      return PerformanceMode.auto;
     }
   }
 
-  static PerformanceMode get mode =>
-      PerformanceMode.fromKey(_settings.performanceMode);
-
-  /// Whether surfaces may use a [BackdropFilter]. Each one costs an offscreen
-  /// gaussian pass per frame, which is what makes older phones stutter.
-  static bool get blur => mode != PerformanceMode.lite;
+  /// Whether surfaces may use a live BackdropFilter.
+  static bool get blur => !lighterVisuals();
 
   /// Whether the sky, weather particles and other ambient loops may animate.
-  static bool get ambientMotion =>
-      mode != PerformanceMode.lite && !_settings.reduceMotion;
+  static bool get ambientMotion => !lighterVisuals();
 
   /// Whether content may fade and slide in as a page opens.
   static bool get entranceMotion =>
-      mode == PerformanceMode.smooth && !_settings.reduceMotion;
+      !lighterVisuals() && mode != PerformanceMode.balanced;
 }

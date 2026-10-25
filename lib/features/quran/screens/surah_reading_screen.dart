@@ -28,6 +28,10 @@ import '../widgets/surah_info_modal.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../bloc/quran_bloc.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/glass_snackbar.dart';
+import '../../../core/constants/radii.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -556,46 +560,11 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
 
     context.read<QuranBloc>().add(SaveBookmark(bookmark));
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        behavior: SnackBarBehavior.floating,
-        padding: EdgeInsets.zero,
-        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-        content: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.15), width: 0.5),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.spiritualGold.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.bookmark_rounded, color: AppColors.spiritualGold, size: 18),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Bookmarked verse ${verse.verseNumber}',
-                    style: AppTextStyles.small(color: Colors.white).copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
+    GlassSnackBar.show(
+      context,
+      message: 'Bookmarked verse ${verse.verseNumber}',
+      icon: Icons.bookmark_rounded,
+      duration: const Duration(seconds: 2),
     );
 
     HapticService().medium();
@@ -775,7 +744,9 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
           ),
                     leadingWidth: 64,
                     leading: Center(
-                      child: GestureDetector(
+                      child: Pressable(
+                        pressedScale: 0.88,
+                        haptic: PressableHaptic.none,
                         onTap: () {
                           HapticService().light();
                           Navigator.of(context).pop();
@@ -789,7 +760,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     ),
                     actions: [
                       if (SurahInfoLocalRepository().getInfo(widget.surahId) != null) ...[
-                        GestureDetector(
+                        Pressable(
+                          pressedScale: 0.88,
                           onTap: () => _showSurahInfoModal(SurahInfoLocalRepository().getInfo(widget.surahId)!, isSmallPhone),
                           child: Container(
                             padding: EdgeInsets.all(isSmallPhone ? 6 : 8),
@@ -799,7 +771,8 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                         ),
                         const SizedBox(width: 12),
                       ],
-                      GestureDetector(
+                      Pressable(
+                        pressedScale: 0.88,
                         onTap: () => _showSettingsSheet(isSmallPhone),
                         child: Container(
                           padding: EdgeInsets.all(isSmallPhone ? 6 : 8),
@@ -819,7 +792,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     // to preserve legibility, which keeps the look at a
                     // fraction of the per-frame cost.
                     flexibleSpace: ClipRect(
-                      child: BackdropFilter(
+                      child: AppBackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                         child: Container(
                           color: Colors.black.withValues(alpha: 0.28), // Dark glass tint for readability
@@ -978,7 +951,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                                 backgroundColor: Colors.white.withValues(alpha: 0.1),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.card)),
                               ),
                             ),
                           ],
@@ -1220,7 +1193,9 @@ class _VerseCard extends StatelessWidget {
                     ),
                   )
                 else
-                  GestureDetector(
+                  Pressable(
+                    pressedScale: 0.88,
+                    haptic: PressableHaptic.none,
                     onTap: () {
                       HapticService().light();
                       onMore();
@@ -1453,9 +1428,10 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
   Widget build(BuildContext context) {
     final small = widget.isSmallPhone;
     return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      child: BackdropFilter(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(AppRadii.sheet)),
+      child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        fallbackTint: AppBackdropFilter.sheetTint,
         child: Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.88),
           decoration: BoxDecoration(

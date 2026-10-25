@@ -23,13 +23,16 @@ class TasbihAdapter extends TypeAdapter<Tasbih> {
       targetCount: fields[3] as int,
       totalCount: fields[4] as int,
       lastUpdated: fields[5] as DateTime,
+      completedRounds: (fields[6] as int?) ?? 0,
+      dayCount: (fields[7] as int?) ?? 0,
+      todayKey: fields[8] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Tasbih obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(9)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -41,7 +44,13 @@ class TasbihAdapter extends TypeAdapter<Tasbih> {
       ..writeByte(4)
       ..write(obj.totalCount)
       ..writeByte(5)
-      ..write(obj.lastUpdated);
+      ..write(obj.lastUpdated)
+      ..writeByte(6)
+      ..write(obj.completedRounds)
+      ..writeByte(7)
+      ..write(obj.dayCount)
+      ..writeByte(8)
+      ..write(obj.todayKey);
   }
 
   @override

@@ -9,6 +9,9 @@ import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/location_off_prompt.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/pressable.dart';
+import '../../../core/constants/radii.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -108,7 +111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               backgroundColor: Colors.transparent,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(24),
-                child: BackdropFilter(
+                child: AppBackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                   child: Container(
                     padding: const EdgeInsets.all(24),
@@ -405,7 +408,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     // Glass Card for Status
                     ClipRRect(
                       borderRadius: BorderRadius.circular(20),
-                      child: BackdropFilter(
+                      child: AppBackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                         child: Container(
                           padding: const EdgeInsets.all(24),
@@ -578,7 +581,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     if (_location != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(20),
-                        child: BackdropFilter(
+                        child: AppBackdropFilter(
                           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                           child: Container(
                             padding: const EdgeInsets.all(24),
@@ -640,7 +643,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     required VoidCallback onTap,
     bool compact = false,
   }) {
-    return GestureDetector(
+    return Pressable(
+      pressedScale: 0.96,
+      haptic: PressableHaptic.none,
       onTap: () {
         HapticService().light();
         onTap();
@@ -771,7 +776,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 backgroundColor: AppColors.spiritualGold,
                 foregroundColor: Colors.black,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.pill)),
               ),
               child: _isLoading
                   ? const PremiumFlowingLoader(size: 20, color: Colors.black)
