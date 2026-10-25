@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:wird2/widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/repositories/sunnah_repository.dart';
+import '../../../core/services/device_profile.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
@@ -27,6 +28,7 @@ import '../../../core/quran/transliterator.dart';
 import '../../../core/repositories/quran_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 
 class SettingsScreen extends StatefulWidget {
@@ -145,8 +147,9 @@ class SettingsScreenState extends State<SettingsScreen> {
         insetPadding: const EdgeInsets.symmetric(horizontal: 24),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
+          child: AppBackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            fallbackTint: AppBackdropFilter.sheetTint,
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -609,10 +612,13 @@ class SettingsScreenState extends State<SettingsScreen> {
                   _buildDivider(),
                   _buildSwitchRow(
                     title: "Reduce Motion",
-                    subtitle: "Minimise animation across the app",
-                    value: _settings.reduceMotion,
-                    onChanged: (v) =>
-                        _saveSettings(_settings.copyWith(reduceMotion: v)),
+                    subtitle: _reduceMotionSubtitle(),
+                    value: lighterVisuals(),
+                    // Flipping it makes the choice the user's own, so the
+                    // device-based default stops applying.
+                    onChanged: (v) => _saveSettings(
+                      _settings.copyWith(reduceMotion: v, reduceMotionUserSet: true),
+                    ),
                   ),
                 ]),
               ),
@@ -671,7 +677,7 @@ class SettingsScreenState extends State<SettingsScreen> {
   Widget _buildLocationCard() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
+      child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           padding: const EdgeInsets.all(20),
@@ -743,7 +749,7 @@ class SettingsScreenState extends State<SettingsScreen> {
   Widget _buildGlassSection(List<Widget> children) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
+      child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12), // Higher blur
         child: Container(
           decoration: BoxDecoration(
@@ -804,6 +810,16 @@ class SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  String _reduceMotionSubtitle() {
+    const base = "Lighter animations and effects for smoother performance";
+    if (DeviceProfile.instance.animationsOff) {
+      return "$base. Kept to fades because system animations are off";
+    }
+    if (_settings.reduceMotionUserSet) return base;
+    final reason = DeviceProfile.instance.reason;
+    return reason == null ? base : "$base. $reason";
   }
 
   Widget _buildSwitchRow({
@@ -894,8 +910,9 @@ class SettingsScreenState extends State<SettingsScreen> {
       barrierColor: Colors.black.withOpacity(0.6), // Darken background
       builder: (context) => ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
+        child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          fallbackTint: AppBackdropFilter.sheetTint,
           child: Container(
             padding: const EdgeInsets.only(top: 8),
             decoration: BoxDecoration(

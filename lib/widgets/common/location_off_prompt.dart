@@ -7,6 +7,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/text_styles.dart';
 import '../../core/services/location_service.dart';
 import 'glass_snackbar.dart';
+import 'app_backdrop_filter.dart';
 
 /// Follow-up when device location is still off after [LocationService]
 /// asked for it.
@@ -38,8 +39,9 @@ Future<void> showLocationOffPrompt(BuildContext context) async {
       insetPadding: const EdgeInsets.symmetric(horizontal: 24),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
+        child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          fallbackTint: AppBackdropFilter.sheetTint,
           child: Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(

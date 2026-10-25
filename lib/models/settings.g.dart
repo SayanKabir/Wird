@@ -133,13 +133,14 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       hapticsEnabled: fields[23] == null ? true : fields[23] as bool,
       quranTransliterationScript:
           fields[24] == null ? 'latin' : fields[24] as String,
+      reduceMotionUserSet: fields[25] == null ? false : fields[25] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(25)
+      ..writeByte(26)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -189,7 +190,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(23)
       ..write(obj.hapticsEnabled)
       ..writeByte(24)
-      ..write(obj.quranTransliterationScript);
+      ..write(obj.quranTransliterationScript)
+      ..writeByte(25)
+      ..write(obj.reduceMotionUserSet);
   }
 
   @override

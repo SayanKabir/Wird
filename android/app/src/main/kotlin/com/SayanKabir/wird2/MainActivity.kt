@@ -1,8 +1,12 @@
 package com.SayanKabir.wird2
 
+import android.app.ActivityManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.Display
 import com.google.android.gms.common.api.ResolvableApiException
 import com.google.android.gms.location.LocationRequest
@@ -26,6 +30,36 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "deviceProfile" -> result.success(deviceProfile())
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    /**
+     * What the device can comfortably do, so the app can default to its
+     * lighter visuals on weak hardware: memory, the system's own low-RAM
+     * flag, CPU cores, and the two system settings that ask apps to calm
+     * down (Battery Saver and "Remove animations").
+     */
+    private fun deviceProfile(): Map<String, Any> {
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val mem = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        val animatorScale = Settings.Global.getFloat(
+            contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f
+        )
+        return mapOf(
+            "totalRamMb" to (mem.totalMem / (1024 * 1024)).toInt(),
+            "isLowRamDevice" to am.isLowRamDevice,
+            "cpuCores" to Runtime.getRuntime().availableProcessors(),
+            "sdkInt" to Build.VERSION.SDK_INT,
+            "powerSave" to power.isPowerSaveMode,
+            "animationsOff" to (animatorScale == 0f),
+        )
     }
 
     /**
@@ -75,6 +109,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val LOCATION_CHANNEL = "com.SayanKabir.wird2/location"
+        private const val DEVICE_CHANNEL = "com.SayanKabir.wird2/device"
         private const val LOCATION_SETTINGS_REQUEST = 7301
     }
 

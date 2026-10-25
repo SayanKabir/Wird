@@ -13,9 +13,10 @@ import '../../../widgets/common/pressable.dart';
 /// The fold only applies on a side that has more content beyond it, so text
 /// at rest (scrolled to the top, or too short to scroll) sits flat.
 ///
-/// With reduce motion on, nothing tilts: the edges with more content simply
-/// fade out (a static mask), so text still never ends in a hard cut, and the
-/// scroll stops without bouncing.
+/// The fold costs an offscreen layer per word, so with lighter visuals the
+/// edges with more content get a single gradient mask instead: text still
+/// fades rather than ending in a hard cut, and the scroll keeps its bounce
+/// (which only stops when the system asks for no animation).
 ///
 /// Wrap text in [FoldText] (or single widgets in [Fold]) to take part: each
 /// word folds on its own, so a long paragraph curls away line by line.
@@ -56,14 +57,15 @@ class _FoldingScrollViewState extends State<FoldingScrollView> {
 
   @override
   Widget build(BuildContext context) {
-    final reduced = reduceMotionEnabled();
+    final mode = motionMode();
     final scroll = SingleChildScrollView(
       controller: _controller,
-      physics: reduced ? const ClampingScrollPhysics() : const BouncingScrollPhysics(),
+      // The bounce is cheap, so it stays in lite mode.
+      physics: mode == MotionMode.still ? const ClampingScrollPhysics() : const BouncingScrollPhysics(),
       padding: widget.padding,
       child: widget.child,
     );
-    if (!reduced) return _FoldScope(controller: _controller, child: scroll);
+    if (mode == MotionMode.full) return _FoldScope(controller: _controller, child: scroll);
 
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: (n) => _onMetrics(n.metrics),
@@ -281,7 +283,7 @@ class _RippleTapAreaState extends State<RippleTapArea> with TickerProviderStateM
   void _down(TapDownDetails d) {
     widget.onTap();
     setState(() => _pressed = true);
-    if (reduceMotionEnabled()) return;
+    if (motionStill()) return;
 
     final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 650));
     final ripple = _Ripple(d.localPosition, controller);
@@ -318,7 +320,7 @@ class _RippleTapAreaState extends State<RippleTapArea> with TickerProviderStateM
           fit: StackFit.expand,
           children: [
             AnimatedScale(
-              scale: _pressed && !reduceMotionEnabled() ? 0.975 : 1,
+              scale: _pressed && !motionStill() ? 0.975 : 1,
               duration: const Duration(milliseconds: 90),
               curve: Curves.easeOut,
               child: widget.child,
@@ -376,7 +378,7 @@ class TickingNumber extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (reduceMotionEnabled()) return Text('$value', style: style);
+    if (motionStill()) return Text('$value', style: style);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
       switchInCurve: Curves.easeOutCubic,

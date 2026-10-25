@@ -25,6 +25,7 @@ import '../../../models/quran_bookmark.dart';
 import '../widgets/surah_info_modal.dart';
 import '../bloc/quran_bloc.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -231,8 +232,9 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
         margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
         content: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
+          child: AppBackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            fallbackTint: AppBackdropFilter.sheetTint,
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -456,7 +458,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                     // to preserve legibility, which keeps the look at a
                     // fraction of the per-frame cost.
                     flexibleSpace: ClipRect(
-                      child: BackdropFilter(
+                      child: AppBackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                         child: Container(
                           color: Colors.black.withValues(alpha: 0.28), // Dark glass tint for readability
@@ -877,8 +879,9 @@ class _VerseCard extends StatelessWidget {
       barrierColor: Colors.black.withValues(alpha: 0.5),
       builder: (sheetCtx) => ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
+        child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          fallbackTint: AppBackdropFilter.sheetTint,
           child: Container(
             padding: EdgeInsets.fromLTRB(isSmallPhone ? 20 : 24, 12, isSmallPhone ? 20 : 24, isSmallPhone ? 32 : 40),
             decoration: BoxDecoration(
@@ -1131,8 +1134,9 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
     final small = widget.isSmallPhone;
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-      child: BackdropFilter(
+      child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        fallbackTint: AppBackdropFilter.sheetTint,
         child: Container(
           constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.88),
           decoration: BoxDecoration(

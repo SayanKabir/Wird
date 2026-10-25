@@ -55,7 +55,7 @@ class SunnahCheck extends StatelessWidget {
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 220),
               switchInCurve: Curves.easeOutBack,
-              transitionBuilder: (child, animation) => reduceMotionEnabled()
+              transitionBuilder: (child, animation) => motionStill()
                   ? FadeTransition(opacity: animation, child: child)
                   : ScaleTransition(scale: animation, child: child),
               child: done

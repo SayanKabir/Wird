@@ -9,6 +9,7 @@ import '../../../models/prayer_log.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../tasbih/screens/session_screen.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 class PrayerCard extends StatefulWidget {
   final Prayer prayer;
@@ -85,7 +86,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       margin: const EdgeInsets.only(bottom: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: BackdropFilter(
+        child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
           child: GestureDetector(
             onTap: _toggleExpand,

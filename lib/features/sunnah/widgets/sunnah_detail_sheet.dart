@@ -12,6 +12,7 @@ import '../../../widgets/common/pressable.dart';
 import '../bloc/sunnah_bloc.dart';
 import 'sunnah_check.dart';
 import 'sunnah_format.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 /// Opens the detail sheet for [sunnah]. Its controls act in place: ticking it
 /// or adding it to the practice updates the sheet and the screen behind it,
@@ -45,8 +46,9 @@ class SunnahDetailSheet extends StatelessWidget {
       constraints: BoxConstraints(maxHeight: size.height * 0.88),
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        child: BackdropFilter(
+        child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+          fallbackTint: AppBackdropFilter.sheetTint,
           child: Container(
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.25),

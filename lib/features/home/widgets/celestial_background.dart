@@ -11,6 +11,9 @@ import 'package:wird2/features/home/widgets/weather_overlay.dart';
 class CelestialBackground extends StatefulWidget {
   final PrayerPeriod prayerPeriod;
   final bool reduceMotion;
+
+  /// Lighter visuals: the sky keeps moving but steps at a lower rate.
+  final bool lite;
   final Widget child;
   final WeatherCondition weatherCondition;
   final int cloudCoverage;
@@ -23,6 +26,7 @@ class CelestialBackground extends StatefulWidget {
     required this.prayerPeriod,
     required this.child,
     this.reduceMotion = false,
+    this.lite = false,
     this.weatherCondition = WeatherCondition.clear,
     this.cloudCoverage = 0,
     this.latitude = 0.0,
@@ -217,6 +221,7 @@ class _CelestialBackgroundState extends State<CelestialBackground>
                 condition: widget.weatherCondition,
                 cloudCoverage: widget.cloudCoverage,
                 reduceMotion: widget.reduceMotion,
+                lite: widget.lite,
                 isNight: _isNightTime(widget.prayerPeriod),
               ),
 

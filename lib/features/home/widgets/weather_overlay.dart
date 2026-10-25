@@ -10,11 +10,15 @@ class WeatherOverlay extends StatelessWidget {
   final int cloudCoverage; // 0-100
   final bool reduceMotion;
 
+  /// Lighter visuals: clouds step at a lower rate.
+  final bool lite;
+
   const WeatherOverlay({
     super.key,
     required this.condition,
     this.cloudCoverage = 0,
     this.reduceMotion = false,
+    this.lite = false,
     this.isNight = false,
   });
 
@@ -36,6 +40,7 @@ class WeatherOverlay extends StatelessWidget {
               child: _CloudOverlay(
                 cloudCoverage: cloudCoverage,
                 reduceMotion: reduceMotion,
+                lite: lite,
               ),
             ),
 
@@ -80,10 +85,12 @@ class WeatherOverlay extends StatelessWidget {
 class _CloudOverlay extends StatefulWidget {
   final int cloudCoverage;
   final bool reduceMotion;
+  final bool lite;
 
   const _CloudOverlay({
     required this.cloudCoverage,
     required this.reduceMotion,
+    this.lite = false,
   });
 
   @override
@@ -107,12 +114,16 @@ class _CloudOverlayState extends State<_CloudOverlay>
   /// smooth for a soft-edged blurred shape — while cutting the paint rate by 6x.
   static const double _stepSeconds = 1 / 20;
 
+  /// In lighter visuals there are no blurs above to re-rasterise, and ~10fps
+  /// still reads as a slow drift for these soft shapes.
+  static const double _liteStepSeconds = 1 / 10;
+
   @override
   void initState() {
     super.initState();
     _ticker = createTicker((elapsed) {
       final next = elapsed.inMilliseconds / 1000.0;
-      if (next - _time < _stepSeconds) return;
+      if (next - _time < (widget.lite ? _liteStepSeconds : _stepSeconds)) return;
       setState(() => _time = next);
     });
 

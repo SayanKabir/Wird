@@ -10,6 +10,7 @@ import '../../../core/dhikr/dhikr_catalog.dart';
 import '../../../models/tasbih.dart';
 import '../../../widgets/common/pressable.dart';
 import '../bloc/tasbih_bloc.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 /// Frosted bottom-sheet frame shared by the dhikr sheets.
 class DhikrSheetFrame extends StatelessWidget {
@@ -21,8 +22,9 @@ class DhikrSheetFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-      child: BackdropFilter(
+      child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        fallbackTint: AppBackdropFilter.sheetTint,
         child: Container(
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.3),

@@ -26,6 +26,7 @@ import 'models/surah.dart';
 import 'models/verse.dart';
 import 'models/quran_bookmark.dart';
 import 'models/quran_progress.dart';
+import 'core/services/device_profile.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +34,9 @@ void main() async {
   // Initialize services
   final storageService = StorageService();
   await storageService.init();
+
+  // Decides the default for Reduce motion on this device.
+  await DeviceProfile.instance.init();
 
   final notificationService = NotificationService();
   await notificationService.init();

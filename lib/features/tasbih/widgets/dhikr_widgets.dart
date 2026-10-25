@@ -29,7 +29,8 @@ class DhikrBackdrop extends StatelessWidget {
         final settings = StorageService().getSettings();
         return CelestialBackground(
           prayerPeriod: _period(prayerState),
-          reduceMotion: settings.reduceMotion,
+          reduceMotion: motionStill(),
+          lite: lighterVisuals(),
           weatherCondition: _condition(settings.weatherTheme),
           cloudCoverage: _clouds(settings.weatherTheme),
           latitude: settings.location?.latitude ?? 0.0,
@@ -254,7 +255,8 @@ class DhikrRing extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final full = progress >= 1;
-    final still = reduceMotionEnabled();
+    final still = motionStill();
+    final glow = !lighterVisuals();
     return TweenAnimationBuilder<double>(
       key: ValueKey(full ? pulseKey : null),
       tween: Tween(begin: full && !still ? 1.06 : 1, end: 1),
@@ -269,7 +271,7 @@ class DhikrRing extends StatelessWidget {
           duration: still ? Duration.zero : const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
           builder: (context, value, _) => CustomPaint(
-            painter: _RingPainter(value, stroke: size < 160 ? 7 : 10),
+            painter: _RingPainter(value, stroke: size < 160 ? 7 : 10, glow: glow),
             child: Center(child: child),
           ),
         ),
@@ -282,7 +284,10 @@ class _RingPainter extends CustomPainter {
   final double progress;
   final double stroke;
 
-  _RingPainter(this.progress, {required this.stroke});
+  /// The soft blurred halo on a full ring; skipped in lighter visuals.
+  final bool glow;
+
+  _RingPainter(this.progress, {required this.stroke, required this.glow});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -302,7 +307,7 @@ class _RingPainter extends CustomPainter {
 
     final sweep = math.pi * 2 * progress;
     final full = progress >= 1;
-    if (full) {
+    if (full && glow) {
       canvas.drawCircle(
         center,
         radius,
@@ -337,7 +342,7 @@ class _RingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_RingPainter old) => old.progress != progress || old.stroke != stroke;
+  bool shouldRepaint(_RingPainter old) => old.progress != progress || old.stroke != stroke || old.glow != glow;
 }
 
 /// Quiet text action ("Undo", "Skip step") that dims when it can't act.

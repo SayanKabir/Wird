@@ -207,7 +207,7 @@ class _SessionScreenState extends State<SessionScreen> {
             switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
               // With reduce motion, steps simply cross-fade.
-              if (reduceMotionEnabled()) return FadeTransition(opacity: animation, child: child);
+              if (motionStill()) return FadeTransition(opacity: animation, child: child);
               final incoming = child.key == ValueKey(_step);
               final dir = (_movedForward ? 1 : -1) * (incoming ? 1 : -1);
               return FadeTransition(
@@ -305,7 +305,7 @@ class _SessionScreenState extends State<SessionScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TweenAnimationBuilder<double>(
-                    tween: Tween(begin: reduceMotionEnabled() ? 1 : 0.6, end: 1),
+                    tween: Tween(begin: motionStill() ? 1 : 0.6, end: 1),
                     duration: const Duration(milliseconds: 420),
                     curve: Curves.easeOutBack,
                     builder: (context, v, child) => Transform.scale(scale: v, child: child),
@@ -418,7 +418,7 @@ class _Beads extends StatelessWidget {
           // Re-keyed when filled so the pop plays once, as the bead lands.
           TweenAnimationBuilder<double>(
             key: ValueKey('$i${i < done}'),
-            tween: Tween(begin: i < done && !reduceMotionEnabled() ? 1.3 : 1, end: 1),
+            tween: Tween(begin: i < done && !motionStill() ? 1.3 : 1, end: 1),
             duration: const Duration(milliseconds: 420),
             curve: Curves.elasticOut,
             builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
@@ -435,7 +435,7 @@ class _Beads extends StatelessWidget {
                   color: i < done ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.4),
                   width: 1.5,
                 ),
-                boxShadow: i < done
+                boxShadow: i < done && !lighterVisuals()
                     ? [BoxShadow(color: AppColors.spiritualGold.withValues(alpha: 0.45), blurRadius: 12)]
                     : null,
               ),

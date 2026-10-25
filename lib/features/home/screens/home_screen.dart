@@ -31,8 +31,10 @@ import '../../../models/settings.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../tasbih/screens/session_screen.dart';
+import '../../../core/services/device_profile.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/glass_snackbar.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -347,7 +349,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         : 0,
                 // The background widgets have always supported this, but nothing
                 // ever supplied it, so the setting had no effect.
-                reduceMotion: settings.reduceMotion,
+                reduceMotion: motionStill(),
+                lite: lighterVisuals(),
                 latitude: _latitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
                 child: Scaffold(
@@ -427,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       padding: const EdgeInsets.only(bottom: 4),
       child: ClipRRect(
           borderRadius: BorderRadius.circular(32), // High curvature for capsule shape
-          child: BackdropFilter(
+          child: AppBackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
             child: Container(
               height: containerHeight,
@@ -510,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
+          child: AppBackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -776,7 +779,7 @@ class _DashboardView extends StatelessWidget {
               // Start Glassmorphism implementation
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(16),
-                child: BackdropFilter(
+                child: AppBackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
                   child: Container(
                     padding: const EdgeInsets.symmetric(

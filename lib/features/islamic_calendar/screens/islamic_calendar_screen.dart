@@ -12,6 +12,7 @@ import '../../../core/utils/islamic_day_utils.dart';
 import '../../../widgets/common/string_lights_overlay.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 class IslamicCalendarScreen extends StatefulWidget {
   final DateTime? initialDate;
@@ -366,8 +367,9 @@ class _MaghribInfoPill extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
         content: ClipRRect(
           borderRadius: BorderRadius.circular(16),
-          child: BackdropFilter(
+          child: AppBackdropFilter(
             filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+            fallbackTint: AppBackdropFilter.sheetTint,
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(

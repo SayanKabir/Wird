@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'app_backdrop_filter.dart';
 
 /// A reusable container that implements the glassmorphism effect
 class GlassContainer extends StatelessWidget {
@@ -60,7 +61,7 @@ class GlassContainer extends StatelessWidget {
     );
 
     if (shouldBlur) {
-      glassContent = BackdropFilter(
+      glassContent = AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
         child: glassContent,
       );

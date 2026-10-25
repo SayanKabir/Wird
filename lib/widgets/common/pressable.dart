@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/constants/durations.dart';
 import '../../core/services/haptic_service.dart';
-import '../../core/services/storage_service.dart';
+import '../../core/services/device_profile.dart';
+
+export '../../core/services/device_profile.dart' show MotionMode, motionMode, lighterVisuals, motionStill;
 
 /// Wraps a tappable element so it responds to touch instead of sitting inert:
 /// it scales down slightly while held and springs back on release, and fires the
@@ -48,20 +50,13 @@ class Pressable extends StatefulWidget {
 
 enum PressableHaptic { none, selection, light, medium, heavy }
 
-/// Whether the user has turned on "Reduce motion" in Settings. Read at build
-/// time, so screens opened after the toggle pick it up.
-bool reduceMotionEnabled() {
-  try {
-    return StorageService().getSettings().reduceMotion;
-  } catch (_) {
-    return false;
-  }
-}
 
 class _PressableState extends State<Pressable> {
   bool _pressed = false;
 
-  bool get _reduceMotion => reduceMotionEnabled();
+  // The press scale is a cheap transform, so it stays in lite mode and only
+  // stops when the system asks for no animation at all.
+  bool get _reduceMotion => motionStill();
 
   void _setPressed(bool value) {
     if (_pressed == value) return;

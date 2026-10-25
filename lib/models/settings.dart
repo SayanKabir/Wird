@@ -393,7 +393,9 @@ class AppSettings extends Equatable {
   @HiveField(8)
   final bool dynamicBackground;
 
-  /// Whether to reduce motion for accessibility
+  /// Whether to reduce motion. Only meaningful once [reduceMotionUserSet]
+  /// is true; until then the app decides from the device (see
+  /// DeviceProfile), so read the effective value via lighterVisuals()/motionMode().
   @HiveField(9)
   final bool reduceMotion;
 
@@ -457,6 +459,11 @@ class AppSettings extends Equatable {
   @HiveField(24, defaultValue: 'latin')
   final String quranTransliterationScript;
 
+  /// True once the user has flipped Reduce motion themselves; from then on
+  /// their [reduceMotion] choice wins over the device-based default.
+  @HiveField(25, defaultValue: false)
+  final bool reduceMotionUserSet;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -483,6 +490,7 @@ class AppSettings extends Equatable {
     this.quranSelectedScript = QuranScript.indopak,
     this.hapticsEnabled = true,
     this.quranTransliterationScript = 'latin',
+    this.reduceMotionUserSet = false,
   });
 
   /// Default settings
@@ -517,6 +525,7 @@ class AppSettings extends Equatable {
     QuranScript? quranSelectedScript,
     bool? hapticsEnabled,
     String? quranTransliterationScript,
+    bool? reduceMotionUserSet,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -544,6 +553,7 @@ class AppSettings extends Equatable {
       quranSelectedScript: quranSelectedScript ?? this.quranSelectedScript,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       quranTransliterationScript: quranTransliterationScript ?? this.quranTransliterationScript,
+      reduceMotionUserSet: reduceMotionUserSet ?? this.reduceMotionUserSet,
     );
   }
 
@@ -573,6 +583,7 @@ class AppSettings extends Equatable {
     quranSelectedScript,
     hapticsEnabled,
     quranTransliterationScript,
+    reduceMotionUserSet,
   ];
 }
 

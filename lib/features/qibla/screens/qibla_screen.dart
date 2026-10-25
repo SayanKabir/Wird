@@ -8,6 +8,7 @@ import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/app_backdrop_filter.dart';
 
 /// Qibla compass screen with Celestial Zen design
 class QiblaScreen extends StatefulWidget {
@@ -371,7 +372,7 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
   Widget _buildCalibrationBadge() {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
+      child: AppBackdropFilter(
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
