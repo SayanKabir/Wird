@@ -180,9 +180,10 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
         ),
       ),
       alignment: Alignment.center,
-      child: Text(
+      child: Icon(
         widget.prayer.iconForDay(widget.date),
-        style: const TextStyle(fontSize: 22),
+        size: 22,
+        color: iconColor,
       ),
     );
   }

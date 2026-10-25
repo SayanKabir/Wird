@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:hive/hive.dart';
 
 part 'prayer.g.dart';
@@ -87,25 +88,27 @@ extension PrayerExtension on Prayer {
     }
   }
 
-  /// Get the emoji icon for this prayer
-  String get icon {
+  /// Icon for this prayer, following the sun through the day. Material
+  /// rounded icons rather than emoji, which rendered differently on every
+  /// phone and couldn't take the card's tint.
+  IconData get icon {
     switch (this) {
       case Prayer.tahajjud:
-        return '🌙';
+        return Icons.nights_stay_rounded;
       case Prayer.fajr:
-        return '🌅';
+        return Icons.wb_twilight_rounded;
       case Prayer.ishraq:
-        return '☀️';
+        return Icons.light_mode_outlined;
       case Prayer.duha:
-        return '🌤️';
+        return Icons.light_mode_rounded;
       case Prayer.dhuhr:
-        return '☀️';
+        return Icons.wb_sunny_rounded;
       case Prayer.asr:
-        return '🌤️';
+        return Icons.brightness_6_rounded;
       case Prayer.maghrib:
-        return '🌆';
+        return Icons.nightlight_round;
       case Prayer.isha:
-        return '🌙';
+        return Icons.dark_mode_rounded;
     }
   }
 
@@ -142,9 +145,9 @@ extension PrayerExtension on Prayer {
   }
 
   /// Get icon for Friday
-  String iconForDay(DateTime date) {
+  IconData iconForDay(DateTime date) {
     if (this == Prayer.dhuhr && date.weekday == DateTime.friday) {
-      return '🕌';
+      return Icons.mosque_rounded;
     }
     return icon;
   }

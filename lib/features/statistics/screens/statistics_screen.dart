@@ -640,7 +640,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               color: Colors.white.withValues(alpha: 0.05),
               shape: BoxShape.circle,
             ),
-            child: Text(prayer.icon, style: const TextStyle(fontSize: 20)),
+            child: Icon(prayer.icon, size: 20, color: Colors.white.withValues(alpha: 0.8)),
           ),
           const SizedBox(width: 16),
           Expanded(
