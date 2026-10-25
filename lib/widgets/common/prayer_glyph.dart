@@ -12,7 +12,7 @@ import '../../models/prayer.dart';
 ///
 /// Drawn on a canvas in one colour, so it takes the card's tint like a normal
 /// [Icon]. Pass [animate] for the current prayer: the glyph then breathes in a
-/// slow four-second loop (stars twinkle, rays turn, the sun rises or sinks a
+/// slow three-second loop (stars twinkle, rays turn, the sun rises or sinks a
 /// little). Everything else draws a single still frame, and the loop never
 /// runs when the system's "Remove animations" is on.
 class PrayerGlyph extends StatefulWidget {
@@ -63,7 +63,7 @@ _Glyph _glyphFor(Prayer prayer, DateTime? date) {
 class _PrayerGlyphState extends State<PrayerGlyph> with SingleTickerProviderStateMixin {
   late final AnimationController _loop = AnimationController(
     vsync: this,
-    duration: const Duration(seconds: 4),
+    duration: const Duration(seconds: 3),
   );
 
   @override
@@ -139,45 +139,45 @@ class _GlyphPainter extends CustomPainter {
     switch (glyph) {
       case _Glyph.tahajjud:
         _crescent(canvas, p(0.42, 0.56), s * 0.3, fill);
-        _sparkle(canvas, p(0.76, 0.26), s * 0.13, fill, 0.35 + 0.65 * _wave);
-        _sparkle(canvas, p(0.84, 0.62), s * 0.08, fill, 0.35 + 0.65 * _wave2);
+        _sparkle(canvas, p(0.76, 0.26), s * (0.09 + 0.07 * _wave), fill, 0.2 + 0.8 * _wave);
+        _sparkle(canvas, p(0.84, 0.62), s * (0.05 + 0.05 * _wave2), fill, 0.2 + 0.8 * _wave2);
 
       case _Glyph.fajr:
         const horizon = 0.72;
-        final rise = 0.04 * _wave;
+        final rise = 0.1 * _wave;
         // Half the sun shows above the horizon, with a gap at the line.
         final sun = p(0.5, horizon - 0.06 - rise);
         canvas.save();
         canvas.clipRect(Rect.fromLTRB(0, 0, s, (horizon - 0.08) * s));
         canvas.drawCircle(sun, s * 0.2, stroke);
         canvas.restore();
-        _rays(canvas, sun, s * 0.29, s * (0.07 + 0.04 * _wave), stroke,
+        _rays(canvas, sun, s * 0.29, s * (0.03 + 0.09 * _wave), stroke,
             count: 5, from: -165, to: -15);
         canvas.drawLine(p(0.1, horizon), p(0.9, horizon), stroke);
 
       case _Glyph.ishraq:
-        final lift = 0.03 * _wave;
+        final lift = 0.08 * _wave;
         // Fully risen, clear of the horizon; rays only fan upward.
         canvas.drawCircle(p(0.5, 0.52 - lift), s * 0.16, stroke);
-        _rays(canvas, p(0.5, 0.52 - lift), s * 0.25, s * (0.06 + 0.04 * _wave), stroke,
+        _rays(canvas, p(0.5, 0.52 - lift), s * 0.25, s * (0.03 + 0.08 * _wave), stroke,
             count: 5, from: -180, to: 0);
         canvas.drawLine(p(0.14, 0.86), p(0.86, 0.86), stroke);
 
       case _Glyph.duha:
         canvas.drawCircle(p(0.5, 0.5), s * 0.17, stroke);
-        _rays(canvas, p(0.5, 0.5), s * 0.27, s * 0.1, stroke,
+        _rays(canvas, p(0.5, 0.5), s * 0.27, s * (0.05 + 0.07 * _wave), stroke,
             count: 8, from: 0, to: 315, rotate: t.value * 45);
 
       case _Glyph.dhuhr:
         canvas.drawCircle(p(0.5, 0.5), s * 0.18, fill);
-        _rays(canvas, p(0.5, 0.5), s * 0.28, s * 0.13, stroke,
+        _rays(canvas, p(0.5, 0.5), s * 0.28, s * (0.07 + 0.08 * _wave), stroke,
             count: 8, from: 0, to: 315, rotate: t.value * 45);
 
       case _Glyph.asr:
         // The cloud sits in front of the sun, so it is cut out of the sun
         // before its own outline is drawn: all inside one layer, so the cut
         // never punches through to the card behind.
-        final drift = s * 0.05 * (_wave - 0.5);
+        final drift = s * 0.16 * (_wave - 0.5);
         canvas.saveLayer(Offset.zero & size, Paint());
         canvas.drawCircle(p(0.62, 0.36), s * 0.15, stroke);
         _rays(canvas, p(0.62, 0.36), s * 0.24, s * 0.08, stroke, count: 5, from: -180, to: 0);
@@ -195,7 +195,7 @@ class _GlyphPainter extends CustomPainter {
 
       case _Glyph.maghrib:
         const horizon = 0.6;
-        final sink = 0.05 * _wave;
+        final sink = 0.11 * _wave;
         canvas.save();
         canvas.clipRect(Rect.fromLTRB(0, 0, s, (horizon - 0.08) * s));
         canvas.drawCircle(p(0.5, horizon - 0.1 + sink), s * 0.22, stroke);
@@ -206,8 +206,14 @@ class _GlyphPainter extends CustomPainter {
         canvas.drawLine(p(0.4, 0.88), p(0.6, 0.88), stroke..color = color.withValues(alpha: 0.4));
 
       case _Glyph.isha:
+        // The crescent rocks gently while its star twinkles.
+        canvas.save();
+        canvas.translate(0.46 * s, 0.52 * s);
+        canvas.rotate((_wave - 0.5) * 0.22);
+        canvas.translate(-0.46 * s, -0.52 * s);
         _crescent(canvas, p(0.46, 0.52), s * 0.34, fill);
-        _sparkle(canvas, p(0.78, 0.3), s * 0.12, fill, 0.35 + 0.65 * _wave);
+        canvas.restore();
+        _sparkle(canvas, p(0.78, 0.3), s * (0.07 + 0.07 * _wave2), fill, 0.2 + 0.8 * _wave2);
 
       case _Glyph.jumuah:
         // Dome on a base, with a crescent finial that catches the light.
@@ -218,7 +224,7 @@ class _GlyphPainter extends CustomPainter {
         canvas.drawLine(p(0.14, 0.86), p(0.86, 0.86), stroke);
         canvas.drawLine(p(0.5, 0.32), p(0.5, 0.24), stroke);
         _crescent(canvas, p(0.5, 0.14), s * 0.08,
-            Paint()..color = color.withValues(alpha: 0.55 + 0.45 * _wave));
+            Paint()..color = color.withValues(alpha: 0.3 + 0.7 * _wave));
         // Door.
         final door = Path()
           ..moveTo(0.42 * s, 0.86 * s)
