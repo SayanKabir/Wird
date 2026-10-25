@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -47,7 +48,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   final PageController _pageController = PageController(initialPage: 2);
   final NotificationService _notificationService = NotificationService();
   final WeatherService _weatherService = WeatherService();
@@ -88,6 +89,20 @@ class _HomeScreenState extends State<HomeScreen>
   /// Direction of the last jump, for the small slide that goes with the fade.
   double _jumpDirection = 1;
 
+  /// Where the tab highlight sits, in page units. Follows the page while it
+  /// moves (swipes, neighbouring slides); for a jump to a distant tab, where
+  /// the page itself teleports, [_highlightGlide] carries it across instead.
+  final ValueNotifier<double> _highlightPage = ValueNotifier<double>(2);
+  late final AnimationController _highlightGlide = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+  );
+  Animation<double>? _highlightTween;
+
+  /// Keeps the highlight where it is while a jumped-to page builds its
+  /// first frame.
+  bool _highlightHeld = false;
+
   bool _showPermissionWarning = false;
   WeatherData? _weather;
   Timer? _weatherTimer;
@@ -98,6 +113,10 @@ class _HomeScreenState extends State<HomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _pageController.addListener(_onPageScroll);
+    _highlightGlide.addListener(() {
+      final tween = _highlightTween;
+      if (tween != null) _highlightPage.value = tween.value;
+    });
     _checkPermissions();
     _fetchWeather();
     _autoDetectLocation();
@@ -223,6 +242,8 @@ class _HomeScreenState extends State<HomeScreen>
     _currentPage.dispose();
     _celestialOpacity.dispose();
     _jumpFade.dispose();
+    _highlightPage.dispose();
+    _highlightGlide.dispose();
     _weatherTimer?.cancel();
     _debugService.overriddenWeather.removeListener(_onDebugChanged);
     _debugService.overriddenMoonPhase.removeListener(_onDebugChanged);
@@ -239,6 +260,18 @@ class _HomeScreenState extends State<HomeScreen>
     final page = _pageController.page ?? _homePageIndex.toDouble();
     final away = (page - _homePageIndex).abs().clamp(0.0, 1.0);
     _celestialOpacity.value = 1 - 0.75 * away;
+    if (!_highlightGlide.isAnimating && !_highlightHeld) _highlightPage.value = page;
+  }
+
+  /// Carries the highlight from where it is to [index] on its own.
+  void _glideHighlight(int index) {
+    if (motionStill()) {
+      _highlightPage.value = index.toDouble();
+      return;
+    }
+    _highlightTween = Tween<double>(begin: _highlightPage.value, end: index.toDouble())
+        .animate(CurvedAnimation(parent: _highlightGlide, curve: AppCurves.emphasized));
+    _highlightGlide.forward(from: 0);
   }
 
   /// Neighbouring tabs slide over. Distant ones don't fly past every page in
@@ -252,9 +285,19 @@ class _HomeScreenState extends State<HomeScreen>
       await _pageController.animateToPage(index, duration: AppDurations.tabSlide, curve: AppCurves.emphasized);
       return;
     }
+    // A tab opened for the first time can take a few hundred milliseconds to
+    // build its first frame. Starting the glide and fade before that frame
+    // meant both ran out during it and looked instant, so jump, wait for the
+    // new page to be on screen, then animate.
+    _highlightHeld = true;
+    if (!motionStill()) _jumpFade.value = 0;
     _pageController.jumpToPage(index);
-    if (motionStill()) return;
     _jumpDirection = index > from ? 1 : -1;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+    _highlightHeld = false;
+    _glideHighlight(index);
+    if (motionStill()) return;
     await _jumpFade.forward(from: 0);
   }
 
@@ -496,25 +539,22 @@ class _HomeScreenState extends State<HomeScreen>
               child: Stack(
                 alignment: Alignment.centerLeft,
                 children: [
-                  // A soft highlight that sits behind the current icon and
-                  // follows the page position, so it glides with a swipe and
-                  // slides across when a tab is tapped.
-                  AnimatedBuilder(
-                    animation: _pageController,
-                    builder: (context, _) {
-                      final page = _pageController.hasClients && _pageController.position.haveDimensions
-                          ? (_pageController.page ?? currentPage.toDouble())
-                          : currentPage.toDouble();
+                  // A softly lit capsule behind the current icon. It follows
+                  // the page during swipes, glides across on taps, and
+                  // stretches a little mid-move so it reads as travelling.
+                  ValueListenableBuilder<double>(
+                    valueListenable: _highlightPage,
+                    builder: (context, page, _) {
+                      final p = page.clamp(0.0, 6.0);
+                      // One stretch per move: across the whole glide on a
+                      // tap, or between the two icons during a swipe.
+                      final transit = _highlightGlide.isAnimating
+                          ? math.sin(_highlightGlide.value * math.pi)
+                          : math.sin((p - p.floorToDouble()) * math.pi);
+                      final w = iconWidth - 6 + 10 * transit;
                       return Transform.translate(
-                        offset: Offset(page.clamp(0.0, 6.0) * iconWidth, 0),
-                        child: Container(
-                          width: iconWidth,
-                          height: iconHeight,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(AppRadii.pill),
-                          ),
-                        ),
+                        offset: Offset(p * iconWidth + (iconWidth - w) / 2, 0),
+                        child: _TabHighlight(width: w, height: iconHeight - 6),
                       );
                     },
                   ),
@@ -542,35 +582,24 @@ class _HomeScreenState extends State<HomeScreen>
       double height, double size, int currentPage) {
     final isSelected = currentPage == index;
     final color =
-        isSelected ? Colors.white : Colors.white.withValues(alpha: 0.3);
+        isSelected ? Colors.white : Colors.white.withValues(alpha: 0.38);
 
     return Pressable(
       onTap: () => _navToPage(index),
       // Navigation is a frequent, low-stakes tap — the lightest feedback.
       haptic: PressableHaptic.selection,
-      pressedScale: 0.86,
-      child: AnimatedContainer(
-        duration: AppDurations.normal,
-        curve: AppCurves.settle,
+      pressedScale: 0.88,
+      child: SizedBox(
         width: width,
         height: height,
-        alignment: Alignment.center,
-        transform:
-            Matrix4.identity()..scale(isSelected ? 1.1 : 1.0), // Subtle pop
-        child: Icon(
-          icon,
-          size: size,
-          color: color,
-          // Add a subtle glow only to the active icon
-          shadows: isSelected && !lighterVisuals()
-              ? [
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    blurRadius: 10,
-                    spreadRadius: 1,
-                  ),
-                ]
-              : null,
+        child: Center(
+          // The highlight marks the selection; the icon only brightens.
+          child: TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: color),
+            duration: AppDurations.normal,
+            curve: AppCurves.emphasized,
+            builder: (context, c, _) => Icon(icon, size: size, color: c),
+          ),
         ),
       ),
     );
@@ -1691,6 +1720,32 @@ class _JumpFade extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// The tab highlight: a capsule lit from above with a hairline edge, so it
+/// reads as a piece of glass resting in the bar rather than a grey blot.
+class _TabHighlight extends StatelessWidget {
+  final double width;
+  final double height;
+
+  const _TabHighlight({required this.width, required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white.withValues(alpha: 0.16), Colors.white.withValues(alpha: 0.06)],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14), width: 0.5),
+      ),
     );
   }
 }
