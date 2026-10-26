@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import '../../../widgets/common/prayer_glyph.dart';
+import '../../../widgets/common/prayer_window.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
@@ -164,30 +164,49 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
     );
   }
 
+  /// The prayer's sky through the gold arch, like a small app icon. The
+  /// current prayer glows and animates; done and missed ones step back.
   Widget _buildIcon(PrayerStatus status) {
-    Color iconColor = Colors.white.withOpacity(0.7);
-    if (widget.isActive) iconColor = AppColors.activeGlow;
-    if (status.isCompleted) iconColor = AppColors.statusOnTime;
-
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: iconColor.withOpacity(0.1),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: iconColor.withOpacity(0.2),
-          width: 1.5,
-        ),
-      ),
-      alignment: Alignment.center,
-      // Only the current prayer's glyph animates; the rest draw a still frame.
-      child: PrayerGlyph(
-        prayer: widget.prayer,
-        date: widget.date,
-        size: 26,
-        color: iconColor,
-        animate: widget.isActive && !widget.reduceMotion,
+    final settled = status.isCompleted || status == PrayerStatus.missed;
+    return SizedBox.square(
+      dimension: 48,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AnimatedOpacity(
+            opacity: settled ? 0.5 : 1,
+            duration: AppDurations.normal,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(48 * 0.23),
+                boxShadow: widget.isActive
+                    ? [BoxShadow(color: const Color(0xFFF2C46D).withValues(alpha: 0.45), blurRadius: 14)]
+                    : null,
+              ),
+              child: PrayerWindow(
+                prayer: widget.prayer,
+                date: widget.date,
+                size: 48,
+                animate: widget.isActive && !widget.reduceMotion,
+              ),
+            ),
+          ),
+          if (status.isCompleted)
+            Positioned(
+              right: -3,
+              bottom: -3,
+              child: Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: AppColors.statusOnTime,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black.withValues(alpha: 0.25), width: 1.5),
+                ),
+                child: const Icon(Icons.check_rounded, size: 12, color: Colors.white),
+              ),
+            ),
+        ],
       ),
     );
   }
