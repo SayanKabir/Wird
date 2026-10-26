@@ -45,57 +45,6 @@ class DayProgress extends StatelessWidget {
   }
 }
 
-/// The phrase of the adhan now playing, in Arabic with its meaning, fading in
-/// over the page while the clip sounds.
-class AthanCueCaption extends StatelessWidget {
-  const AthanCueCaption({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<AthanCue?>(
-      valueListenable: AthanCueService.instance.playing,
-      builder: (context, cue, _) => AnimatedSwitcher(
-        duration: const Duration(milliseconds: 500),
-        switchInCurve: AppCurves.emphasized,
-        switchOutCurve: AppCurves.exit,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween(begin: const Offset(0, -0.15), end: Offset.zero).animate(animation),
-            child: child,
-          ),
-        ),
-        child: cue == null
-            ? const SizedBox.shrink()
-            // Two lines, since the shahada and its meaning are too long to
-            // share one.
-            : GlassPanel(
-                key: ValueKey(cue),
-                radius: AppRadii.group,
-                fill: 0.12,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      cue.arabic,
-                      textAlign: TextAlign.center,
-                      textDirection: TextDirection.rtl,
-                      style: AppTextStyles.arabic(size: 18, color: AppColors.spiritualGold).copyWith(height: 1.4),
-                    ),
-                    Text(
-                      cue.meaning,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.85)),
-                    ),
-                  ],
-                ),
-              ),
-      ),
-    );
-  }
-}
-
 /// Speaker button that mutes the adhan cues.
 class CueMuteButton extends StatelessWidget {
   const CueMuteButton({super.key});

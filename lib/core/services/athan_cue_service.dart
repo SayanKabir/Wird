@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
@@ -52,6 +54,10 @@ enum AthanCue {
     'قَدْ قَامَتِ الصَّلَاةُ',
     'Qad qāmati-ṣ-ṣalāh',
     'The prayer has begun',
+    later: [
+      (Duration(milliseconds: 6000), CuePhrase('اللَّهُ أَكْبَرُ', 'Allah is the greatest')),
+      (Duration(milliseconds: 9900), CuePhrase('لَا إِلَٰهَ إِلَّا اللَّهُ', 'There is no god but Allah')),
+    ],
   );
 
   /// Path under assets/, as audioplayers' [AssetSource] expects.
@@ -60,7 +66,27 @@ enum AthanCue {
   final String transliteration;
   final String meaning;
 
-  const AthanCue(this.asset, this.arabic, this.transliteration, this.meaning);
+  /// Further phrases inside the same clip, by how far in they start, so the
+  /// caption can follow a clip that says more than one thing.
+  final List<(Duration, CuePhrase)> later;
+
+  const AthanCue(this.asset, this.arabic, this.transliteration, this.meaning, {this.later = const []});
+
+  CuePhrase get phrase => CuePhrase(arabic, meaning);
+}
+
+/// What a caption shows for one phrase.
+class CuePhrase {
+  final String arabic;
+  final String meaning;
+
+  const CuePhrase(this.arabic, this.meaning);
+
+  @override
+  bool operator ==(Object other) => other is CuePhrase && other.arabic == arabic && other.meaning == meaning;
+
+  @override
+  int get hashCode => Object.hash(arabic, meaning);
 }
 
 /// Plays [AthanCue]s. Quiet by design: it follows the ringer's silent mode,
@@ -83,10 +109,29 @@ class AthanCueService {
   /// Set by the speaker button on the onboarding header.
   final ValueNotifier<bool> muted = ValueNotifier(false);
 
-  /// The cue now sounding, for a caption to follow along with.
-  final ValueNotifier<AthanCue?> playing = ValueNotifier(null);
+  /// The phrase now sounding, for a caption to follow along with.
+  final ValueNotifier<CuePhrase?> playing = ValueNotifier(null);
+
+  /// True while a screen (onboarding) draws the caption itself, which hides
+  /// the app-wide one so a phrase never shows twice.
+  final ValueNotifier<bool> captionedLocally = ValueNotifier(false);
 
   static const _captionFor = Duration(milliseconds: 4000);
+  final List<Timer> _captionTimers = [];
+
+  /// Walks the caption through [cue]'s phrases, then clears it.
+  void _caption(AthanCue cue) {
+    for (final t in _captionTimers) {
+      t.cancel();
+    }
+    _captionTimers.clear();
+    playing.value = cue.phrase;
+    for (final (at, phrase) in cue.later) {
+      _captionTimers.add(Timer(at, () => playing.value = phrase));
+    }
+    final last = cue.later.isEmpty ? Duration.zero : cue.later.last.$1;
+    _captionTimers.add(Timer(last + _captionFor, () => playing.value = null));
+  }
 
   /// Prepares every clip. Safe to call more than once.
   Future<void> warmUp() => _warming ??= _prepareAll();
@@ -114,10 +159,7 @@ class AthanCueService {
   /// caption still shows so the moment isn't lost.
   Future<void> play(AthanCue cue) async {
     debugPrint('[AthanCue] ${cue.name}${muted.value ? ' (muted)' : ''}');
-    playing.value = cue;
-    Future.delayed(_captionFor, () {
-      if (playing.value == cue) playing.value = null;
-    });
+    _caption(cue);
     if (muted.value) return;
     try {
       await warmUp();
@@ -130,11 +172,13 @@ class AthanCueService {
       await player.resume();
     } catch (e) {
       debugPrint('[AthanCue] ${cue.name} not played: $e');
-      if (playing.value == cue) playing.value = null;
     }
   }
 
   Future<void> stop() async {
+    for (final t in _captionTimers) {
+      t.cancel();
+    }
     playing.value = null;
     for (final player in _players.values) {
       await player.stop();

@@ -30,6 +30,7 @@ import 'models/quran_bookmark.dart';
 import 'models/quran_progress.dart';
 import 'core/services/device_profile.dart';
 import 'core/services/app_icon_service.dart';
+import 'widgets/common/athan_cue_caption.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -138,6 +139,9 @@ class WirdApp extends StatelessWidget {
         title: 'Wird',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(),
+        // The adhan caption floats above every route, so a phrase that
+        // outlives its screen (onboarding's last) is still captioned.
+        builder: (context, child) => Stack(children: [child!, const AthanCueOverlay()]),
         initialRoute: isOnboardingCompleted ? '/home' : '/onboarding',
         routes: {
           '/onboarding': (context) => const OnboardingScreen(),

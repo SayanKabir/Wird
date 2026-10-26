@@ -18,6 +18,7 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../models/prayer.dart';
 import '../../../models/settings.dart';
+import '../../../widgets/common/athan_cue_caption.dart';
 import '../../../widgets/common/glass_panel.dart';
 import '../../../widgets/common/location_off_prompt.dart';
 import '../../../widgets/common/prayer_glyph.dart';
@@ -133,6 +134,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     _endWarning = s.endTimeWarningMinutes;
     _suggestedMethod = _methodForCountry(_location?.country);
     _cues.warmUp();
+    _cues.captionedLocally.value = true;
     WidgetsBinding.instance.addObserver(this);
     _checkNotifications();
   }
@@ -154,6 +156,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   void dispose() {
     _pageController.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    _cues.captionedLocally.value = false;
     _cityController.dispose();
     _celestialOpacity.dispose();
     super.dispose();
@@ -391,12 +394,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       _storageService.saveSettings(settings),
       // Qad qāmati-ṣ-ṣalāh is heard twice under the veil; home arrives with
       // the closing takbir.
-      Future.delayed(Duration(milliseconds: still ? 600 : 5200)),
+      Future.delayed(Duration(milliseconds: still ? 600 : 5800)),
     ]);
     if (!mounted) return;
     // The phrase lifts away as home fades in over it, so no empty beat of
     // sky falls between them.
     Navigator.of(context).pushReplacement(_HomeArrival());
+    // The takbir and tahlil run on over home, captioned there.
+    _cues.captionedLocally.value = false;
     if (!still) await Future.delayed(const Duration(milliseconds: 350));
     if (mounted) setState(() => _leaving = true);
   }
