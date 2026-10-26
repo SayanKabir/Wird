@@ -473,7 +473,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   children: [
                     Text(
                       "Achievements",
-                      style: AppTextStyles.h3(color: AppColors.spiritualGold),
+                      style: AppTextStyles.body(color: AppColors.spiritualGold, weight: FontWeight.w600),
                     ),
                     Text(
                       "$unlockedCount / $totalCount unlocked",
@@ -609,7 +609,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   Text("Most Recited", style: AppTextStyles.tiny(color: Colors.white54)),
                   Text(
                     tasbih.name,
-                    style: AppTextStyles.h3(color: AppColors.spiritualGold),
+                    style: AppTextStyles.bodyLarge(color: AppColors.spiritualGold, weight: FontWeight.w600),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -670,7 +670,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 children: [
                   Text(
                     next.event.title,
-                    style: AppTextStyles.h3(color: accent),
+                    style: AppTextStyles.bodyLarge(color: accent, weight: FontWeight.w600),
                   ),
                   Text(
                     next.event.subtitle,

@@ -63,7 +63,8 @@ class ScheduleView extends StatelessWidget {
                             Container(
                               width: 12,
                               height: 12,
-                              margin: const EdgeInsets.symmetric(vertical: 22),
+                              // Centred on the card's 40px icon (14px padding + 20).
+                              margin: const EdgeInsets.only(top: 28, bottom: 6),
                               decoration: BoxDecoration(
                                 color: isActive
                                     ? AppColors.activeGlow
@@ -107,7 +108,8 @@ class ScheduleView extends StatelessWidget {
                         // Content (Prayer Card)
                         Expanded(
                           child: Padding(
-                            padding: const EdgeInsets.only(bottom: 24),
+                            // The card's own 12px margin is the gap between rows.
+                            padding: EdgeInsets.zero,
                             child: Builder(
                               builder: (context) {
                                 final now = DateTime.now();

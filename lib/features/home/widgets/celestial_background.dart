@@ -27,6 +27,10 @@ class CelestialBackground extends StatefulWidget {
   final MoonPhase? fixedMoonPhase;
   final bool showCelestialBody;
 
+  /// How long the sky takes to move to a new period. The home screen keeps
+  /// the slow default; onboarding walks through a whole day, so it's quicker.
+  final Duration transitionDuration;
+
   const CelestialBackground({
     super.key,
     required this.prayerPeriod,
@@ -39,6 +43,7 @@ class CelestialBackground extends StatefulWidget {
     this.latitude = 0.0,
     this.fixedMoonPhase,
     this.showCelestialBody = true,
+    this.transitionDuration = const Duration(milliseconds: 12000),
   });
 
   @override
@@ -57,11 +62,11 @@ class _CelestialBackgroundState extends State<CelestialBackground>
   void initState() {
     super.initState();
 
-    // 12s duration for a very slow, majestic celestial transition
+    // 12s by default, for a very slow, majestic celestial transition
     _controller = AnimationController(
       duration: widget.reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 12000),
+          : widget.transitionDuration,
       vsync: this,
     );
 

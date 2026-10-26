@@ -117,7 +117,8 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
                       behavior: HitTestBehavior.opaque,
                       onTap: _toggleExpand,
                       child: Padding(
-                        padding: const EdgeInsets.all(20),
+                        // Same row rhythm as Settings and Statistics.
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                         child: _buildHeader(status),
                       ),
                     ),
@@ -129,11 +130,11 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
                       alignment: Alignment.topCenter,
                       child: _isExpanded
                           ? Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                               child: Column(
                                 children: [
                                   Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
-                                  const SizedBox(height: 20),
+                                  const SizedBox(height: 16),
                                   _buildExpandedDetails(status),
                                 ],
                               ),
@@ -154,7 +155,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
     return Row(
       children: [
         _buildIcon(status),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(child: _buildNameAndArabic()),
         if (!(_isExpanded && widget.timeData != null))
           _buildTimeOrStatusPill(status),
@@ -179,8 +180,8 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       opacity: status == PrayerStatus.missed ? 0.5 : 1,
       duration: AppDurations.normal,
       child: Container(
-        width: 48,
-        height: 48,
+        width: 40,
+        height: 40,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: LinearGradient(
@@ -198,7 +199,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
         child: PrayerGlyph.colored(
           prayer: widget.prayer,
           date: widget.date,
-          size: 32,
+          size: 26,
           animate: widget.isActive && !widget.reduceMotion,
         ),
       ),
@@ -211,8 +212,10 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       children: [
         Text(
           widget.prayer.displayNameForDay(widget.date),
-          style: AppTextStyles.h3(
+          // Row titles across the app are body size; h3 made Schedule loud.
+          style: AppTextStyles.body(
             color: widget.isActive ? Colors.white : Colors.white.withOpacity(0.9),
+            weight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 2),
@@ -249,8 +252,8 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       style: TextStyle(
         fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
         color: Colors.white.withOpacity(widget.isActive ? 1.0 : 0.8),
-        fontWeight: FontWeight.w600,
-        fontSize: 16,
+        fontWeight: FontWeight.w500,
+        fontSize: 15,
       ),
     );
   }
@@ -357,7 +360,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
               children: [
                 Text("WINDOW", style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.4))),
                 const SizedBox(height: 4),
-                Text("$start — $end", style: AppTextStyles.h3(color: Colors.white)),
+                Text("$start — $end", style: AppTextStyles.body(color: Colors.white, weight: FontWeight.w600)),
               ],
             ),
           ],
