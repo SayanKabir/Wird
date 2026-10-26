@@ -4,6 +4,11 @@ import 'package:flutter/foundation.dart';
 /// A short phrase of the adhan, played as a cue at a meaningful moment:
 /// "come to prayer" as the user begins onboarding, "come to success" as they
 /// finish it.
+///
+/// The clips are the first call of each phrase from "Beautiful adhan.ogg" by
+/// Adam-synagda on Wikimedia Commons (CC0, public domain), cut at 82.6s and
+/// 102.1s, faded and loudness-normalised:
+/// https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
 enum AthanCue {
   salah(
     'audio/hayya_alas_salah.m4a',
