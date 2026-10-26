@@ -1,3 +1,7 @@
+import '../../../models/prayer_status.dart';
+import '../../../models/prayer_log.dart';
+import '../../../core/services/storage_service.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -72,29 +76,90 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
-  // ─── Shared section header ───
-  /// Section label in the same style as the Quran and Sunnah tabs.
-  Widget _sectionHeader(String label) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 28, 24, 12),
-      child: Text(
-        label,
-        style: AppTextStyles.tiny(color: AppColors.spiritualGold.withValues(alpha: 0.8))
-            .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
+  // ─── Shared pieces ───
+  //
+  // One card style for the whole page, and numbers in the same thin display
+  // type as the home countdown, so Statistics reads like the rest of Wird
+  // rather than a dashboard of identical tiles.
+
+  Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(20)}) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: child,
+    );
+  }
+
+  /// Icon and title along the top of a card, with an optional note at the end.
+  Widget _cardTitle(IconData icon, String title, {String? note}) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+        const SizedBox(width: 10),
+        Text(title, style: AppTextStyles.body(weight: FontWeight.w500)),
+        const Spacer(),
+        if (note != null) Text(note, style: AppTextStyles.small(color: Colors.white54)),
+      ],
+    );
+  }
+
+  /// A number over a small spaced label.
+  Widget _figure(String value, String label) {
+    return Column(
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: CountUpText(value, animate: _countUp, style: AppTextStyles.display(size: 30, height: 1.0)),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          style: AppTextStyles.tiny(color: Colors.white54).copyWith(fontSize: 10, letterSpacing: 1.4),
+        ),
+      ],
+    );
+  }
+
+  /// Figures side by side, split by hairlines.
+  Widget _figures(List<(String, String)> items) {
+    return IntrinsicHeight(
+      child: Row(
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            if (i > 0)
+              Container(
+                width: 0.5,
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                color: Colors.white.withValues(alpha: 0.14),
+              ),
+            Expanded(child: _figure(items[i].$1, items[i].$2)),
+          ],
+        ],
       ),
     );
   }
 
-  // ─── Thin divider between major sections ───
-  Widget _sectionDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
-      child: Container(
-        height: 0.5,
-        color: Colors.white.withValues(alpha: 0.06),
+  /// A titled card of figures, for Sunnah, Quran and Dhikr.
+  Widget _statCard({required IconData icon, required String title, required List<(String, String)> figures}) {
+    return _card(
+      child: Column(
+        children: [
+          _cardTitle(icon, title),
+          const SizedBox(height: 20),
+          _figures(figures),
+        ],
       ),
     );
   }
+
+  Widget _padded(Widget child, {double top = 14}) => SliverToBoxAdapter(
+        child: Padding(padding: EdgeInsets.fromLTRB(24, top, 24, 0), child: child),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -112,252 +177,199 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               parent: BouncingScrollPhysics(),
             ),
             slivers: [
-            // ─── Page Header ───
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    PageHeader(overline: "INSIGHTS", title: "Statistics"),
-                  ],
-                ),
-              ),
-            ),
-
-            // ─── Prayer Hero Streak ───
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildHeroStreakCard(stats['currentStreak'] as int),
-              ),
-            ),
-
-            // ─── Prayer Key Metrics ───
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
-              sliver: SliverGrid.count(
-                crossAxisCount: 2,
-                mainAxisSpacing: 14,
-                crossAxisSpacing: 14,
-                childAspectRatio: 1.25,
-                children: [
-                  _buildGlassMetricCard(
-                    title: "Best Streak",
-                    value: "${stats['longestStreak']}",
-                    unit: "DAYS",
-                    icon: Icons.emoji_events_rounded,
-                    color: AppColors.spiritualGold,
-                  ),
-                  _buildGlassMetricCard(
-                    title: "This Week",
-                    value: "${stats['weekPercentage']}%",
-                    unit: "COMPLETION",
-                    icon: Icons.pie_chart_rounded,
-                    color: AppColors.spiritualGold,
-                  ),
-                ],
-              ),
-            ),
-
-            // ─── Overview Summary ───
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
-                child: _buildOverviewCard(
-                  stats['weekOnTime'] as int,
-                  stats['weekTotal'] as int,
-                ),
-              ),
-            ),
-
-            // ─── Achievements Banner ───
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: _buildAchievementsBanner(context, achievements),
-              ),
-            ),
-
-            // ─── Divider ───
-            SliverToBoxAdapter(child: _sectionDivider()),
-
-            // ─── By Prayer Section ───
-            SliverToBoxAdapter(child: _sectionHeader("BY PRAYER")),
-
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final prayer = fardhPrayers[index];
-                    final streak = (stats['prayerStreaks'] as Map<String, int>)[prayer.name] ?? 0;
-                    return _buildPrayerStreakRow(prayer, streak, index == fardhPrayers.length - 1);
-                  },
-                  childCount: fardhPrayers.length,
-                ),
-              ),
-            ),
-
-            // Best Prayer Card
-            if (stats['bestPrayer'] != null)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
-                  child: _buildBestPrayerCard(
-                    stats['bestPrayer'] as String,
-                    stats['bestPrayerStreak'] as int,
-                  ),
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 10),
+                  child: const PageHeader(overline: "INSIGHTS", title: "Statistics"),
                 ),
               ),
 
-            // ─── Divider ───
-            SliverToBoxAdapter(child: _sectionDivider()),
+              // Prayer: the streak, and the week prayer by prayer.
+              _padded(_prayerHero(stats)),
+              _padded(_buildAchievementsBanner(context, achievements)),
+              _padded(_byPrayerCard(stats['prayerStreaks'] as Map<String, int>)),
 
-            // ─── Sunnah Progress Section ───
-            if (_dataLoaded) ..._sunnahSlivers(),
+              if (_dataLoaded) ..._sunnahSlivers(),
+              if (_dataLoaded) ..._quranSlivers(),
+              if (_dataLoaded) ..._tasbihSlivers(),
 
-            // ─── Divider ───
-            if (_dataLoaded)
-              SliverToBoxAdapter(child: _sectionDivider()),
+              ..._eventSlivers(),
 
-            // ─── Quran Reading Section ───
-            if (_dataLoaded) ..._quranSlivers(),
-
-            // ─── Divider ───
-            if (_dataLoaded)
-              SliverToBoxAdapter(child: _sectionDivider()),
-
-            // ─── Tasbih & Dhikr Section ───
-            if (_dataLoaded) ..._tasbihSlivers(),
-
-            // ─── Divider ───
-            if (_dataLoaded)
-              SliverToBoxAdapter(child: _sectionDivider()),
-
-            // ─── Upcoming Islamic Events ───
-            ..._eventSlivers(),
-
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
-        ),
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // ─── Sunnah section slivers ───
+  // ─── Prayer ───
+
+  Widget _prayerHero(Map<String, dynamic> stats) {
+    final streak = stats['currentStreak'] as int;
+    Widget side(String value, String label) => Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            CountUpText(value, animate: _countUp, style: AppTextStyles.display(size: 22, height: 1.1)),
+            Text(label, style: AppTextStyles.tiny(color: Colors.white54)),
+          ],
+        );
+
+    return _card(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'PRAYER STREAK',
+                      style: AppTextStyles.tiny(color: AppColors.spiritualGold)
+                          .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        CountUpText('$streak', animate: _countUp, style: AppTextStyles.display(size: 64, height: 1.0)),
+                        const SizedBox(width: 8),
+                        Text(streak == 1 ? 'day' : 'days', style: AppTextStyles.body(color: Colors.white60)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  side('${stats['longestStreak']}', 'best streak'),
+                  const SizedBox(height: 10),
+                  side('${stats['weekPercentage']}%', 'on time this week'),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          _WeekRibbon(logs: StorageService().getRecentPrayerLogs(7)),
+        ],
+      ),
+    );
+  }
+
+  /// Each prayer's streak against the longest, with its glyph in colour.
+  Widget _byPrayerCard(Map<String, int> streaks) {
+    final longest = fardhPrayers.fold<int>(7, (m, p) => math.max(m, streaks[p.name] ?? 0));
+    return _card(
+      child: Column(
+        children: [
+          _cardTitle(Icons.timeline_rounded, 'By prayer', note: 'day streaks'),
+          const SizedBox(height: 8),
+          for (final prayer in fardhPrayers) _prayerStreakRow(prayer, streaks[prayer.name] ?? 0, longest),
+        ],
+      ),
+    );
+  }
+
+  Widget _prayerStreakRow(Prayer prayer, int streak, int longest) {
+    final accent = _prayerAccent(prayer);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [for (final c in prayerSky(prayer)) c.withValues(alpha: 0.7)],
+              ),
+            ),
+            child: PrayerGlyph.colored(prayer: prayer, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(prayer.displayName, style: AppTextStyles.body(weight: FontWeight.w500)),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: Stack(
+                    children: [
+                      Container(height: 4, color: Colors.white.withValues(alpha: 0.08)),
+                      FractionallySizedBox(
+                        widthFactor: (streak / longest).clamp(0.0, 1.0),
+                        child: Container(height: 4, color: accent),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 36,
+            child: Text(
+              '$streak',
+              textAlign: TextAlign.right,
+              style: AppTextStyles.display(size: 24, height: 1.0, color: streak > 0 ? Colors.white : Colors.white38),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Sunnah ───
   List<Widget> _sunnahSlivers() {
     final p = _sunnahProgress;
     if (p == null) return [];
-
     return [
-      SliverToBoxAdapter(child: _sectionHeader("SUNNAH PROGRESS")),
-
-      // Metrics grid
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-        sliver: SliverGrid.count(
-          crossAxisCount: 2,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 1.25,
-          children: [
-            _buildGlassMetricCard(
-              title: "Current Streak",
-              value: "${p.liveStreak()}",
-              unit: "DAYS",
-              icon: Icons.local_fire_department_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Best Streak",
-              value: "${p.longestStreak}",
-              unit: "DAYS",
-              icon: Icons.emoji_events_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Sunnahs Kept",
-              value: "${p.uniqueSunnahsPracticed}",
-              unit: "DIFFERENT",
-              icon: Icons.explore_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Times Kept",
-              value: "${p.totalPracticeActions}",
-              unit: "IN ALL",
-              icon: Icons.trending_up_rounded,
-              color: AppColors.spiritualGold,
-            ),
-          ],
-        ),
-      ),
-
-      // Top Sunnahs list
-      if (p.practiceCountsBySunnah.isNotEmpty)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-            child: _buildTopSunnahsList(p),
-          ),
-        ),
+      _padded(_statCard(
+        icon: Icons.auto_stories_rounded,
+        title: 'Sunnah',
+        figures: [
+          ('${p.liveStreak()}', 'streak'),
+          ('${p.longestStreak}', 'best'),
+          ('${p.uniqueSunnahsPracticed}', 'kept'),
+          ('${p.totalPracticeActions}', 'times'),
+        ],
+      )),
+      if (p.practiceCountsBySunnah.isNotEmpty) _padded(_buildTopSunnahsList(p), top: 10),
     ];
   }
 
-  // ─── Quran section slivers ───
+  // ─── Quran ───
   List<Widget> _quranSlivers() {
     final q = _quranProgress;
     if (q == null) return [];
-
-
     return [
-      SliverToBoxAdapter(child: _sectionHeader("QURAN READING")),
-
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-        sliver: SliverGrid.count(
-          crossAxisCount: 2,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 1.25,
-          children: [
-            _buildGlassMetricCard(
-              title: "Total Read",
-              value: "${q.totalVersesRead}",
-              unit: "VERSES",
-              icon: Icons.menu_book_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Days Read",
-              value: "${q.daysRead}",
-              unit: "DAYS",
-              icon: Icons.event_available_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Current Streak",
-              value: "${q.currentStreak}",
-              unit: "DAYS",
-              icon: Icons.local_fire_department_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Best Streak",
-              value: "${q.longestStreak}",
-              unit: "DAYS",
-              icon: Icons.emoji_events_rounded,
-              color: AppColors.spiritualGold,
-            ),
-          ],
-        ),
-      ),
+      _padded(_statCard(
+        icon: Icons.menu_book_rounded,
+        title: 'Quran',
+        figures: [
+          (_formatCount(q.totalVersesRead), 'verses'),
+          ('${q.daysRead}', 'days'),
+          ('${q.currentStreak}', 'streak'),
+          ('${q.longestStreak}', 'best'),
+        ],
+      )),
     ];
   }
 
-  // ─── Tasbih section slivers ───
+  // ─── Dhikr ───
   List<Widget> _tasbihSlivers() {
     // Prefer the live counters so counting elsewhere shows up here at once.
     final live = context.watch<TasbihBloc>().state;
@@ -370,43 +382,15 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final mostRecited = (visible.isEmpty ? tasbihs : visible).reduce((a, b) => a.totalCount > b.totalCount ? a : b);
 
     return [
-      SliverToBoxAdapter(child: _sectionHeader("TASBIH & DHIKR")),
-
-      // Total lifetime + active counters
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-        sliver: SliverGrid.count(
-          crossAxisCount: 2,
-          mainAxisSpacing: 14,
-          crossAxisSpacing: 14,
-          childAspectRatio: 1.25,
-          children: [
-            _buildGlassMetricCard(
-              title: "Lifetime Dhikr",
-              value: _formatCount(totalLifetime),
-              unit: "BEADS",
-              icon: Icons.all_inclusive_rounded,
-              color: AppColors.spiritualGold,
-            ),
-            _buildGlassMetricCard(
-              title: "Today",
-              value: _formatCount(totalToday),
-              unit: "DHIKR",
-              icon: Icons.today_rounded,
-              color: AppColors.spiritualGold,
-            ),
-          ],
-        ),
-      ),
-
-      // Most recited card
-      if (mostRecited.totalCount > 0)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
-            child: _buildMostRecitedCard(mostRecited),
-          ),
-        ),
+      _padded(_statCard(
+        icon: Icons.fingerprint_rounded,
+        title: 'Dhikr',
+        figures: [
+          (_formatCount(totalLifetime), 'all time'),
+          (_formatCount(totalToday), 'today'),
+        ],
+      )),
+      if (mostRecited.totalCount > 0) _padded(_buildMostRecitedCard(mostRecited), top: 10),
     ];
   }
 
@@ -415,148 +399,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     final next = IslamicDayUtils.nextImportantEvent(DateTime.now());
     if (next == null) return [];
 
-    return [
-      SliverToBoxAdapter(child: _sectionHeader("UPCOMING")),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: _buildEventCard(next),
-        ),
-      ),
-    ];
+    return [_padded(_buildEventCard(next))];
   }
 
   // --- Components for Statistics Screen ---
-
-  Widget _buildHeroStreakCard(int streak) {
-    final bool isActive = streak > 0;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.spiritualGold.withValues(alpha: 0.15),
-              AppColors.spiritualGold.withValues(alpha: 0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.spiritualGold.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.local_fire_department_rounded,
-                color: AppColors.spiritualGold,
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Current Streak",
-                    style: AppTextStyles.tiny(color: Colors.white54),
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      CountUpText(
-                        "$streak",
-                        animate: _countUp,
-                        style: AppTextStyles.h2(color: Colors.white),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        streak == 1 ? "Day" : "Days",
-                        style: AppTextStyles.body(
-                            color: AppColors.spiritualGold.withValues(alpha: 0.9)
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (isActive)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.spiritualGold.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
-                ),
-                child: Text(
-                  "Active",
-                  style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGlassMetricCard({
-    required String title,
-    required String value,
-    required String unit,
-    required IconData icon,
-    required Color color,
-  }) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        // Reduced padding to ensure fit
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, color: color, size: 24),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Added FittedBox to scale text if number is huge
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: CountUpText(
-                    value,
-                    animate: _countUp,
-                    style: AppTextStyles.h2().copyWith(height: 1.0),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  title,
-                  style: AppTextStyles.tiny(color: Colors.white54),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildAchievementsBanner(BuildContext context, List<Achievement> achievements) {
     final unlockedCount = achievements.where((a) => a.isUnlocked).length;
@@ -617,169 +463,6 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
               const Icon(Icons.chevron_right_rounded, color: Colors.white30),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrayerStreakRow(Prayer prayer, int streak, bool isLast) {
-    return Container(
-      margin: EdgeInsets.only(bottom: isLast ? 0 : 12),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              shape: BoxShape.circle,
-            ),
-            child: PrayerGlyph(prayer: prayer, size: 22, color: Colors.white.withValues(alpha: 0.8)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(prayer.displayName, style: AppTextStyles.bodyLarge()),
-                Text(
-                  streak > 0 ? "$streak day streak" : "No streak yet",
-                  style: AppTextStyles.tiny(
-                      color: streak > 0 ? AppColors.spiritualGold : Colors.white30
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (streak > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.spiritualGold.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.local_fire_department_rounded, size: 14, color: AppColors.spiritualGold),
-                  const SizedBox(width: 4),
-                  Text(
-                      "$streak",
-                      style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold)
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverviewCard(int onTime, int total) {
-    final missed = total - onTime;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildOverviewItem("ON TIME", "$onTime", AppColors.statusOnTime),
-            Container(width: 1, height: 40, color: Colors.white10),
-            _buildOverviewItem("TOTAL", "$total", Colors.white),
-            Container(width: 1, height: 40, color: Colors.white10),
-            _buildOverviewItem("MISSED", "$missed", AppColors.statusMissed),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOverviewItem(String label, String value, Color color) {
-    return Column(
-      children: [
-        CountUpText(value, animate: _countUp, style: AppTextStyles.h2(color: color)),
-        const SizedBox(height: 4),
-        Text(label, style: AppTextStyles.tiny(color: Colors.white30)),
-      ],
-    );
-  }
-
-  Widget _buildBestPrayerCard(String prayerName, int streak) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.spiritualGold.withValues(alpha: 0.15),
-              AppColors.spiritualGold.withValues(alpha: 0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.spiritualGold.withValues(alpha: 0.2),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.workspace_premium_rounded, color: AppColors.spiritualGold),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Best Prayer",
-                    style: AppTextStyles.tiny(color: Colors.white54),
-                  ),
-                  Text(
-                    prayerName,
-                    style: AppTextStyles.h3(color: AppColors.spiritualGold),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.spiritualGold.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.local_fire_department_rounded, size: 16, color: AppColors.spiritualGold),
-                  const SizedBox(width: 4),
-                  Text(
-                    "$streak days",
-                    style: AppTextStyles.small(color: AppColors.spiritualGold, weight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -900,7 +583,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 color: AppColors.spiritualGold.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Text("📿", style: TextStyle(fontSize: 24)),
+              child: const Icon(Icons.fingerprint_rounded, color: AppColors.spiritualGold, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -1274,6 +957,96 @@ class _LockedAchievementTile extends StatelessWidget {
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Each fard prayer's own accent, used for the week's dots and streak bars.
+Color _prayerAccent(Prayer prayer) => switch (prayer) {
+      Prayer.fajr => AppColors.fajrAccent,
+      Prayer.dhuhr => AppColors.dhuhrAccent,
+      Prayer.asr => AppColors.asrAccent,
+      // Sunset rose rather than Maghrib's red accent, which reads as "missed".
+      Prayer.maghrib => const Color(0xFFE55D87),
+      _ => const Color(0xFF9D8CFF),
+    };
+
+/// The last seven days, one column each, a dot per prayer: lit in the
+/// prayer's colour when prayed (dimmer if late), a red ring when missed,
+/// a faint ring when not logged.
+class _WeekRibbon extends StatelessWidget {
+  final List<PrayerLog> logs;
+
+  const _WeekRibbon({required this.logs});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final byDay = {for (final l in logs) DateTime(l.date.year, l.date.month, l.date.day): l};
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        for (var i = 6; i >= 0; i--)
+          _day(today.subtract(Duration(days: i)), byDay, isToday: i == 0),
+      ],
+    );
+  }
+
+  Widget _day(DateTime day, Map<DateTime, PrayerLog> byDay, {required bool isToday}) {
+    final log = byDay[day];
+    return Container(
+      width: 34,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: isToday ? Colors.white.withValues(alpha: 0.08) : null,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            DateFormat('E').format(day).substring(0, 1),
+            style: AppTextStyles.tiny(color: isToday ? Colors.white : Colors.white54)
+                .copyWith(fontWeight: isToday ? FontWeight.w700 : FontWeight.w500),
+          ),
+          const SizedBox(height: 8),
+          for (final prayer in fardhPrayers) ...[
+            _dot(prayer, log?.entries[prayer]?.status),
+            const SizedBox(height: 5),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _dot(Prayer prayer, PrayerStatus? status) {
+    const size = 9.0;
+    final accent = _prayerAccent(prayer);
+    if (status != null && status.isCompleted) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: status == PrayerStatus.onTime ? accent : accent.withValues(alpha: 0.45),
+          boxShadow: status == PrayerStatus.onTime
+              ? [BoxShadow(color: accent.withValues(alpha: 0.45), blurRadius: 5)]
+              : null,
+        ),
+      );
+    }
+    final missed = status == PrayerStatus.missed;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: missed ? AppColors.statusMissed.withValues(alpha: 0.7) : Colors.white.withValues(alpha: 0.18),
+          width: 1.2,
         ),
       ),
     );
