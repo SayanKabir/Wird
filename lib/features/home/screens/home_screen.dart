@@ -1125,10 +1125,10 @@ class _DashboardView extends StatelessWidget {
                           decoration: BoxDecoration(
                             // Slightly adjusted opacity for the icon background to pop on glass
                             color: accentColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           // Opens the Islamic calendar.
-                          child: HijriCalendarIcon(size: 24, color: accentColor.withValues(alpha: 0.95)),
+                          child: HijriCalendarIcon(size: 20, color: accentColor.withValues(alpha: 0.95)),
                         ),
                         const SizedBox(width: 12),
                         // Expanded (not Flexible) so the date/event text claims
