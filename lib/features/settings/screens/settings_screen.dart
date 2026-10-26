@@ -64,6 +64,9 @@ class SettingsScreenState extends State<SettingsScreen> {
   bool _canScheduleExactAlarms = true; // Assume true until checked
   bool _showPerPrayerAlerts = false;
 
+  /// Settings groups the user has opened; all start folded.
+  final Set<String> _openGroups = {};
+
   @override
   void initState() {
     super.initState();
@@ -90,8 +93,13 @@ class SettingsScreenState extends State<SettingsScreen> {
   /// Scrolls the Look & Feel section into view and flashes it, so the user can
   /// see which controls the tap brought them to.
   Future<void> revealWeatherSection() async {
+    if (!_openGroups.contains('look')) {
+      setState(() => _openGroups.add('look'));
+      // Let the group finish unfolding so it scrolls to where it ends up.
+      await Future.delayed(AppDurations.normal);
+    }
     final target = _weatherSectionKey.currentContext;
-    if (target == null) return;
+    if (target == null || !target.mounted) return;
     await Scrollable.ensureVisible(
       target,
       duration: const Duration(milliseconds: 450),
@@ -217,19 +225,53 @@ class SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final gutter = AppSpacing.gutter(context);
 
-    Widget section(String label, List<Widget> rows, {Key? key, bool highlight = false}) {
+    // One folded card per group: a header saying what's inside and what
+    // it's set to now, opening onto the rows.
+    Widget group(
+      String id, {
+      required IconData icon,
+      Widget? leading,
+      required String title,
+      required String summary,
+      required List<Widget> rows,
+      Key? key,
+      bool highlight = false,
+    }) {
+      final open = _openGroups.contains(id);
       return SliverToBoxAdapter(
         child: Padding(
           key: key,
-          padding: EdgeInsets.fromLTRB(gutter, AppSpacing.section, gutter, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: EdgeInsets.fromLTRB(gutter, AppSpacing.md, gutter, 0),
+          child: _GlassSection(
+            highlight: highlight,
             children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 4, bottom: AppSpacing.md),
-                child: Text(label, style: AppTextStyles.sectionLabel(color: AppColors.spiritualGold)),
+              _GroupHeader(
+                icon: icon,
+                leading: leading,
+                title: title,
+                summary: summary,
+                open: open,
+                onTap: () => setState(() => open ? _openGroups.remove(id) : _openGroups.add(id)),
               ),
-              _GlassSection(highlight: highlight, children: rows),
+              AnimatedSize(
+                duration: AppDurations.normal,
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: open
+                    ? Column(
+                        children: [
+                          for (final row in rows) ...[
+                            Container(
+                              margin: const EdgeInsets.only(left: 60),
+                              height: 1,
+                              color: Colors.white.withValues(alpha: 0.07),
+                            ),
+                            row,
+                          ],
+                        ],
+                      )
+                    : const SizedBox(width: double.infinity),
+              ),
             ],
           ),
         ),
@@ -238,6 +280,7 @@ class SettingsScreenState extends State<SettingsScreen> {
 
     final translation = QuranTranslations.resolve(_settings.quranSelectedTranslation);
     final mode = PerformanceMode.fromKey(_settings.performanceMode);
+    final appIcon = AppIconChoice.fromKey(_settings.appIcon);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -261,7 +304,13 @@ class SettingsScreenState extends State<SettingsScreen> {
             ),
 
             // ── PRAYER TIMES ──
-            section('PRAYER TIMES', [
+            group(
+              'prayer',
+              icon: Icons.access_time_rounded,
+              title: 'Prayer times',
+              summary: '${_settings.calculationMethod.displayName} · '
+                  '${_settings.madhab == MadhabType.shafi ? 'Standard' : 'Hanafi'} Asr',
+              rows: [
               _SettingRow(
                 icon: Icons.public_rounded,
                 title: 'Calculation method',
@@ -314,7 +363,12 @@ class SettingsScreenState extends State<SettingsScreen> {
             ]),
 
             // ── NOTIFICATIONS ──
-            section('NOTIFICATIONS', [
+            group(
+              'alerts',
+              icon: Icons.notifications_rounded,
+              title: 'Notifications',
+              summary: _settings.notificationsEnabled ? 'Prayer alerts on' : 'Prayer alerts off',
+              rows: [
               _SwitchRow(
                 icon: Icons.notifications_rounded,
                 title: 'Prayer alerts',
@@ -392,7 +446,12 @@ class SettingsScreenState extends State<SettingsScreen> {
 
             // ── QURAN ──
             // Mirrors the in-reader settings sheet; both write the same fields.
-            section('QURAN', [
+            group(
+              'quran',
+              icon: Icons.menu_book_rounded,
+              title: 'Quran',
+              summary: '${_settings.quranSelectedScript.displayName} · ${translation.name}',
+              rows: [
               _SettingRow(
                 icon: Icons.font_download_rounded,
                 title: 'Arabic script',
@@ -452,30 +511,35 @@ class SettingsScreenState extends State<SettingsScreen> {
             // ── LOOK & FEEL ──
             // Tapping the weather widget on the dashboard scrolls here; see
             // revealWeatherSection().
-            section(
-              'LOOK & FEEL',
+            group(
+              'icon',
+              icon: Icons.apps_rounded,
+              leading: _AppIconThumb(choice: _shownAppIcon(), size: 32),
+              title: 'App icon',
+              summary: appIcon == AppIconChoice.auto
+                  ? 'Follows prayer times · ${_shownAppIcon().label} now'
+                  : '${appIcon.label}, always',
+              rows: [
+                _AppIconPicker(
+                  choice: appIcon,
+                  showing: _shownAppIcon(),
+                  onChanged: (c) => _saveSettings(_settings.copyWith(appIcon: c.key)),
+                ),
+              ],
+            ),
+
+            group(
+              'look',
               key: _weatherSectionKey,
               highlight: _highlightWeatherSection,
-              [
+              icon: Icons.palette_rounded,
+              title: 'Look & feel',
+              summary: '${mode.label} · ${_getThemeDisplayName(_settings.weatherTheme)}',
+              rows: [
                 _PerformanceModePicker(
                   mode: mode,
                   autoNote: mode == PerformanceMode.auto ? DeviceProfile.instance.reason : null,
                   onChanged: (m) => _saveSettings(_settings.copyWith(performanceMode: m.key)),
-                ),
-                _AppIconPicker(
-                  choice: AppIconChoice.fromKey(_settings.appIcon),
-                  showing: _shownAppIcon(),
-                  onChanged: (c) => _saveSettings(_settings.copyWith(appIcon: c.key)),
-                ),
-                _SwitchRow(
-                  icon: Icons.schedule_rounded,
-                  title: 'Follow prayer times',
-                  subtitle: 'Icon shows the current prayer',
-                  value: _settings.appIcon == AppIconChoice.auto.key,
-                  // Turning it off keeps whichever icon is showing now.
-                  onChanged: (v) => _saveSettings(_settings.copyWith(
-                    appIcon: v ? AppIconChoice.auto.key : _shownAppIcon().key,
-                  )),
                 ),
                 _SettingRow(
                   icon: Icons.wallpaper_rounded,
@@ -520,7 +584,10 @@ class SettingsScreenState extends State<SettingsScreen> {
             ),
 
             // ── SUPPORT ──
-            section('SUPPORT', [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(gutter, AppSpacing.section, gutter, 0),
+                child: _GlassSection(children: [
               _SettingRow(
                 icon: Icons.mail_outline_rounded,
                 title: 'Report an issue',
@@ -533,7 +600,9 @@ class SettingsScreenState extends State<SettingsScreen> {
                 destructive: true,
                 onTap: _resetSettings,
               ),
-            ]),
+                ]),
+              ),
+            ),
 
             SliverToBoxAdapter(child: SizedBox(height: AppSpacing.navClearance(context))),
           ],
@@ -1013,12 +1082,110 @@ class _PerformanceModePicker extends StatelessWidget {
   }
 }
 
-/// The five home screen icons, one per prayer. Tapping one fixes the icon;
-/// the "Follow prayer times" switch below hands it back to the clock.
+/// Header of a folded settings group: what's inside, what it's set to now,
+/// and a chevron that turns as it opens.
+class _GroupHeader extends StatelessWidget {
+  final IconData icon;
+
+  /// Replaces the tinted icon, e.g. the current app icon.
+  final Widget? leading;
+  final String title;
+  final String summary;
+  final bool open;
+  final VoidCallback onTap;
+
+  const _GroupHeader({
+    required this.icon,
+    this.leading,
+    required this.title,
+    required this.summary,
+    required this.open,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      onTap: onTap,
+      pressedScale: 0.985,
+      haptic: PressableHaptic.selection,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+        child: Row(
+          children: [
+            leading ?? _RowIcon(icon: icon, tint: Colors.white.withValues(alpha: 0.85)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTextStyles.body(weight: FontWeight.w500)),
+                  const SizedBox(height: 2),
+                  Text(
+                    summary,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.small(color: Colors.white54),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            AnimatedRotation(
+              turns: open ? 0.25 : 0,
+              duration: AppDurations.normal,
+              curve: Curves.easeOutCubic,
+              child: const Icon(Icons.chevron_right_rounded, color: Colors.white30, size: 22),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One home screen icon as it looks on the phone: the prayer's thumbnail,
+/// or for Auto, a slice of each of the five side by side.
+class _AppIconThumb extends StatelessWidget {
+  final AppIconChoice choice;
+  final double size;
+
+  const _AppIconThumb({required this.choice, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget image(AppIconChoice c) => Image.asset(
+          'assets/icon/thumbs/${c.key}.png',
+          fit: BoxFit.cover,
+          height: size,
+          // Thumbnails are 168px; decode no bigger than shown.
+          cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
+        );
+
+    return SizedBox.square(
+      dimension: size,
+      child: ClipRRect(
+        // Roughly the curve of a real home screen icon.
+        borderRadius: BorderRadius.circular(size * 0.23),
+        child: choice == AppIconChoice.auto
+            ? Row(
+                children: [
+                  for (final c in AppIconChoice.prayers) Expanded(child: image(c)),
+                ],
+              )
+            : image(choice),
+      ),
+    );
+  }
+}
+
+/// Auto plus the five prayer icons. Auto is the default and follows the
+/// day; tapping a prayer keeps that icon. The icon showing now gets a small
+/// dot, so Auto never looks like a fixed choice of whatever is up.
 class _AppIconPicker extends StatelessWidget {
   final AppIconChoice choice;
 
-  /// The icon on the home screen now; ringed in gold.
+  /// The icon on the home screen now.
   final AppIconChoice showing;
   final ValueChanged<AppIconChoice> onChanged;
 
@@ -1028,11 +1195,11 @@ class _AppIconPicker extends StatelessWidget {
     final auto = choice == AppIconChoice.auto;
     if (Platform.isIOS) {
       return auto
-          ? 'Changes to the current prayer when you open Wird. iOS confirms each change.'
+          ? 'Shows the current prayer and changes when you open Wird. iOS confirms each change.'
           : 'iOS confirms the change with a short message.';
     }
     return auto
-        ? 'Changes with each prayer through the day.'
+        ? 'Shows the current prayer and changes with each one through the day.'
         : 'The new icon appears once you leave Wird.';
   }
 
@@ -1045,16 +1212,8 @@ class _AppIconPicker extends StatelessWidget {
         children: [
           Row(
             children: [
-              _RowIcon(icon: Icons.apps_rounded, tint: Colors.white.withValues(alpha: 0.85)),
-              const SizedBox(width: 14),
-              Text('App icon', style: AppTextStyles.body(weight: FontWeight.w500)),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              for (final c in AppIconChoice.prayers) ...[
-                if (c != AppIconChoice.prayers.first) const SizedBox(width: 10),
+              for (final c in AppIconChoice.values) ...[
+                if (c != AppIconChoice.values.first) const SizedBox(width: 8),
                 Expanded(child: _tile(c)),
               ],
             ],
@@ -1074,7 +1233,8 @@ class _AppIconPicker extends StatelessWidget {
   }
 
   Widget _tile(AppIconChoice c) {
-    final selected = c == showing;
+    final selected = c == choice;
+    final now = choice == AppIconChoice.auto && c == showing;
     return Pressable(
       haptic: PressableHaptic.selection,
       pressedScale: 0.92,
@@ -1086,31 +1246,41 @@ class _AppIconPicker extends StatelessWidget {
           AnimatedContainer(
             duration: AppDurations.normal,
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.all(2.5),
+            padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: selected ? AppColors.spiritualGold : Colors.transparent,
                 width: 2,
               ),
             ),
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: ClipRRect(
-                // Roughly the curve of a real home screen icon.
-                borderRadius: BorderRadius.circular(11),
-                child: Image.asset('assets/icon/thumbs/${c.key}.png', fit: BoxFit.cover),
-              ),
+            child: LayoutBuilder(
+              builder: (context, box) => _AppIconThumb(choice: c, size: box.maxWidth),
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            c.label,
-            maxLines: 1,
-            style: AppTextStyles.small(
-              color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
-              weight: FontWeight.w600,
-            ).copyWith(fontSize: 12),
+          // Shrinks "Maghrib" rather than cutting it off on narrow phones.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              c == AppIconChoice.auto ? 'Auto' : c.label,
+              maxLines: 1,
+              style: AppTextStyles.small(
+                color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
+                weight: FontWeight.w600,
+              ).copyWith(fontSize: 11),
+            ),
+          ),
+          const SizedBox(height: 3),
+          // Marks the icon Auto is showing right now.
+          AnimatedOpacity(
+            opacity: now ? 1 : 0,
+            duration: AppDurations.normal,
+            child: Container(
+              width: 4,
+              height: 4,
+              decoration: const BoxDecoration(color: AppColors.spiritualGold, shape: BoxShape.circle),
+            ),
           ),
         ],
       ),
