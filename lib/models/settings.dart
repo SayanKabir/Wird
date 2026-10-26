@@ -484,6 +484,11 @@ class AppSettings extends Equatable {
   @HiveField(28, defaultValue: true)
   final bool soundsEnabled;
 
+  /// Whether rain and thunder play under the home screen's sky. Separate
+  /// from [soundsEnabled]. See WeatherSoundService.
+  @HiveField(29, defaultValue: true)
+  final bool weatherSoundsEnabled;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -514,6 +519,7 @@ class AppSettings extends Equatable {
     this.performanceMode = 'auto',
     this.appIcon = 'auto',
     this.soundsEnabled = true,
+    this.weatherSoundsEnabled = true,
   });
 
   /// Default settings
@@ -552,6 +558,7 @@ class AppSettings extends Equatable {
     String? performanceMode,
     String? appIcon,
     bool? soundsEnabled,
+    bool? weatherSoundsEnabled,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -583,6 +590,7 @@ class AppSettings extends Equatable {
       performanceMode: performanceMode ?? this.performanceMode,
       appIcon: appIcon ?? this.appIcon,
       soundsEnabled: soundsEnabled ?? this.soundsEnabled,
+      weatherSoundsEnabled: weatherSoundsEnabled ?? this.weatherSoundsEnabled,
     );
   }
 
@@ -616,6 +624,7 @@ class AppSettings extends Equatable {
     performanceMode,
     appIcon,
     soundsEnabled,
+    weatherSoundsEnabled,
   ];
 }
 

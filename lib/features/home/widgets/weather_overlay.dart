@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/services/weather_service.dart';
+import '../../../core/services/weather_sound_service.dart';
 
 /// What the real sky tells the weather: where the light comes from and how
 /// hard the wind blows. Given only with the live sky, in full visuals; without
@@ -443,6 +444,7 @@ class _RainOverlayState extends State<_RainOverlay>
     if (!mounted) return;
     final random = math.Random();
     _flashAt = Offset(0.2 + random.nextDouble() * 0.6, 0.12 + random.nextDouble() * 0.2);
+    WeatherSoundService().thunder();
 
     // Flash on
     setState(() => _showFlash = true);

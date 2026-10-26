@@ -139,13 +139,14 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       performanceMode: fields[26] is String ? fields[26] as String : 'auto',
       appIcon: fields[27] is String ? fields[27] as String : 'auto',
       soundsEnabled: fields[28] is bool ? fields[28] as bool : true,
+      weatherSoundsEnabled: fields[29] is bool ? fields[29] as bool : true,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(29)
+      ..writeByte(30)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -203,7 +204,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(27)
       ..write(obj.appIcon)
       ..writeByte(28)
-      ..write(obj.soundsEnabled);
+      ..write(obj.soundsEnabled)
+      ..writeByte(29)
+      ..write(obj.weatherSoundsEnabled);
   }
 
   @override

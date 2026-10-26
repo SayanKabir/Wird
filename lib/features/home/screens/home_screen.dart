@@ -41,6 +41,8 @@ import '../../tasbih/screens/dhikr_hub_screen.dart';
 import '../../../core/services/device_profile.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/sound_service.dart';
+import '../../../core/services/weather_sound_service.dart';
+import '../../../core/navigation/app_route_observer.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/app_route.dart';
@@ -59,7 +61,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen>
-    with WidgetsBindingObserver, TickerProviderStateMixin {
+    with WidgetsBindingObserver, TickerProviderStateMixin, RouteAware {
   final PageController _pageController = PageController(initialPage: 2);
   final NotificationService _notificationService = NotificationService();
   final WeatherService _weatherService = WeatherService();
@@ -161,6 +163,10 @@ class _HomeScreenState extends State<HomeScreen>
     _debugService.overriddenMoonPhase.addListener(_onDebugChanged);
     _debugService.overriddenWind.addListener(_onDebugChanged);
     _debugService.skyTime.addListener(_onSkyTime);
+    // Home opens on its own tab, so the weather can be heard from the start.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateWeatherSound();
+    });
   }
 
   void _onDebugChanged() {
@@ -199,6 +205,8 @@ class _HomeScreenState extends State<HomeScreen>
 
     switch (state) {
       case AppLifecycleState.resumed:
+        _appVisible = true;
+        _updateWeatherSound();
         context.read<PrayerBloc>().resumeCountdown();
         _startWeatherTimer();
         // Catch up on anything that changed while we were away — the weather
@@ -210,6 +218,8 @@ class _HomeScreenState extends State<HomeScreen>
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
+        _appVisible = false;
+        _updateWeatherSound();
         context.read<PrayerBloc>().pauseCountdown();
         _weatherTimer?.cancel();
         _weatherTimer = null;
@@ -298,12 +308,44 @@ class _HomeScreenState extends State<HomeScreen>
     _debugService.overriddenMoonPhase.removeListener(_onDebugChanged);
     _debugService.overriddenWind.removeListener(_onDebugChanged);
     _debugService.skyTime.removeListener(_onSkyTime);
+    appRouteObserver.unsubscribe(this);
+    WeatherSoundService().setAudible(false);
     super.dispose();
   }
 
   void _onPageChanged(int index) {
     _currentPage.value = index;
     HapticService().light();
+    _updateWeatherSound();
+  }
+
+  // Rain and thunder play only while the home tab's sky is what's on screen.
+  bool _appVisible = true;
+  bool _covered = false;
+
+  void _updateWeatherSound() {
+    WeatherSoundService().setAudible(
+      _appVisible && !_covered && _currentPage.value == _homePageIndex,
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) appRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() {
+    _covered = true;
+    _updateWeatherSound();
+  }
+
+  @override
+  void didPopNext() {
+    _covered = false;
+    _updateWeatherSound();
   }
 
   /// System back on the home shell. From another tab it returns to the
@@ -490,6 +532,7 @@ class _HomeScreenState extends State<HomeScreen>
         // Fetch settings on every build (triggered by Settings update OR PrayerBloc)
         final settings = _storageService.getSettings();
         final effectiveWeather = _getEffectiveWeather(settings);
+        WeatherSoundService().setWeather(effectiveWeather?.condition ?? WeatherCondition.clear);
 
         return BlocBuilder<PrayerBloc, PrayerState>(
           // PrayerBloc re-emits every second to drive the countdown, and

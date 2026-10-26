@@ -84,6 +84,8 @@ flutter:
     - assets/audio/
     # Soft UI sounds, rendered by tool/gen_ui_sounds.py (see SoundService).
     - assets/audio/ui/
+    # Rain and thunder, rendered by tool/gen_weather_sounds.py.
+    - assets/audio/weather/
 
   # Mushaf fonts for the Quran reader, each drawn for the matching Quran.com
   # text (text_uthmani / text_indopak), including its waqf marks.

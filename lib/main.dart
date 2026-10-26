@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/constants/colors.dart';
+import 'core/navigation/app_route_observer.dart';
 import 'core/services/sound_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/notification_service.dart';
@@ -140,6 +141,7 @@ class WirdApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,
+        navigatorObservers: [appRouteObserver],
         title: 'Wird',
         debugShowCheckedModeBanner: false,
         theme: _buildTheme(),

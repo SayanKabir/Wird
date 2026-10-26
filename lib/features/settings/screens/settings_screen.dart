@@ -23,6 +23,7 @@ import '../../../widgets/common/pressable.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../core/services/sound_service.dart';
+import '../../../core/services/weather_sound_service.dart';
 import '../../../widgets/common/location_off_prompt.dart';
 import '../../../core/quran/quran_translations.dart';
 import '../../../core/quran/transliterator.dart';
@@ -601,6 +602,16 @@ class SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (v) async {
                     await _saveSettings(_settings.copyWith(soundsEnabled: v));
                     if (v) SoundService().toggle(true);
+                  },
+                ),
+                _SwitchRow(
+                  icon: Icons.thunderstorm_rounded,
+                  title: 'Rain and thunder',
+                  subtitle: 'Softly, on the home screen, when it rains where you are.',
+                  value: _settings.weatherSoundsEnabled,
+                  onChanged: (v) async {
+                    await _saveSettings(_settings.copyWith(weatherSoundsEnabled: v));
+                    WeatherSoundService().refresh();
                   },
                 ),
               ],
