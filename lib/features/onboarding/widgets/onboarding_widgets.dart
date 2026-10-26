@@ -67,21 +67,27 @@ class AthanCueCaption extends StatelessWidget {
         ),
         child: cue == null
             ? const SizedBox.shrink()
+            // Two lines, since the shahada and its meaning are too long to
+            // share one.
             : GlassPanel(
                 key: ValueKey(cue),
-                radius: AppRadii.pill,
+                radius: AppRadii.group,
                 fill: 0.12,
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                child: Row(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       cue.arabic,
+                      textAlign: TextAlign.center,
                       textDirection: TextDirection.rtl,
-                      style: AppTextStyles.arabic(size: 18, color: AppColors.spiritualGold).copyWith(height: 1.3),
+                      style: AppTextStyles.arabic(size: 18, color: AppColors.spiritualGold).copyWith(height: 1.4),
                     ),
-                    const SizedBox(width: 12),
-                    Text(cue.meaning, style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.85))),
+                    Text(
+                      cue.meaning,
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.85)),
+                    ),
                   ],
                 ),
               ),

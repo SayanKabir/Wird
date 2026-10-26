@@ -1,23 +1,36 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
-/// A short phrase of the adhan, played as a cue at a meaningful moment in
-/// onboarding: the takbir as the user begins, "come to prayer" as they turn
-/// on reminders, "come to success" as they finish.
+/// The phrases of the iqamah, in order. Onboarding sounds one as the user
+/// enters each step, so walking through it recites the whole call, ending
+/// with "the prayer has begun" as they finish.
 ///
 /// Until Wird has its own recording, the clips are cut from "Adhan.ogg" by
 /// Aishatu98 on Wikimedia Commons (CC0, public domain), an iqamah whose
-/// phrases are short and crisp: the opening takbir pair (3.8s), Hayya
-/// ʿala-ṣ-ṣalāh (19.15s) and Hayya ʿala-l-falāḥ (23.2s), faded and
-/// loudness-normalised. https://commons.wikimedia.org/wiki/File:Adhan.ogg
+/// phrases are short and crisp, faded and loudness-normalised:
+/// https://commons.wikimedia.org/wiki/File:Adhan.ogg
 /// To use another muezzin, replace the files under assets/audio/ keeping
-/// their names; nothing else depends on the recording.
+/// their names; nothing else depends on the recording. Keep each clip under
+/// about 20s at 22 kHz mono: Android's low-latency player truncates sounds
+/// past roughly 1 MB decoded.
 enum AthanCue {
   takbir(
     'audio/allahu_akbar.m4a',
     'اللَّهُ أَكْبَرُ',
     'Allāhu akbar',
-    'God is the greatest',
+    'Allah is the greatest',
+  ),
+  shahada(
+    'audio/ashhadu_an_la_ilaha.m4a',
+    'أَشْهَدُ أَنْ لَا إِلَٰهَ إِلَّا اللَّهُ',
+    'Ashhadu an lā ilāha illā-llāh',
+    'There is no god but Allah',
+  ),
+  risalah(
+    'audio/ashhadu_anna_muhammad.m4a',
+    'أَشْهَدُ أَنَّ مُحَمَّدًا رَسُولُ اللَّهِ',
+    'Ashhadu anna Muḥammadan rasūlu-llāh',
+    'Muhammad is the Messenger of Allah',
   ),
   salah(
     'audio/hayya_alas_salah.m4a',
@@ -30,6 +43,15 @@ enum AthanCue {
     'حَيَّ عَلَى الْفَلَاحِ',
     'Hayya ʿala-l-falāḥ',
     'Come to success',
+  ),
+
+  /// Qad qāmati-ṣ-ṣalāh twice, then the closing takbir and tahlil in one
+  /// clip, so the call finishes as home arrives.
+  iqamah(
+    'audio/qad_qamat_closing.m4a',
+    'قَدْ قَامَتِ الصَّلَاةُ',
+    'Qad qāmati-ṣ-ṣalāh',
+    'The prayer has begun',
   );
 
   /// Path under assets/, as audioplayers' [AssetSource] expects.

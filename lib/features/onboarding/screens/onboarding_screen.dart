@@ -31,8 +31,8 @@ import '../widgets/onboarding_widgets.dart';
 /// the stars of Tahajjud to Maghrib's sunset, and each hour asks for one
 /// preference while showing off the feature it shapes: real prayer times and
 /// the Qibla as soon as the location is in, Asr moving as the madhab changes,
-/// both mushaf scripts side by side. Beginning and finishing are marked by a
-/// phrase of the adhan ("come to prayer", "come to success").
+/// both mushaf scripts side by side. Each step is entered with the next
+/// phrase of the iqamah, so the walk through recites the whole call.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -48,6 +48,18 @@ const _skies = [
   PrayerPeriod.dhuhr,
   PrayerPeriod.asr,
   PrayerPeriod.maghrib,
+];
+
+/// The iqamah phrase sounded on arriving at each step, in order; the last
+/// one ([AthanCue.iqamah]) plays on finishing. Going back sounds nothing,
+/// so the phrases are only ever heard in their order.
+const _entryCues = [
+  null,
+  AthanCue.takbir,
+  AthanCue.shahada,
+  AthanCue.risalah,
+  AthanCue.salah,
+  AthanCue.falah,
 ];
 
 const _fard = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
@@ -135,10 +147,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   Future<void> _checkNotifications() async {
     final enabled = await _notificationService.areNotificationsEnabled();
     if (!mounted || !enabled || _notificationsGranted == true) return;
-    final wasAsked = _notificationsGranted == false;
     setState(() => _notificationsGranted = true);
-    // Back from Settings with them on: answer with the call they'll carry.
-    if (wasAsked) _cues.play(AthanCue.salah);
   }
 
   @override
@@ -172,8 +181,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
 
   void _next() {
     HapticService().light();
-    if (_page == 0) _cues.play(AthanCue.takbir);
-    if (_page < _lastPage) _goTo(_page + 1);
+    if (_page < _lastPage) {
+      final cue = _entryCues[_page + 1];
+      if (cue != null) _cues.play(cue);
+      _goTo(_page + 1);
+    }
   }
 
   void _back() {
@@ -314,8 +326,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       _notificationsGranted = granted;
     });
     if (!granted) return;
-    // The call each reminder will carry.
-    _cues.play(AthanCue.salah);
 
     // Android 12+ needs a separate grant to ring exactly on time.
     final canScheduleExact = await _notificationService.canScheduleExactAlarms();
@@ -326,7 +336,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       );
       if (open == true) await _notificationService.requestExactAlarmPermission();
     }
-    await _notificationService.showTestNotification();
   }
 
   // ---------------------------------------------------------------------------
@@ -358,7 +367,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       _homeSky = PrayerService().getCurrentPrayerPeriod(times, DateTime.now());
       _finishing = true;
     });
-    final cue = _cues.play(AthanCue.falah);
+    final cue = _cues.play(AthanCue.iqamah);
 
     final settings = _storageService.getSettings().copyWith(
       onboardingCompleted: true,
@@ -380,8 +389,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     await Future.wait([
       cue,
       _storageService.saveSettings(settings),
-      // Long enough for the phrase to land and the sky to settle.
-      Future.delayed(Duration(milliseconds: still ? 600 : 2600)),
+      // Qad qāmati-ṣ-ṣalāh is heard twice under the veil; home arrives with
+      // the closing takbir.
+      Future.delayed(Duration(milliseconds: still ? 600 : 5200)),
     ]);
     if (!mounted) return;
     // The phrase lifts away as home fades in over it, so no empty beat of
@@ -474,6 +484,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                   ),
                 ),
               ),
+              // Floats over the page under the header, so a phrase coming and
+              // going never moves the content. The finish shows its own.
+              if (!_finishing)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 60,
+                  left: AppSpacing.gutter(context),
+                  right: AppSpacing.gutter(context),
+                  child: const IgnorePointer(child: Center(child: AthanCueCaption())),
+                ),
               if (_finishing)
                 IgnorePointer(
                   child: AnimatedOpacity(
@@ -524,8 +543,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
               ],
             ),
           ),
-          const SizedBox(height: 6),
-          const AthanCueCaption(),
         ],
       ),
     );
@@ -1653,8 +1670,9 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// The phrase the user is answering, blooming in over the sky the home
-/// screen is about to open with, then naming the hour they're arriving in.
+/// "The prayer has begun", the iqamah's last call, blooming in over the sky
+/// the home screen is about to open with, then naming the hour they're
+/// arriving in.
 class _FinishVeil extends StatelessWidget {
   final PrayerPeriod now;
 
@@ -1691,7 +1709,7 @@ class _FinishVeil extends StatelessWidget {
         children: [
           bloom(
             Text(
-              AthanCue.falah.arabic,
+              AthanCue.iqamah.arabic,
               textAlign: TextAlign.center,
               textDirection: TextDirection.rtl,
               style: AppTextStyles.arabic(size: 44, color: Colors.white).copyWith(
@@ -1708,7 +1726,7 @@ class _FinishVeil extends StatelessWidget {
               : rule,
           const SizedBox(height: 14),
           bloom(
-            Text(AthanCue.falah.meaning, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.85))),
+            Text(AthanCue.iqamah.meaning, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.85))),
             700.ms,
           ),
           const SizedBox(height: 28),
