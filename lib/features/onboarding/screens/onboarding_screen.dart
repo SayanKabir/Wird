@@ -23,6 +23,7 @@ import '../../../widgets/common/location_off_prompt.dart';
 import '../../../widgets/common/prayer_glyph.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/wird_icons.dart';
+import '../../home/screens/home_screen.dart';
 import '../../home/widgets/celestial_background.dart';
 import '../widgets/onboarding_widgets.dart';
 
@@ -54,7 +55,7 @@ const _fard = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.ish
 const _bismillahUthmani = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ';
 const _bismillahIndoPak = 'بِسۡمِ اللهِ الرَّحۡمٰنِ الرَّحِيۡمِ';
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBindingObserver {
   final PageController _pageController = PageController();
   final StorageService _storageService = StorageService();
   final LocationService _locationService = LocationService();
@@ -67,6 +68,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _searching = false;
   bool _requestingNotifications = false;
   bool _finishing = false;
+
+  /// The last beat of finishing: the phrase lifts away just before home
+  /// arrives.
+  bool _leaving = false;
+
+  /// The sky for the actual time of day, which the home screen opens with,
+  /// so the hand-off happens under one sky. Set when finishing.
+  PrayerPeriod _homeSky = PrayerPeriod.isha;
   String? _locationError;
   LocationData? _location;
 
@@ -112,11 +121,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _endWarning = s.endTimeWarningMinutes;
     _suggestedMethod = _methodForCountry(_location?.country);
     _cues.warmUp();
+    WidgetsBinding.instance.addObserver(this);
+    _checkNotifications();
+  }
+
+  /// Picks up notifications allowed from the phone's settings while Wird
+  /// was in the background.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _notificationsGranted != true) _checkNotifications();
+  }
+
+  Future<void> _checkNotifications() async {
+    final enabled = await _notificationService.areNotificationsEnabled();
+    if (!mounted || !enabled || _notificationsGranted == true) return;
+    final wasAsked = _notificationsGranted == false;
+    setState(() => _notificationsGranted = true);
+    // Back from Settings with them on: answer with the call they'll carry.
+    if (wasAsked) _cues.play(AthanCue.salah);
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     _cityController.dispose();
     _celestialOpacity.dispose();
     super.dispose();
@@ -126,7 +154,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // Navigation
   // ---------------------------------------------------------------------------
 
-  bool get _canContinue => _page != 1 || _location != null;
+  /// Reminders are the heart of Wird, so the last step waits for them.
+  bool get _canContinue => switch (_page) {
+        1 => _location != null,
+        5 => _notificationsGranted == true,
+        _ => true,
+      };
 
   void _goTo(int page) {
     FocusScope.of(context).unfocus();
@@ -267,6 +300,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Future<void> _requestNotifications() async {
     HapticService().medium();
+    // Once refused, the system won't ask again; only Settings can turn them
+    // on, and coming back is caught by didChangeAppLifecycleState.
+    if (_notificationsGranted == false) {
+      await _locationService.openAppSettings();
+      return;
+    }
     setState(() => _requestingNotifications = true);
     final granted = await _notificationService.requestPermission();
     if (!mounted) return;
@@ -301,8 +340,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       return;
     }
     HapticService().heavy();
-    _celestialOpacity.value = 1;
-    setState(() => _finishing = true);
+    FocusScope.of(context).unfocus();
+    final times = PrayerService().calculatePrayerTimes(
+      date: DateTime.now(),
+      location: location,
+      calculationMethod: _method,
+      madhab: _madhab,
+      includeTahajjud: _tahajjud,
+      includeIshraq: _ishraq,
+      includeDuha: _duha,
+    );
+    // Home starts its sun or moon at the beginning of the hour's arc, not
+    // where this one has travelled to, so this one fades out under the
+    // phrase and home brings its own.
+    _celestialOpacity.value = 0;
+    setState(() {
+      _homeSky = PrayerService().getCurrentPrayerPeriod(times, DateTime.now());
+      _finishing = true;
+    });
     final cue = _cues.play(AthanCue.falah);
 
     final settings = _storageService.getSettings().copyWith(
@@ -313,7 +368,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       includeTahajjud: _tahajjud,
       includeIshraq: _ishraq,
       includeDuha: _duha,
-      notificationsEnabled: _notificationsGranted != false,
+      notificationsEnabled: true,
       endTimeWarningMinutes: _endWarning,
       sunnahNotificationsEnabled: _sunnahReminders,
       islamicEventsEnabled: _islamicEvents,
@@ -321,13 +376,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       quranShowTranslation: _translation,
       quranShowTransliteration: _transliteration,
     );
+    final still = motionStill();
     await Future.wait([
       cue,
       _storageService.saveSettings(settings),
-      // Long enough for the phrase to land and the sky to turn to night.
-      Future.delayed(Duration(milliseconds: motionStill() ? 600 : 2600)),
+      // Long enough for the phrase to land and the sky to settle.
+      Future.delayed(Duration(milliseconds: still ? 600 : 2600)),
     ]);
-    if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+    if (!mounted) return;
+    // The phrase lifts away as home fades in over it, so no empty beat of
+    // sky falls between them.
+    Navigator.of(context).pushReplacement(_HomeArrival());
+    if (!still) await Future.delayed(const Duration(milliseconds: 350));
+    if (mounted) setState(() => _leaving = true);
   }
 
   // ---------------------------------------------------------------------------
@@ -336,7 +397,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final period = _finishing ? PrayerPeriod.isha : _skies[_page];
+    final period = _finishing ? _homeSky : _skies[_page];
     return PopScope(
       canPop: _page == 0 && !_finishing,
       onPopInvokedWithResult: (didPop, _) {
@@ -373,40 +434,60 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
               ),
-              SafeArea(
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    Expanded(
-                      child: PageView(
-                        controller: _pageController,
-                        physics: const NeverScrollableScrollPhysics(),
-                        onPageChanged: (page) {
-                          _celestialOpacity.value = page == 0 ? 1 : 0.5;
-                          setState(() => _page = page);
-                        },
+              // The page's own content dissolves first, leaving only the sky.
+              AnimatedOpacity(
+                opacity: _finishing ? 0 : 1,
+                duration: const Duration(milliseconds: 500),
+                curve: AppCurves.emphasized,
+                child: AnimatedSlide(
+                  offset: _finishing ? const Offset(0, 0.02) : Offset.zero,
+                  duration: const Duration(milliseconds: 600),
+                  curve: AppCurves.emphasized,
+                  child: IgnorePointer(
+                    ignoring: _finishing,
+                    child: SafeArea(
+                      child: Column(
                         children: [
-                          _WelcomePage(onBegin: _next),
-                          _page1(),
-                          _page2(),
-                          _page3(),
-                          _page4(),
-                          _page5(),
+                          _buildHeader(),
+                          Expanded(
+                            child: PageView(
+                              controller: _pageController,
+                              physics: const NeverScrollableScrollPhysics(),
+                              onPageChanged: (page) {
+                                _celestialOpacity.value = page == 0 ? 1 : 0.5;
+                                setState(() => _page = page);
+                              },
+                              children: [
+                                _WelcomePage(onBegin: _next),
+                                _page1(),
+                                _page2(),
+                                _page3(),
+                                _page4(),
+                                _page5(),
+                              ],
+                            ),
+                          ),
+                          _buildFooter(),
                         ],
                       ),
                     ),
-                    _buildFooter(),
-                  ],
+                  ),
                 ),
               ),
-              IgnorePointer(
-                child: AnimatedOpacity(
-                  opacity: _finishing ? 1 : 0,
-                  duration: const Duration(milliseconds: 900),
-                  curve: AppCurves.emphasized,
-                  child: _finishing ? const _FinishVeil() : const SizedBox.expand(),
+              if (_finishing)
+                IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: _leaving ? 0 : 1,
+                    duration: const Duration(milliseconds: 600),
+                    curve: AppCurves.exit,
+                    child: AnimatedSlide(
+                      offset: _leaving ? const Offset(0, -0.04) : Offset.zero,
+                      duration: const Duration(milliseconds: 600),
+                      curve: AppCurves.exit,
+                      child: _FinishVeil(now: _homeSky),
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -460,7 +541,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: SizedBox(
         width: double.infinity,
         child: OnboardingButton(
-          label: isLast ? 'Begin with Wird' : (_page == 1 && _location == null ? 'Set your location first' : 'Continue'),
+          label: switch (_page) {
+            1 when _location == null => 'Set your location first',
+            5 when _notificationsGranted != true => 'Allow reminders to begin',
+            5 => 'Begin with Wird',
+            _ => 'Continue',
+          },
           icon: isLast ? null : Icons.arrow_forward_rounded,
           gold: isLast,
           loading: _finishing,
@@ -783,7 +869,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       const OnboardingHeading(
         eyebrow: 'Maghrib · sunset',
         title: 'Never miss the call',
-        body: 'A notification as each prayer begins, and a quiet nudge before its time runs out.',
+        body: 'Wird is built around the call to prayer: a notification as each prayer begins, and a quiet nudge before its time runs out. Allow them to begin.',
       ),
       const SizedBox(height: AppSpacing.xl),
       _NotificationMock(prayer: upcoming?.$1, time: upcoming?.$2),
@@ -808,8 +894,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               )
             : GhostButton(
                 key: const ValueKey('ask'),
-                label: _notificationsGranted == false ? 'Try again' : 'Turn on reminders',
-                icon: Icons.notifications_active_rounded,
+                label: _notificationsGranted == false ? 'Open settings' : 'Allow reminders',
+                icon: _notificationsGranted == false ? Icons.settings_rounded : Icons.notifications_active_rounded,
                 loading: _requestingNotifications,
                 onPressed: _requestNotifications,
               ),
@@ -817,7 +903,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       if (_notificationsGranted == false) ...[
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'Notifications are off for Wird. You can allow them later in your phone\'s settings.',
+          'Notifications are off for Wird. Turn them on in Settings, then come back here.',
           textAlign: TextAlign.center,
           style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7)),
         ),
@@ -1567,37 +1653,100 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// Fills the screen as onboarding ends: the phrase the user is answering,
-/// over the sky turning to night.
+/// The phrase the user is answering, blooming in over the sky the home
+/// screen is about to open with, then naming the hour they're arriving in.
 class _FinishVeil extends StatelessWidget {
-  const _FinishVeil();
+  final PrayerPeriod now;
+
+  const _FinishVeil({required this.now});
+
+  static String _name(PrayerPeriod p) => switch (p) {
+        PrayerPeriod.tahajjud => 'Tahajjud',
+        PrayerPeriod.fajr => 'Fajr',
+        PrayerPeriod.sunrise => 'Sunrise',
+        PrayerPeriod.dhuhr => 'Dhuhr',
+        PrayerPeriod.asr => 'Asr',
+        PrayerPeriod.maghrib => 'Maghrib',
+        PrayerPeriod.isha => 'Isha',
+      };
 
   @override
   Widget build(BuildContext context) {
+    final animate = !motionStill();
+    Widget bloom(Widget child, Duration delay) => animate
+        ? child
+            .animate()
+            .fadeIn(delay: delay, duration: 900.ms, curve: AppCurves.emphasized)
+            .scaleXY(begin: 0.94, delay: delay, duration: 1200.ms, curve: AppCurves.emphasized)
+        : child;
+    final rule = Container(width: 72, height: 1, color: AppColors.spiritualGold.withValues(alpha: 0.7));
+
     return Container(
-      color: AppColors.background.withValues(alpha: 0.35),
-      alignment: Alignment.center,
+      color: AppColors.background.withValues(alpha: 0.25),
+      // Below centre, clear of the sun or moon for most of the day.
+      alignment: const Alignment(0, 0.2),
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            AthanCue.falah.arabic,
-            textAlign: TextAlign.center,
-            textDirection: TextDirection.rtl,
-            style: AppTextStyles.arabic(size: 44, color: Colors.white).copyWith(
-              height: 1.4,
-              shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.4), blurRadius: 28)],
+          bloom(
+            Text(
+              AthanCue.falah.arabic,
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+              style: AppTextStyles.arabic(size: 44, color: Colors.white).copyWith(
+                height: 1.4,
+                shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.45), blurRadius: 28)],
+              ),
             ),
+            200.ms,
           ),
-          const SizedBox(height: 12),
-          Text(AthanCue.falah.transliteration, style: AppTextStyles.body(color: AppColors.spiritualGold)),
-          const SizedBox(height: 4),
-          Text(AthanCue.falah.meaning, style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.75))),
+          const SizedBox(height: 14),
+          // A rule of gold drawn outwards from the centre.
+          animate
+              ? rule.animate().scaleX(begin: 0, delay: 600.ms, duration: 900.ms, curve: AppCurves.emphasized)
+              : rule,
+          const SizedBox(height: 14),
+          bloom(
+            Text(AthanCue.falah.meaning, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.85))),
+            700.ms,
+          ),
+          const SizedBox(height: 28),
+          bloom(
+            Text(
+              'NOW · ${_name(now).toUpperCase()}',
+              style: AppTextStyles.sectionLabel(color: AppColors.spiritualGold.withValues(alpha: 0.9)),
+            ),
+            1300.ms,
+          ),
         ],
       ),
     );
   }
+}
+
+/// Home arriving over the sky onboarding finished on: it fades in while
+/// settling from slightly larger, as if the view were coming to rest.
+///
+/// Home's first frame is heavy (it starts every bloc and the sky at once)
+/// and stalls the screen for about 0.6s even in a release build, so the
+/// fade starts late enough for that stall to pass behind the phrase.
+class _HomeArrival extends PageRouteBuilder<void> {
+  _HomeArrival()
+      : super(
+          settings: const RouteSettings(name: '/home'),
+          transitionDuration: Duration(milliseconds: motionStill() ? 200 : 1600),
+          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            if (motionStill()) return FadeTransition(opacity: animation, child: child);
+            final fade = CurvedAnimation(parent: animation, curve: const Interval(0.4, 0.85, curve: Curves.easeOut));
+            final settle = CurvedAnimation(parent: animation, curve: const Interval(0.4, 1, curve: AppCurves.emphasized));
+            return FadeTransition(
+              opacity: fade,
+              child: ScaleTransition(scale: Tween(begin: 1.05, end: 1.0).animate(settle), child: child),
+            );
+          },
+        );
 }
 
 /// Asks to open the "Alarms & reminders" setting on Android 12+.

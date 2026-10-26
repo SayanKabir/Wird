@@ -500,6 +500,12 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>();
       
       return await androidPlugin?.areNotificationsEnabled() ?? false;
+    } else if (Platform.isIOS) {
+      final iosPlugin = _notificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>();
+      final options = await iosPlugin?.checkPermissions();
+      return options?.isEnabled ?? false;
     }
     return true;
   }

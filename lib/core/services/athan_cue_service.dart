@@ -5,9 +5,11 @@ import 'package:flutter/foundation.dart';
 /// onboarding: the takbir as the user begins, "come to prayer" as they turn
 /// on reminders, "come to success" as they finish.
 ///
-/// The clips are cut from "Beautiful adhan.ogg" by Adam-synagda on Wikimedia
-/// Commons (CC0, public domain), faded and loudness-normalised:
-/// https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
+/// Until Wird has its own recording, the clips are cut from "Adhan.ogg" by
+/// Aishatu98 on Wikimedia Commons (CC0, public domain), an iqamah whose
+/// phrases are short and crisp: the opening takbir pair (3.8s), Hayya
+/// ʿala-ṣ-ṣalāh (19.15s) and Hayya ʿala-l-falāḥ (23.2s), faded and
+/// loudness-normalised. https://commons.wikimedia.org/wiki/File:Adhan.ogg
 /// To use another muezzin, replace the files under assets/audio/ keeping
 /// their names; nothing else depends on the recording.
 enum AthanCue {
@@ -62,7 +64,7 @@ class AthanCueService {
   /// The cue now sounding, for a caption to follow along with.
   final ValueNotifier<AthanCue?> playing = ValueNotifier(null);
 
-  static const _captionFor = Duration(milliseconds: 4500);
+  static const _captionFor = Duration(milliseconds: 4000);
 
   /// Prepares every clip. Safe to call more than once.
   Future<void> warmUp() => _warming ??= _prepareAll();
