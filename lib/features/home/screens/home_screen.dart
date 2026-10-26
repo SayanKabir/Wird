@@ -1362,11 +1362,10 @@ class _CurrentPrayerSection extends StatelessWidget {
               tag: 'current_prayer_name',
               child: Text(
                 prayer.displayNameForDay(state.date),
-                style: AppTextStyles.h1(color: textColor).copyWith(
-                  fontSize: 56,
-                  fontWeight: FontWeight.w200,
+                style: AppTextStyles.display(
+                  size: 56,
+                  color: textColor,
                   height: 0.9,
-                  letterSpacing: -1,
                   shadows: [
                     Shadow(
                       color: textColor.withValues(alpha: 0.1),
@@ -1613,10 +1612,10 @@ class _NextPrayerSection extends StatelessWidget {
         ],
         Text(
           prayer.displayNameForDay(state.date),
-          style: AppTextStyles.h2(color: textColor).copyWith(
-            fontWeight: FontWeight.w300,
+          style: AppTextStyles.display(
+            size: 32,
+            color: textColor,
             letterSpacing: 0.5,
-            fontSize: 32,
           ),
         ),
         const SizedBox(height: 8),
@@ -1664,9 +1663,7 @@ class _WaitingForNextSection extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             nextPrayer!.displayNameForDay(state.date),
-            style: AppTextStyles.h1(
-              color: textColor,
-            ).copyWith(fontSize: 48, fontWeight: FontWeight.w200),
+            style: AppTextStyles.display(size: 48, color: textColor),
           ),
           const SizedBox(height: 16),
           // Countdown to NEXT prayer start

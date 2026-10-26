@@ -219,10 +219,7 @@ class _TimeSeparator extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Text(
         ":",
-        style: AppTextStyles.h2(color: color.withOpacity(0.5)).copyWith(
-          fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
-          fontSize: 32,
-        ),
+        style: AppTextStyles.display(size: 32, weight: FontWeight.w200, color: color.withOpacity(0.5)),
       ),
     );
   }
@@ -250,13 +247,8 @@ class _TimeUnit extends StatelessWidget {
         // Number
         Text(
           value.toString().padLeft(2, '0'),
-          style: TextStyle(
-            fontFeatures: const [FontFeature.tabularFigures()], // Fixed-width digits so numbers don't jitter
-            fontSize: 56, // Huge hero size
-            fontWeight: FontWeight.w300, // Light weight
-            color: color,
-            height: 1.0,
-          ),
+          // Thin and tall; see AppTextStyles.display.
+          style: AppTextStyles.display(size: 56, color: color, height: 1.0),
         ),
         const SizedBox(width: 4),
         // Label (h, m, s)

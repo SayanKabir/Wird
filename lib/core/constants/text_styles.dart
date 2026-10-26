@@ -303,6 +303,30 @@ class AppTextStyles {
     fontFeatures: const [FontFeature.tabularFigures()],
   );
 
+  /// Thin, narrow display type for the home screen's big prayer names and
+  /// countdown: the platform's own sans (Roboto on Android; iOS has no
+  /// Roboto, so it falls back to SF). Their light weights are slimmer and
+  /// taller than Inter's. Inter can't stand in here: google_fonts loads one
+  /// file per weight, so asking an h1 (Bold) for w200 still draws Bold.
+  static TextStyle display({
+    required double size,
+    FontWeight weight = FontWeight.w300,
+    Color? color,
+    double? height,
+    double? letterSpacing,
+    List<Shadow>? shadows,
+  }) =>
+      TextStyle(
+        fontFamily: 'Roboto',
+        fontSize: size,
+        fontWeight: weight,
+        color: color ?? Colors.white,
+        height: height,
+        letterSpacing: letterSpacing,
+        fontFeatures: const [FontFeature.tabularFigures()],
+        shadows: shadows ?? _shadows,
+      );
+
   /// Overline - Small caps style labels
   static TextStyle overline({Color? color}) => _inter(FontWeight.w600).copyWith(
     fontSize: 12,
