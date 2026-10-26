@@ -4,6 +4,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/repositories/surah_info_local_repository.dart';
 import '../../../core/constants/radii.dart';
+import '../../../widgets/common/kaaba_icon.dart';
 
 class SurahInfoModal extends StatelessWidget {
   final SurahInfoData info;
@@ -90,12 +91,14 @@ class SurahInfoModal extends StatelessWidget {
                           // surah list and reading screens (Makki/Madani)
                           // without rewriting all 114 data rows.
                           _Badge(
-                            icon: _isMakki(info.revelation) ? '🕋' : '🕌',
+                            icon: _isMakki(info.revelation)
+                                ? const KaabaIcon(size: 14)
+                                : Icon(Icons.mosque_rounded, size: 14, color: AppColors.spiritualGold.withValues(alpha: 0.9)),
                             text: _isMakki(info.revelation) ? 'Makki' : 'Madani',
                           ),
                           const SizedBox(width: 8),
                           _Badge(
-                            icon: '⏳',
+                            icon: Icon(Icons.hourglass_bottom_rounded, size: 14, color: Colors.white.withValues(alpha: 0.75)),
                             text: info.period,
                           ),
                         ],
@@ -149,7 +152,7 @@ class SurahInfoModal extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  final String icon;
+  final Widget icon;
   final String text;
 
   const _Badge({required this.icon, required this.text});
@@ -166,7 +169,7 @@ class _Badge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: const TextStyle(fontSize: 12)),
+          icon,
           const SizedBox(width: 6),
           Text(text, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.9))),
         ],

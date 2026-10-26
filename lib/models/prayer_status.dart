@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:hive/hive.dart';
 
 part 'prayer_status.g.dart';
@@ -47,18 +48,18 @@ extension PrayerStatusExtension on PrayerStatus {
   }
 
   /// Get the status icon
-  String get icon {
+  IconData get icon {
     switch (this) {
       case PrayerStatus.pending:
-        return '⏳';
+        return Icons.hourglass_bottom_rounded;
       case PrayerStatus.onTime:
-        return '✅';
+        return Icons.check_circle_rounded;
       case PrayerStatus.late:
-        return '🕓';
+        return Icons.schedule_rounded;
       case PrayerStatus.missed:
-        return '❌';
+        return Icons.cancel_rounded;
       case PrayerStatus.upcoming:
-        return '🔵';
+        return Icons.radio_button_unchecked_rounded;
     }
   }
 

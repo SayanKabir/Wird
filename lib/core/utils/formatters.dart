@@ -135,14 +135,15 @@ class AppFormatters {
   // STREAK FORMATTING
   // ============================================
 
-  /// Format streak as "🔥 7-day streak"
+  /// Format streak as "7 days". Show it beside
+  /// Icons.local_fire_department_rounded rather than an emoji.
   static String formatStreak(int days) {
     if (days == 0) {
       return 'No streak';
     } else if (days == 1) {
-      return '🔥 1 day';
+      return '1 day';
     } else {
-      return '🔥 $days days';
+      return '$days days';
     }
   }
 

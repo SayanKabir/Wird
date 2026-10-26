@@ -9,6 +9,7 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/kaaba_icon.dart';
 
 /// Qibla compass screen with Celestial Zen design
 class QiblaScreen extends StatefulWidget {
@@ -262,19 +263,18 @@ class _QiblaScreenState extends State<QiblaScreen> with SingleTickerProviderStat
                         margin: EdgeInsets.only(bottom: compassSize * 0.6),
                         child: Column(
                           children: [
-                            Text(
-                              '🕋',
-                              style: TextStyle(
-                                fontSize: compassSize * 0.15, // Scales with screen
-                                height: 1.0,
-                                shadows: [
-                                  Shadow(
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                boxShadow: [
+                                  BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.3),
                                     blurRadius: 12,
                                     offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
+                              // Scales with the compass.
+                              child: KaabaIcon(size: compassSize * 0.16),
                             ),
                             SizedBox(height: compassSize * 0.04),
                             Container(

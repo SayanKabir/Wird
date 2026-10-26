@@ -826,7 +826,7 @@ class NotificationService {
 
     await _zonedScheduleSafe(
       id: 200,
-      title: '📿 Sunnah of the Week',
+      title: 'Sunnah of the Week',
       body: 'This week\'s sunnah: $sunnahTitle — try to practice it daily!',
       scheduledDate: scheduled,
       details: NotificationDetails(
@@ -880,7 +880,7 @@ class NotificationService {
 
     await _zonedScheduleSafe(
       id: 300,
-      title: '🌙 ${message.title}',
+      title: message.title,
       body: message.subtitle,
       scheduledDate: scheduled,
       details: NotificationDetails(
@@ -918,7 +918,7 @@ class NotificationService {
   Future<void> showTestNotification() async {
     await _notificationsPlugin.show(
       999,
-      '🕌 Test Notification',
+      'Test notification',
       'Prayer notifications are working!',
       const NotificationDetails(
         android: AndroidNotificationDetails(
@@ -974,7 +974,7 @@ class NotificationService {
 
     await _zonedScheduleSafe(
       id: 301,
-      title: '🍽️ Suhoor — 30 min before Fajr',
+      title: 'Suhoor — 30 min before Fajr',
       body: msg,
       scheduledDate: scheduledTime,
       details: NotificationDetails(
@@ -1067,10 +1067,10 @@ class NotificationService {
 
       if (isRamadan) {
         if (prayer == Prayer.fajr) {
-          titleOverride = '🌅 Suhoor time has ended';
+          titleOverride = 'Suhoor time has ended';
           bodyOverride = _ramadanFajrMessages[_random.nextInt(_ramadanFajrMessages.length)];
         } else if (prayer == Prayer.maghrib) {
-          titleOverride = '🌙 Break your fast — Iftar time!';
+          titleOverride = 'Break your fast — Iftar time!';
           bodyOverride = _ramadanMaghribMessages[_random.nextInt(_ramadanMaghribMessages.length)];
         }
       }
@@ -1122,7 +1122,7 @@ class NotificationService {
 
     await _zonedScheduleSafe(
       id: id,
-      title: '🌙 Wird',
+      title: 'Wird',
       body: 'Prayer times updated for today',
       scheduledDate: tz.TZDateTime.from(midnightTime, tz.local),
       details: const NotificationDetails(
@@ -1192,7 +1192,7 @@ class NotificationService {
 
     final result = await _zonedScheduleSafe(
       id: 9998, // Special test ID
-      title: '✅ Scheduled notification works!',
+      title: 'Scheduled notification works!',
       body: 'This was scheduled 10 seconds ago via zonedSchedule()',
       scheduledDate: testTime,
       details: const NotificationDetails(
