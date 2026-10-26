@@ -1,3 +1,4 @@
+import '../../../widgets/common/glass_sheet.dart';
 import '../../../models/prayer_status.dart';
 import '../../../models/prayer_log.dart';
 import '../../../core/services/storage_service.dart';
@@ -726,18 +727,20 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
 class AchievementsScreen extends StatelessWidget {
   final List<Achievement> achievements;
-  
+
   const AchievementsScreen({super.key, required this.achievements});
 
   @override
   Widget build(BuildContext context) {
     final unlocked = achievements.where((a) => a.isUnlocked).toList();
     final locked = achievements.where((a) => !a.isUnlocked).toList();
+    // The locked one you're closest to, if you've started any.
+    final started = locked.where((a) => a.progress > 0).toList()
+      ..sort((a, b) => b.progress.compareTo(a.progress));
+    final next = started.isEmpty ? null : started.first;
 
     // This is a pushed route, so it sits above the celestial background rather
-    // than inside it and has to paint its own. It previously used a one-off
-    // navy-to-black gradient that appeared nowhere else in the app, which is
-    // why arriving here felt like leaving it. Use the same palette the other
+    // than inside it and has to paint its own, in the same palette the other
     // pushed full-screen route (the surah reader) uses.
     final gradientColors = AppColors.getGradientForPeriod(PrayerPeriod.tahajjud);
 
@@ -755,77 +758,30 @@ class AchievementsScreen extends StatelessWidget {
           child: CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              // 1. Header
               SliverToBoxAdapter(
                 child: Padding(
-                  // Matches the Statistics tab this screen is opened from.
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      PageHeader(
-                        overline: "MILESTONES",
-                        title: "Achievements",
-                        overlineColor: AppColors.spiritualGold,
-                        onBack: () => Navigator.pop(context),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "${unlocked.length} of ${achievements.length} Unlocked",
-                        style: AppTextStyles.body(color: Colors.white54),
-                      ),
-                    ],
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+                  child: PageHeader(
+                    overline: "MILESTONES",
+                    title: "Achievements",
+                    onBack: () => Navigator.pop(context),
                   ),
                 ),
               ),
-
-              // 2. Unlocked Grid
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: _AchievementsHero(earned: unlocked.length, total: achievements.length, next: next),
+                ),
+              ),
               if (unlocked.isNotEmpty) ...[
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 0.85,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                          (context, index) => _AchievementCard(item: unlocked[index]),
-                      childCount: unlocked.length,
-                    ),
-                  ),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                _gridLabel('EARNED'),
+                _grid(context, unlocked),
               ],
-
-              // 3. Locked Header
-              if (locked.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Text(
-                      "LOCKED",
-                      style: AppTextStyles.tiny(color: Colors.white30).copyWith(letterSpacing: 2),
-                    ),
-                  ),
-                ),
-
-              // 4. Locked List
-              if (locked.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                          (context, index) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _LockedAchievementTile(item: locked[index]),
-                      ),
-                      childCount: locked.length,
-                    ),
-                  ),
-                ),
-
+              if (locked.isNotEmpty) ...[
+                _gridLabel('STILL AHEAD'),
+                _grid(context, locked),
+              ],
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
@@ -833,127 +789,185 @@ class AchievementsScreen extends StatelessWidget {
       ),
     );
   }
+
+  Widget _gridLabel(String label) => SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(28, 28, 24, 14),
+          child: Text(
+            label,
+            style: AppTextStyles.tiny(color: AppColors.spiritualGold.withValues(alpha: 0.8))
+                .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+
+  Widget _grid(BuildContext context, List<Achievement> items) => SliverPadding(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        sliver: SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 8,
+            childAspectRatio: 0.9,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, i) => _MedallionTile(item: items[i]),
+            childCount: items.length,
+          ),
+        ),
+      );
 }
 
-class _AchievementCard extends StatelessWidget {
-  final Achievement item;
+/// The count in thin display type inside a gold ring of progress, and the
+/// achievement you're nearest to next.
+class _AchievementsHero extends StatelessWidget {
+  final int earned;
+  final int total;
+  final Achievement? next;
 
-  const _AchievementCard({required this.item});
+  const _AchievementsHero({required this.earned, required this.total, this.next});
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.spiritualGold.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.3)),
-          // No glow: these were the only two boxShadows in the app, which is
-          // part of why this screen read as foreign. The gold fill and border
-          // already mark a badge as unlocked without them.
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: AppColors.spiritualGold,
-                shape: BoxShape.circle,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          SizedBox.square(
+            dimension: 96,
+            child: CustomPaint(
+              painter: _RingPainter(progress: total == 0 ? 0 : earned / total),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('$earned', style: AppTextStyles.display(size: 34, height: 1.0)),
+                    Text('of $total', style: AppTextStyles.tiny(color: Colors.white54)),
+                  ],
+                ),
               ),
-              child: Icon(item.icon, color: Colors.black, size: 20),
             ),
-            const Spacer(),
-            Text(
-              item.title,
-              style: AppTextStyles.h3().copyWith(height: 1.2),
-            ),
-            const SizedBox(height: 4),
-            if (item.unlockedDate != null)
-              Text(
-                DateFormat('MMM d, y').format(item.unlockedDate!),
-                style: AppTextStyles.tiny(color: AppColors.spiritualGold),
-              ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: next == null
+                ? Text(
+                    earned == total ? 'Every milestone reached.' : 'Keep going: your next milestone is on its way.',
+                    style: AppTextStyles.body(color: Colors.white70),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'NEXT UP',
+                        style: AppTextStyles.tiny(color: AppColors.spiritualGold)
+                            .copyWith(letterSpacing: 2, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(next!.title, style: AppTextStyles.body(weight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Text(next!.description, style: AppTextStyles.small(color: Colors.white54)),
+                      const SizedBox(height: 10),
+                      _ProgressLine(value: next!.progress),
+                      const SizedBox(height: 4),
+                      Text(next!.progressText, style: AppTextStyles.tiny(color: Colors.white54)),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _LockedAchievementTile extends StatelessWidget {
-  final Achievement item;
+class _ProgressLine extends StatelessWidget {
+  final double value;
 
-  const _LockedAchievementTile({required this.item});
+  const _ProgressLine({required this.value});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-        ),
+      borderRadius: BorderRadius.circular(2),
+      child: Stack(
+        children: [
+          Container(height: 4, color: Colors.white.withValues(alpha: 0.1)),
+          FractionallySizedBox(
+            widthFactor: value.clamp(0.0, 1.0),
+            child: Container(height: 4, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RingPainter extends CustomPainter {
+  final double progress;
+
+  const _RingPainter({required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = (Offset.zero & size).deflate(4);
+    final track = Paint()
+      ..color = Colors.white.withValues(alpha: 0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3;
+    canvas.drawArc(rect, 0, math.pi * 2, false, track);
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      math.pi * 2 * progress.clamp(0.0, 1.0),
+      false,
+      Paint()
+        ..color = AppColors.spiritualGold
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) => old.progress != progress;
+}
+
+/// One achievement as an eight-pointed star: solid gold once earned, a gold
+/// outline (with an arc of progress, if started) while still ahead. Tap for
+/// what it takes and when it was earned.
+class _MedallionTile extends StatelessWidget {
+  final Achievement item;
+
+  const _MedallionTile({required this.item});
+
+  void _showDetail(BuildContext context) {
+    showGlassSheet<void>(
+      context: context,
+      title: item.title,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(item.icon, color: Colors.white30, size: 20),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: AppTextStyles.body(color: Colors.white60),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.description,
-                        style: AppTextStyles.tiny(color: Colors.white30),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (item.progress > 0) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: item.progress,
-                        backgroundColor: Colors.white.withValues(alpha: 0.1),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          AppColors.spiritualGold.withValues(alpha: 0.6),
-                        ),
-                        minHeight: 4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    item.progressText,
-                    style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.4)),
-                  ),
-                ],
+            Text(item.description, style: AppTextStyles.body(color: Colors.white70)),
+            const SizedBox(height: 16),
+            if (item.isUnlocked && item.unlockedDate != null)
+              Text(
+                'Earned ${DateFormat('d MMMM y').format(item.unlockedDate!)}',
+                style: AppTextStyles.small(color: AppColors.spiritualGold),
+              )
+            else ...[
+              _ProgressLine(value: item.progress),
+              const SizedBox(height: 6),
+              Text(
+                item.progressText.isEmpty ? 'Not started yet' : item.progressText,
+                style: AppTextStyles.small(color: Colors.white54),
               ),
             ],
           ],
@@ -961,6 +975,134 @@ class _LockedAchievementTile extends StatelessWidget {
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final earned = item.isUnlocked;
+    return Pressable(
+      haptic: PressableHaptic.selection,
+      pressedScale: 0.94,
+      onTap: () => _showDetail(context),
+      child: Column(
+        children: [
+          SizedBox.square(
+            dimension: 76,
+            child: CustomPaint(
+              painter: _MedallionPainter(earned: earned, progress: item.progress),
+              child: Center(
+                child: Icon(
+                  item.icon,
+                  size: 26,
+                  color: earned ? const Color(0xFF3A2608) : Colors.white.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.title,
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: AppTextStyles.small(
+              color: earned ? Colors.white : Colors.white54,
+              weight: earned ? FontWeight.w600 : FontWeight.w400,
+            ).copyWith(fontSize: 12, height: 1.25),
+          ),
+          if (earned && item.unlockedDate != null)
+            Text(
+              DateFormat('MMM d').format(item.unlockedDate!),
+              style: AppTextStyles.tiny(color: AppColors.spiritualGold.withValues(alpha: 0.8)).copyWith(fontSize: 10),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MedallionPainter extends CustomPainter {
+  final bool earned;
+  final double progress;
+
+  const _MedallionPainter({required this.earned, required this.progress});
+
+  static const _gold = Color(0xFFE9B95A);
+
+  /// Two squares, one turned 45 degrees, softened at the corners.
+  Path _star(Offset c, double r) {
+    Path square(double turn) {
+      final path = Path()
+        ..addRRect(RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: r * 1.42, height: r * 1.42),
+          Radius.circular(r * 0.12),
+        ));
+      return path.transform((Matrix4.identity()
+            ..translateByDouble(c.dx, c.dy, 0, 1)
+            ..rotateZ(turn))
+          .storage);
+    }
+
+    return Path.combine(PathOperation.union, square(0), square(math.pi / 4));
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.width * 0.46;
+    final star = _star(c, r);
+
+    if (earned) {
+      canvas.drawPath(
+        star,
+        Paint()
+          ..color = _gold.withValues(alpha: 0.35)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.18),
+      );
+      canvas.drawPath(
+        star,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFEBB5), _gold, Color(0xFFB9772A)],
+          ).createShader(Offset.zero & size),
+      );
+      // An inner star, like the inlay on a tile.
+      canvas.drawPath(
+        _star(c, r * 0.74),
+        Paint()
+          ..color = const Color(0xFF3A2608).withValues(alpha: 0.18)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2,
+      );
+      return;
+    }
+
+    canvas.drawPath(star, Paint()..color = Colors.white.withValues(alpha: 0.04));
+    canvas.drawPath(
+      star,
+      Paint()
+        ..color = _gold.withValues(alpha: 0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2,
+    );
+    if (progress > 0) {
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r * 0.66),
+        -math.pi / 2,
+        math.pi * 2 * progress.clamp(0.0, 1.0),
+        false,
+        Paint()
+          ..color = _gold.withValues(alpha: 0.8)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _MedallionPainter old) => old.earned != earned || old.progress != progress;
 }
 
 /// Each fard prayer's own accent, used for the week's dots and streak bars.
