@@ -189,7 +189,7 @@ class OnboardingHeading extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(eyebrow.toUpperCase(), style: AppTextStyles.sectionLabel(color: AppColors.spiritualGold.withValues(alpha: 0.9))),
+        Text(eyebrow.toUpperCase(), style: AppTextStyles.sectionLabel(color: Colors.white.withValues(alpha: 0.85))),
         const SizedBox(height: 10),
         Text(title, style: AppTextStyles.display(size: 34, weight: FontWeight.w300, height: 1.15)),
         const SizedBox(height: 10),

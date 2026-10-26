@@ -1,20 +1,37 @@
-import 'dart:ui';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+
 import '../../../core/constants/colors.dart';
+import '../../../core/constants/durations.dart';
+import '../../../core/constants/effects.dart';
+import '../../../core/constants/radii.dart';
+import '../../../core/constants/spacing.dart';
 import '../../../core/constants/text_styles.dart';
-import '../../../core/services/storage_service.dart';
+import '../../../core/services/athan_cue_service.dart';
+import '../../../core/services/haptic_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/services/prayer_service.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../models/prayer.dart';
 import '../../../models/settings.dart';
-import '../../../widgets/common/premium_flowing_loader.dart';
-import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/glass_panel.dart';
 import '../../../widgets/common/location_off_prompt.dart';
-import '../../../widgets/common/app_backdrop_filter.dart';
+import '../../../widgets/common/prayer_glyph.dart';
 import '../../../widgets/common/pressable.dart';
-import '../../../core/constants/radii.dart';
 import '../../../widgets/common/wird_icons.dart';
+import '../../home/widgets/celestial_background.dart';
+import '../widgets/onboarding_widgets.dart';
 
-
+/// First run. The user walks through one day of the app's living sky, from
+/// the stars of Tahajjud to Maghrib's sunset, and each hour asks for one
+/// preference while showing off the feature it shapes: real prayer times and
+/// the Qibla as soon as the location is in, Asr moving as the madhab changes,
+/// both mushaf scripts side by side. Beginning and finishing are marked by a
+/// phrase of the adhan ("come to prayer", "come to success").
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -22,248 +39,1449 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
+/// The sky behind each step, in order through the day.
+const _skies = [
+  PrayerPeriod.tahajjud,
+  PrayerPeriod.fajr,
+  PrayerPeriod.sunrise,
+  PrayerPeriod.dhuhr,
+  PrayerPeriod.asr,
+  PrayerPeriod.maghrib,
+];
+
+const _fard = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
+
+const _bismillahUthmani = 'بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ';
+const _bismillahIndoPak = 'بِسۡمِ اللهِ الرَّحۡمٰنِ الرَّحِيۡمِ';
+
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   final StorageService _storageService = StorageService();
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
+  final TextEditingController _cityController = TextEditingController();
+  final AthanCueService _cues = AthanCueService.instance;
 
-  int _currentPage = 0;
-  bool _isLoading = false;
-  String? _error;
+  int _page = 0;
+  bool _locating = false;
+  bool _searching = false;
+  bool _requestingNotifications = false;
+  bool _finishing = false;
+  String? _locationError;
   LocationData? _location;
-  CalculationMethodType _calculationMethod = CalculationMethodType.muslimWorldLeague;
+
+  CalculationMethodType _method = CalculationMethodType.muslimWorldLeague;
+  CalculationMethodType? _suggestedMethod;
   MadhabType _madhab = MadhabType.shafi;
 
-  bool? _notificationPermissionGranted;
+  bool _tahajjud = true;
+  bool _ishraq = false;
+  bool _duha = false;
+  bool _sunnahReminders = true;
+  bool _islamicEvents = true;
+
+  QuranScript _script = QuranScript.indopak;
+  bool _translation = true;
+  bool _transliteration = false;
+
+  bool? _notificationsGranted;
+  int _endWarning = AppDurations.defaultEndWarningMinutes;
+
+  int get _lastPage => _skies.length - 1;
+
+  /// The sun and moon pass behind the headings, so they're softened while a
+  /// page has text over them.
+  final ValueNotifier<double> _celestialOpacity = ValueNotifier(1);
+
+  @override
+  void initState() {
+    super.initState();
+    // Coming back here (Settings can reset onboarding) starts from what's set.
+    final s = _storageService.getSettings();
+    _location = s.location;
+    _method = s.calculationMethod;
+    _madhab = s.madhab;
+    _tahajjud = s.includeTahajjud;
+    _ishraq = s.includeIshraq;
+    _duha = s.includeDuha;
+    _sunnahReminders = s.sunnahNotificationsEnabled;
+    _islamicEvents = s.islamicEventsEnabled;
+    _script = s.quranSelectedScript;
+    _translation = s.quranShowTranslation;
+    _transliteration = s.quranShowTransliteration;
+    _endWarning = s.endTimeWarningMinutes;
+    _suggestedMethod = _methodForCountry(_location?.country);
+  }
 
   @override
   void dispose() {
     _pageController.dispose();
+    _cityController.dispose();
+    _celestialOpacity.dispose();
     super.dispose();
   }
 
-  void _nextPage() {
-    HapticService().light();
-    if (_currentPage < 3) {
-      _pageController.nextPage(
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOutQuart,
-      );
-    }
+  // ---------------------------------------------------------------------------
+  // Navigation
+  // ---------------------------------------------------------------------------
+
+  bool get _canContinue => _page != 1 || _location != null;
+
+  void _goTo(int page) {
+    FocusScope.of(context).unfocus();
+    _pageController.animateToPage(
+      page,
+      duration: motionStill() ? Duration.zero : const Duration(milliseconds: 520),
+      curve: AppCurves.move,
+    );
   }
 
-  void _previousPage() {
+  void _next() {
     HapticService().light();
-    if (_currentPage > 0) {
-      _pageController.previousPage(
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOutQuart,
-      );
-    }
+    if (_page == 0) _cues.play(AthanCue.salah);
+    if (_page < _lastPage) _goTo(_page + 1);
   }
 
-  Future<void> _getLocation() async {
+  void _back() {
+    HapticService().light();
+    if (_page > 0) _goTo(_page - 1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Location
+  // ---------------------------------------------------------------------------
+
+  Future<void> _detectLocation() async {
     HapticService().medium();
     setState(() {
-      _isLoading = true;
-      _error = null;
+      _locating = true;
+      _locationError = null;
     });
-
     final result = await _locationService.getCurrentLocation();
     if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-      if (result.isSuccess) {
-        _location = result.data;
-        _error = null;
-      } else {
-        _error = result.error;
-      }
-    });
-
+    setState(() => _locating = false);
+    if (result.isSuccess) {
+      _setLocation(result.data!);
+    } else {
+      setState(() => _locationError = result.error);
+    }
     if (result.serviceDisabled) await showLocationOffPrompt(context);
   }
 
-  Future<void> _requestNotificationPermission() async {
-    HapticService().medium();
-    setState(() => _isLoading = true);
-
-    // Request basic notification permission
-    final granted = await _notificationService.requestPermission();
-    debugPrint('[Onboarding] Notification permission granted: $granted');
-
+  Future<void> _searchCity() async {
+    final query = _cityController.text.trim();
+    if (query.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    HapticService().light();
     setState(() {
-      _isLoading = false;
-      _notificationPermissionGranted = granted;
+      _searching = true;
+      _locationError = null;
     });
+    final result = await _locationService.geocodeCity(query, null);
+    if (!mounted) return;
+    setState(() => _searching = false);
+    if (result.isSuccess) {
+      _setLocation(result.data!);
+    } else {
+      setState(() => _locationError = result.error);
+    }
+  }
 
-    if (granted) {
-      // Also request exact alarm permission (Android 12+)
-      final canScheduleExact = await _notificationService.canScheduleExactAlarms();
-      debugPrint('[Onboarding] Can schedule exact alarms: $canScheduleExact');
-      if (!canScheduleExact) {
-        // Show dialog explaining why exact alarms are needed
-        if (mounted) {
-          final shouldOpen = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => Dialog(
-              backgroundColor: Colors.transparent,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: AppBackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
+  void _setLocation(LocationData location) {
+    HapticService().medium();
+    final suggested = _methodForCountry(location.country);
+    setState(() {
+      _location = location;
+      _locationError = null;
+      _suggestedMethod = suggested;
+      if (suggested != null) _method = suggested;
+      if (_hanafiCountries.contains(location.country?.toLowerCase())) _madhab = MadhabType.hanafi;
+    });
+  }
+
+  static const _hanafiCountries = {'pakistan', 'india', 'bangladesh', 'afghanistan', 'turkey', 'türkiye'};
+
+  /// The convention most mosques in [country] follow, when it's clear.
+  static CalculationMethodType? _methodForCountry(String? country) {
+    switch (country?.toLowerCase()) {
+      case 'united states':
+      case 'united states of america':
+      case 'canada':
+        return CalculationMethodType.isna;
+      case 'saudi arabia':
+      case 'yemen':
+        return CalculationMethodType.ummAlQura;
+      case 'egypt':
+      case 'sudan':
+      case 'libya':
+      case 'syria':
+      case 'lebanon':
+        return CalculationMethodType.egyptian;
+      case 'pakistan':
+      case 'india':
+      case 'bangladesh':
+      case 'afghanistan':
+        return CalculationMethodType.karachi;
+      case 'iran':
+        return CalculationMethodType.tehran;
+      case 'united arab emirates':
+        return CalculationMethodType.dubai;
+      case 'kuwait':
+        return CalculationMethodType.kuwait;
+      case 'qatar':
+        return CalculationMethodType.qatar;
+      case 'singapore':
+      case 'malaysia':
+      case 'indonesia':
+      case 'brunei':
+        return CalculationMethodType.singapore;
+      case 'united kingdom':
+      case 'germany':
+      case 'france':
+      case 'netherlands':
+      case 'belgium':
+        return CalculationMethodType.muslimWorldLeague;
+    }
+    return null;
+  }
+
+  /// Today's times for the chosen location and conventions.
+  Map<Prayer, PrayerTimeData>? _times({CalculationMethodType? method, MadhabType? madhab}) {
+    final location = _location;
+    if (location == null) return null;
+    return PrayerService().calculatePrayerTimes(
+      date: DateTime.now(),
+      location: location,
+      calculationMethod: method ?? _method,
+      madhab: madhab ?? _madhab,
+      includeTahajjud: true,
+      includeIshraq: true,
+      includeDuha: true,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Notifications
+  // ---------------------------------------------------------------------------
+
+  Future<void> _requestNotifications() async {
+    HapticService().medium();
+    setState(() => _requestingNotifications = true);
+    final granted = await _notificationService.requestPermission();
+    if (!mounted) return;
+    setState(() {
+      _requestingNotifications = false;
+      _notificationsGranted = granted;
+    });
+    if (!granted) return;
+
+    // Android 12+ needs a separate grant to ring exactly on time.
+    final canScheduleExact = await _notificationService.canScheduleExactAlarms();
+    if (!canScheduleExact && mounted) {
+      final open = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => const _ExactAlarmDialog(),
+      );
+      if (open == true) await _notificationService.requestExactAlarmPermission();
+    }
+    await _notificationService.showTestNotification();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Finish
+  // ---------------------------------------------------------------------------
+
+  Future<void> _finish() async {
+    final location = _location;
+    if (location == null) {
+      _goTo(1);
+      return;
+    }
+    HapticService().heavy();
+    _celestialOpacity.value = 1;
+    setState(() => _finishing = true);
+    _cues.play(AthanCue.falah);
+
+    final settings = _storageService.getSettings().copyWith(
+      onboardingCompleted: true,
+      location: location,
+      calculationMethod: _method,
+      madhab: _madhab,
+      includeTahajjud: _tahajjud,
+      includeIshraq: _ishraq,
+      includeDuha: _duha,
+      notificationsEnabled: _notificationsGranted != false,
+      endTimeWarningMinutes: _endWarning,
+      sunnahNotificationsEnabled: _sunnahReminders,
+      islamicEventsEnabled: _islamicEvents,
+      quranSelectedScript: _script,
+      quranShowTranslation: _translation,
+      quranShowTransliteration: _transliteration,
+    );
+    await Future.wait([
+      _storageService.saveSettings(settings),
+      // Long enough for the phrase to land and the sky to turn to night.
+      Future.delayed(Duration(milliseconds: motionStill() ? 600 : 2600)),
+    ]);
+    if (mounted) Navigator.of(context).pushReplacementNamed('/home');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    final period = _finishing ? PrayerPeriod.isha : _skies[_page];
+    return PopScope(
+      canPop: _page == 0 && !_finishing,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_finishing) _back();
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        resizeToAvoidBottomInset: true,
+        body: CelestialBackground(
+          prayerPeriod: period,
+          reduceMotion: motionStill(),
+          lite: lighterVisuals(),
+          latitude: _location?.latitude ?? 0,
+          transitionDuration: const Duration(milliseconds: 2200),
+          // The welcome's wordmark sits where the Tahajjud moon would; the
+          // stars carry that page, and the sun rises on the next.
+          showCelestialBody: _page != 0 || _finishing,
+          celestialOpacity: _celestialOpacity,
+          child: Stack(
+            children: [
+              // Dawn and noon skies are bright where the cards sit; a soft
+              // shade keeps the glass and its text legible on every page.
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
                     decoration: BoxDecoration(
-                      color: AppColors.background.withValues(alpha: 0.8),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.alarm_on_rounded, color: Colors.orange, size: 48),
-                        const SizedBox(height: 16),
-                        Text(
-                          "Precise Reminders",
-                          style: AppTextStyles.h3(color: Colors.white),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "To notify you exactly when prayer time begins, please enable 'Alarms & reminders' for Wird in your device settings.",
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.7)),
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextButton(
-                                onPressed: () => Navigator.pop(ctx, false),
-                                child: Text("Skip", style: TextStyle(color: Colors.white54)),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => Navigator.pop(ctx, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.orange,
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                child: Text("Open Settings"),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Color(0x00000000), Color(0x33000000), Color(0x66000000)],
+                        stops: [0.15, 0.5, 1],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          );
-
-          if (shouldOpen == true) {
-            await _notificationService.requestExactAlarmPermission();
-          }
-        }
-      }
-
-      await _notificationService.showTestNotification();
-    }
-  }
-
-  Future<void> _completeOnboarding() async {
-    HapticService().heavy();
-    if (_location == null) {
-      setState(() => _error = 'Please set your location first');
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    final settings = AppSettings(
-      onboardingCompleted: true,
-      location: _location,
-      calculationMethod: _calculationMethod,
-      madhab: _madhab,
-      notificationsEnabled: true,
+              SafeArea(
+                child: Column(
+                  children: [
+                    _buildHeader(),
+                    Expanded(
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onPageChanged: (page) {
+                          _celestialOpacity.value = page == 0 ? 1 : 0.5;
+                          setState(() => _page = page);
+                        },
+                        children: [
+                          _WelcomePage(onBegin: _next),
+                          _page1(),
+                          _page2(),
+                          _page3(),
+                          _page4(),
+                          _page5(),
+                        ],
+                      ),
+                    ),
+                    _buildFooter(),
+                  ],
+                ),
+              ),
+              IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _finishing ? 1 : 0,
+                  duration: const Duration(milliseconds: 900),
+                  curve: AppCurves.emphasized,
+                  child: _finishing ? const _FinishVeil() : const SizedBox.expand(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
-
-    await _storageService.saveSettings(settings);
-
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/home');
-    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
+  Widget _buildHeader() {
+    final gutter = AppSpacing.gutter(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gutter - 10, 8, gutter - 10, 0),
+      child: Column(
         children: [
-          // 1. Deep Celestial Background
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.topLeft,
-                  radius: 1.5,
-                  colors: [
-                    Color(0xFF1E1B4B), // Deep Indigo
-                    Color(0xFF0F172A), // Slate 900
-                    Colors.black,
+          SizedBox(
+            height: 44,
+            child: Row(
+              children: [
+                AnimatedOpacity(
+                  duration: AppDurations.normal,
+                  opacity: _page > 0 && !_finishing ? 1 : 0,
+                  child: Pressable(
+                    onTap: _page > 0 && !_finishing ? _back : null,
+                    child: const SizedBox(
+                      width: 44,
+                      height: 44,
+                      child: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.white),
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                DayArcProgress(step: _finishing ? _skies.length : _page, steps: _skies.length + 1),
+                const Spacer(),
+                const CueMuteButton(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          const AthanCueCaption(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    final gutter = AppSpacing.gutter(context);
+    // The welcome page carries its own call to action.
+    if (_page == 0) return const SizedBox(height: 8);
+    final isLast = _page == _lastPage;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 16),
+      child: SizedBox(
+        width: double.infinity,
+        child: OnboardingButton(
+          label: isLast ? 'Begin with Wird' : (_page == 1 && _location == null ? 'Set your location first' : 'Continue'),
+          icon: isLast ? null : Icons.arrow_forward_rounded,
+          gold: isLast,
+          loading: _finishing,
+          onPressed: !_canContinue ? null : (isLast ? _finish : _next),
+        ),
+      ),
+    );
+  }
+
+  /// Fades and lifts a page's pieces in turn, when entrance motion is on.
+  Widget _enter(Widget child, int order) {
+    if (!AppEffects.entranceMotion) return child;
+    final delay = 120.ms + AppDurations.stagger * order * 2;
+    return child
+        .animate()
+        .fadeIn(delay: delay, duration: 420.ms, curve: AppCurves.emphasized)
+        .slideY(begin: 0.06, delay: delay, duration: 420.ms, curve: AppCurves.emphasized);
+  }
+
+  Widget _scroll(List<Widget> children) {
+    final gutter = AppSpacing.gutter(context);
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+      padding: EdgeInsets.fromLTRB(gutter, 20, gutter, 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (var i = 0; i < children.length; i++) _enter(children[i], i)],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 1 · Fajr — location, answered with today's times and the Qibla
+  // ---------------------------------------------------------------------------
+
+  Widget _page1() {
+    final location = _location;
+    return _scroll([
+      const OnboardingHeading(
+        eyebrow: 'Fajr · dawn',
+        title: 'Where do you pray?',
+        body: 'Your times follow the sun where you stand, to the minute, and the Qibla is worked out from the same spot.',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      GhostButton(
+        label: location == null ? 'Use my location' : 'Detect again',
+        icon: Icons.my_location_rounded,
+        loading: _locating,
+        onPressed: _locating || _searching ? null : _detectLocation,
+      ),
+      const SizedBox(height: AppSpacing.md),
+      _CitySearchField(
+        controller: _cityController,
+        searching: _searching,
+        onSubmit: _searchCity,
+      ),
+      if (_locationError != null) ...[
+        const SizedBox(height: AppSpacing.md),
+        Text(_locationError!, style: AppTextStyles.small(color: const Color(0xFFFFB4AB))),
+      ],
+      const SizedBox(height: AppSpacing.xl),
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 450),
+        switchInCurve: AppCurves.emphasized,
+        switchOutCurve: AppCurves.exit,
+        transitionBuilder: (child, animation) => FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(scale: Tween(begin: 0.97, end: 1.0).animate(animation), child: child),
+        ),
+        child: location == null
+            ? const _LocationPlaceholder(key: ValueKey('none'))
+            : _LocationResultCard(
+                key: ValueKey('${location.latitude},${location.longitude}'),
+                location: location,
+                times: _times()!,
+              ),
+      ),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2 · Sunrise — calculation method and madhab, with times that move
+  // ---------------------------------------------------------------------------
+
+  Widget _page2() {
+    final times = _times();
+    final methods = CalculationMethodType.values.where((m) => m != CalculationMethodType.other).toList();
+    if (_suggestedMethod != null) {
+      methods
+        ..remove(_suggestedMethod)
+        ..insert(0, _suggestedMethod!);
+    }
+    return _scroll([
+      const OnboardingHeading(
+        eyebrow: 'Sunrise · the day opens',
+        title: 'Whose clock do you keep?',
+        body: 'Scholars measure dawn and nightfall a little differently. Choose what your mosque follows and watch your times move.',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      if (times != null) _LiveTimesStrip(times: times),
+      const SizedBox(height: AppSpacing.xl),
+      Text('CALCULATION', style: AppTextStyles.sectionLabel()),
+      const SizedBox(height: AppSpacing.md),
+      LayoutBuilder(builder: (context, constraints) {
+        final width = (constraints.maxWidth - AppSpacing.sm) / 2;
+        return Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            for (final m in methods)
+              SizedBox(
+                width: width,
+                child: ChoiceTile(
+                  selected: _method == m,
+                  onTap: () => setState(() => _method = m),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(m.shortName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.body(weight: FontWeight.w600)),
+                          ),
+                          if (m == _suggestedMethod) ...[
+                            const SizedBox(width: 6),
+                            Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.spiritualGold),
+                          ],
+                        ],
+                      ),
+                      Text(
+                        m == _suggestedMethod ? 'Suggested for you' : m.regions,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.tiny(
+                          color: m == _suggestedMethod
+                              ? AppColors.spiritualGold.withValues(alpha: 0.9)
+                              : Colors.white.withValues(alpha: 0.6),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      }),
+      const SizedBox(height: AppSpacing.xl),
+      Text('ASR', style: AppTextStyles.sectionLabel()),
+      const SizedBox(height: AppSpacing.md),
+      Row(
+        children: [
+          Expanded(
+            child: _MadhabTile(
+              title: 'Standard',
+              subtitle: "Shafi'i, Maliki, Hanbali",
+              asr: _times(madhab: MadhabType.shafi)?[Prayer.asr]?.startTime,
+              selected: _madhab == MadhabType.shafi,
+              onTap: () => setState(() => _madhab = MadhabType.shafi),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _MadhabTile(
+              title: 'Hanafi',
+              subtitle: 'Shadow twice its length',
+              asr: _times(madhab: MadhabType.hanafi)?[Prayer.asr]?.startTime,
+              selected: _madhab == MadhabType.hanafi,
+              onTap: () => setState(() => _madhab = MadhabType.hanafi),
+            ),
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3 · Dhuhr — voluntary prayers and the Sunnah
+  // ---------------------------------------------------------------------------
+
+  Widget _page3() {
+    final times = _times();
+    String window(Prayer p, {bool startOnly = false}) {
+      final t = times?[p];
+      if (t == null) return '';
+      final start = AppFormatters.formatTime(t.startTime);
+      return startOnly ? 'from $start' : '$start – ${AppFormatters.formatTime(t.endTime)}';
+    }
+
+    Widget disc(Prayer p) => _SkyDisc(prayer: p, size: 40);
+
+    return _scroll([
+      const OnboardingHeading(
+        eyebrow: 'Dhuhr · high noon',
+        title: 'Beyond the five',
+        body: 'Add the voluntary prayers to your day, and let Wird bring back one forgotten Sunnah at a time.',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      ToggleTile(
+        leading: disc(Prayer.tahajjud),
+        title: 'Tahajjud',
+        subtitle: 'Last third of the night ${window(Prayer.tahajjud, startOnly: true)}',
+        value: _tahajjud,
+        onChanged: (v) => setState(() => _tahajjud = v),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        leading: disc(Prayer.ishraq),
+        title: 'Ishraq',
+        subtitle: 'Once the sun has risen · ${window(Prayer.ishraq)}',
+        value: _ishraq,
+        onChanged: (v) => setState(() => _ishraq = v),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        leading: disc(Prayer.duha),
+        title: 'Duha',
+        subtitle: 'The forenoon prayer · ${window(Prayer.duha)}',
+        value: _duha,
+        onChanged: (v) => setState(() => _duha = v),
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      Text('THE SUNNAH', style: AppTextStyles.sectionLabel()),
+      const SizedBox(height: AppSpacing.md),
+      ToggleTile(
+        leading: const _GlyphBadge(WirdGlyph.sunnah),
+        title: 'Sunnah revival',
+        subtitle: 'A gentle nudge towards a practice of the Prophet ﷺ',
+        value: _sunnahReminders,
+        onChanged: (v) => setState(() => _sunnahReminders = v),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        leading: const _GlyphBadge(null, icon: Icons.nightlight_round),
+        title: 'Islamic days',
+        subtitle: 'Ramadan, the Eids and the white days, on the Hijri calendar',
+        value: _islamicEvents,
+        onChanged: (v) => setState(() => _islamicEvents = v),
+      ),
+    ]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4 · Asr — the mushaf
+  // ---------------------------------------------------------------------------
+
+  Widget _page4() {
+    return _scroll([
+      const OnboardingHeading(
+        eyebrow: 'Asr · the afternoon',
+        title: 'Read in the hand you know',
+        body: 'The whole Quran in two mushaf scripts, with translation, transliteration and verses you can share.',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      Row(
+        children: [
+          Expanded(child: _scriptTile(QuranScript.indopak, _bismillahIndoPak, 'Indo-Pak', 'South Asian')),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: _scriptTile(QuranScript.uthmani, _bismillahUthmani, 'Uthmani', 'Madinah')),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      _VersePreview(script: _script, translation: _translation, transliteration: _transliteration),
+      const SizedBox(height: AppSpacing.lg),
+      ToggleTile(
+        title: 'Translation',
+        subtitle: 'Saheeh International, under each verse',
+        value: _translation,
+        onChanged: (v) => setState(() => _translation = v),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        title: 'Transliteration',
+        subtitle: 'The Arabic spelled out, to read along',
+        value: _transliteration,
+        onChanged: (v) => setState(() => _transliteration = v),
+      ),
+    ]);
+  }
+
+  Widget _scriptTile(QuranScript script, String sample, String name, String note) {
+    return ChoiceTile(
+      selected: _script == script,
+      onTap: () => setState(() => _script = script),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 56,
+            child: Center(
+              child: FittedBox(
+                child: Text(
+                  sample,
+                  textDirection: TextDirection.rtl,
+                  style: AppTextStyles.arabic(size: 22, color: Colors.white, script: script),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(name, style: AppTextStyles.body(weight: FontWeight.w600)),
+          Text(note, style: AppTextStyles.tiny()),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5 · Maghrib — reminders, then the call to success
+  // ---------------------------------------------------------------------------
+
+  Widget _page5() {
+    final granted = _notificationsGranted == true;
+    final times = _times();
+    final upcoming = times == null ? null : _nextFard(times);
+    return _scroll([
+      const OnboardingHeading(
+        eyebrow: 'Maghrib · sunset',
+        title: 'Never miss the call',
+        body: 'A notification as each prayer begins, and a quiet nudge before its time runs out.',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      _NotificationMock(prayer: upcoming?.$1, time: upcoming?.$2),
+      const SizedBox(height: AppSpacing.lg),
+      AnimatedSwitcher(
+        duration: AppDurations.slow,
+        child: granted
+            ? GlassPanel(
+                key: const ValueKey('granted'),
+                radius: AppRadii.pill,
+                color: AppColors.statusOnTime.withValues(alpha: 0.2),
+                edgeColor: AppColors.statusOnTime.withValues(alpha: 0.5),
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 10),
+                    Text('Reminders are on', style: AppTextStyles.button()),
+                  ],
+                ),
+              )
+            : GhostButton(
+                key: const ValueKey('ask'),
+                label: _notificationsGranted == false ? 'Try again' : 'Turn on reminders',
+                icon: Icons.notifications_active_rounded,
+                loading: _requestingNotifications,
+                onPressed: _requestNotifications,
+              ),
+      ),
+      if (_notificationsGranted == false) ...[
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Notifications are off for Wird. You can allow them later in your phone\'s settings.',
+          textAlign: TextAlign.center,
+          style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7)),
+        ),
+      ],
+      const SizedBox(height: AppSpacing.xl),
+      Text('WARN ME BEFORE A PRAYER ENDS', style: AppTextStyles.sectionLabel()),
+      const SizedBox(height: AppSpacing.md),
+      Row(
+        children: [
+          for (final m in AppDurations.endWarningOptions) ...[
+            Expanded(
+              child: ChoiceTile(
+                selected: _endWarning == m,
+                onTap: () => setState(() => _endWarning = m),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  children: [
+                    Text('$m', style: AppTextStyles.tabular(AppTextStyles.bodyLarge(weight: FontWeight.w600))),
+                    Text('min', style: AppTextStyles.tiny()),
                   ],
                 ),
               ),
             ),
-          ),
+            if (m != AppDurations.endWarningOptions.last) const SizedBox(width: 6),
+          ],
+        ],
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      if (_location != null) _Summary(
+        city: _location!.city ?? _location!.displayName,
+        method: _method.shortName,
+        madhab: _madhab == MadhabType.hanafi ? 'Hanafi' : 'Standard',
+        script: _script.displayName,
+      ),
+    ]);
+  }
 
-          // 2. Ambient Glows
-          Positioned(
-            top: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: AppColors.spiritualGold.withValues(alpha: 0.05),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.buttonPrimary.withValues(alpha: 0.1),
-                    blurRadius: 100,
-                    spreadRadius: 50,
-                  )
-                ],
+  (Prayer, DateTime)? _nextFard(Map<Prayer, PrayerTimeData> times) {
+    final now = DateTime.now();
+    for (final p in _fard) {
+      final t = times[p]?.startTime;
+      if (t != null && t.isAfter(now)) return (p, t);
+    }
+    final fajr = times[Prayer.fajr]?.startTime;
+    return fajr == null ? null : (Prayer.fajr, fajr.add(const Duration(days: 1)));
+  }
+}
+
+// =============================================================================
+// Welcome
+// =============================================================================
+
+/// The night sky, the name, and a glimpse of what's inside. The one call to
+/// action sounds "come to prayer" as the day begins.
+class _WelcomePage extends StatelessWidget {
+  final VoidCallback onBegin;
+
+  const _WelcomePage({required this.onBegin});
+
+  @override
+  Widget build(BuildContext context) {
+    final gutter = AppSpacing.gutter(context);
+    final animate = AppEffects.entranceMotion;
+    Widget enter(Widget child, int order, {double rise = 0.08}) => animate
+        ? child
+            .animate()
+            .fadeIn(delay: 200.ms + 140.ms * order, duration: 700.ms, curve: AppCurves.emphasized)
+            .slideY(begin: rise, delay: 200.ms + 140.ms * order, duration: 700.ms, curve: AppCurves.emphasized)
+        : child;
+
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(gutter, 12, gutter, 20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  children: [
+                    SizedBox(height: constraints.maxHeight * 0.05),
+                    enter(
+                      Text(
+                        'وِرْد',
+                        textDirection: TextDirection.rtl,
+                        style: AppTextStyles.arabic(size: 84, color: Colors.white).copyWith(
+                          height: 1.45,
+                          shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.35), blurRadius: 30)],
+                        ),
+                      ),
+                      0,
+                      rise: 0.15,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    enter(
+                      Text('WIRD', style: AppTextStyles.display(size: 20, weight: FontWeight.w300, letterSpacing: 10)),
+                      1,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    enter(
+                      Text(
+                        'Your daily portion of prayer,\nQuran and remembrance.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.8)),
+                      ),
+                      2,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Column(
+                  children: [
+                    enter(const _DayStrip(), 3),
+                    const SizedBox(height: AppSpacing.md),
+                    enter(
+                      Text(
+                        'The sky here follows your prayers.',
+                        style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)),
+                      ),
+                      3,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    enter(const _FeatureChips(), 4),
+                    const SizedBox(height: AppSpacing.xl),
+                    enter(
+                      SizedBox(
+                        width: double.infinity,
+                        child: OnboardingButton(label: 'Bismillah', onPressed: onBegin, icon: Icons.arrow_forward_rounded),
+                      ),
+                      5,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    enter(
+                      Text(
+                        'Sets up in about a minute',
+                        style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)),
+                      ),
+                      5,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The five prayers as their home-screen skies, in a row.
+class _DayStrip extends StatelessWidget {
+  const _DayStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        for (final p in _fard)
+          Column(
+            children: [
+              _SkyDisc(prayer: p, size: 46),
+              const SizedBox(height: 6),
+              Text(p.displayName, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.75))),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _FeatureChips extends StatelessWidget {
+  const _FeatureChips();
+
+  static const _features = <(WirdGlyph?, IconData?, String)>[
+    (WirdGlyph.quran, null, 'Quran, offline'),
+    (WirdGlyph.qibla, null, 'Qibla'),
+    (WirdGlyph.tasbih, null, 'Tasbih & azkar'),
+    (WirdGlyph.sunnah, null, 'Sunnah revival'),
+    (null, Icons.calendar_month_rounded, 'Hijri calendar'),
+    (WirdGlyph.stats, null, 'Streaks'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final (glyph, icon, label) in _features)
+          GlassPanel(
+            radius: AppRadii.pill,
+            fill: 0.08,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                glyph != null
+                    ? WirdGlyphIcon(glyph, size: 15, color: AppColors.spiritualGold)
+                    : Icon(icon, size: 15, color: AppColors.spiritualGold),
+                const SizedBox(width: 7),
+                Text(label, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.85))),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// Shared pieces
+// =============================================================================
+
+/// A prayer's glyph on a disc of its own sky, as on the home screen icon.
+class _SkyDisc extends StatelessWidget {
+  final Prayer prayer;
+  final double size;
+
+  const _SkyDisc({required this.prayer, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: prayerSky(prayer),
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      alignment: Alignment.center,
+      child: PrayerGlyph.colored(prayer: prayer, size: size * 0.62),
+    );
+  }
+}
+
+class _GlyphBadge extends StatelessWidget {
+  final WirdGlyph? glyph;
+  final IconData? icon;
+
+  const _GlyphBadge(this.glyph, {this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.spiritualGold.withValues(alpha: 0.14),
+        border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.35)),
+      ),
+      alignment: Alignment.center,
+      child: glyph != null
+          ? WirdGlyphIcon(glyph!, size: 20, color: AppColors.spiritualGold)
+          : Icon(icon, size: 20, color: AppColors.spiritualGold),
+    );
+  }
+}
+
+class _CitySearchField extends StatelessWidget {
+  final TextEditingController controller;
+  final bool searching;
+  final VoidCallback onSubmit;
+
+  const _CitySearchField({required this.controller, required this.searching, required this.onSubmit});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      radius: AppRadii.pill,
+      fill: 0.08,
+      padding: const EdgeInsets.only(left: 18, right: 6),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, size: 20, color: Colors.white.withValues(alpha: 0.6)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => onSubmit(),
+              style: AppTextStyles.body(),
+              cursorColor: AppColors.spiritualGold,
+              decoration: InputDecoration(
+                hintText: 'Or search a city',
+                hintStyle: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.5)),
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 15),
               ),
             ),
           ),
-
-          // 3. Content
-          SafeArea(
-            child: Column(
-              children: [
-                _buildProgressHeader(),
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged: (page) => setState(() => _currentPage = page),
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _buildWelcomePage(),
-                      _buildLocationPage(),
-                      _buildCalculationPage(),
-                      _buildNotificationPage(),
-                    ],
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: searching
+                ? const Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+                : Pressable(
+                    onTap: onSubmit,
+                    child: Icon(Icons.arrow_forward_rounded, size: 20, color: Colors.white.withValues(alpha: 0.8)),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LocationPlaceholder extends StatelessWidget {
+  const _LocationPlaceholder({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.05,
+      padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+      child: Column(
+        children: [
+          Opacity(
+            opacity: 0.55,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [for (final p in _fard) _SkyDisc(prayer: p, size: 30)],
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            "Today's times will appear here",
+            style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Once the location is in: the city, today's five times and the Qibla.
+class _LocationResultCard extends StatelessWidget {
+  final LocationData location;
+  final Map<Prayer, PrayerTimeData> times;
+
+  const _LocationResultCard({super.key, required this.location, required this.times});
+
+  static const _compass = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+
+  @override
+  Widget build(BuildContext context) {
+    final qibla = PrayerService().getQiblaDirection(location);
+    final point = _compass[((qibla % 360) / 22.5).round() % 16];
+    final now = DateTime.now();
+    Prayer? next;
+    for (final p in _fard) {
+      if (times[p]!.startTime.isAfter(now)) {
+        next = p;
+        break;
+      }
+    }
+
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.1,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.place_rounded, size: 18, color: AppColors.spiritualGold),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(location.displayName,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.body(weight: FontWeight.w600)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final p in _fard)
+                Column(
+                  children: [
+                    _SkyDisc(prayer: p, size: 34),
+                    const SizedBox(height: 6),
+                    Text(
+                      p.displayName,
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: p == next ? 1 : 0.7)),
+                    ),
+                    Text(
+                      _shortTime(times[p]!.startTime),
+                      style: AppTextStyles.tabular(AppTextStyles.small(
+                        color: Colors.white.withValues(alpha: p == next ? 1 : 0.85),
+                        weight: p == next ? FontWeight.w700 : FontWeight.w500,
+                      )),
+                    ),
+                    const SizedBox(height: 4),
+                    // Marks the prayer that comes next.
+                    Container(
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: p == next ? AppColors.spiritualGold : Colors.transparent,
+                      ),
+                    ),
+                  ],
                 ),
-                _buildBottomNavigation(),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: qibla),
+                duration: motionStill() ? Duration.zero : const Duration(milliseconds: 1400),
+                curve: AppCurves.settle,
+                builder: (context, angle, child) =>
+                    Transform.rotate(angle: angle * math.pi / 180, child: child),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
+                  ),
+                  alignment: Alignment.topCenter,
+                  child: Icon(Icons.navigation_rounded, size: 16, color: AppColors.kaabaGold),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: 'Qibla  ', style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7))),
+                    TextSpan(
+                      text: '${qibla.round()}° $point',
+                      style: AppTextStyles.tabular(AppTextStyles.small(weight: FontWeight.w600, color: Colors.white)),
+                    ),
+                    TextSpan(text: '  from north', style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7))),
+                  ]),
+                ),
+              ),
+              WirdGlyphIcon(WirdGlyph.qibla, size: 18, color: Colors.white.withValues(alpha: 0.5)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Short times ("5:12") for tight rows; the period is clear from the prayer.
+String _shortTime(DateTime t) => AppFormatters.formatTime(t).replaceAll(RegExp(r'\s?[AP]M$'), '');
+
+/// Fajr, Asr and Isha: the times the conventions disagree on, so the user
+/// sees what each choice does.
+class _LiveTimesStrip extends StatelessWidget {
+  final Map<Prayer, PrayerTimeData> times;
+
+  const _LiveTimesStrip({required this.times});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.1,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      child: Row(
+        children: [
+          for (final p in const [Prayer.fajr, Prayer.asr, Prayer.isha])
+            Expanded(
+              child: Column(
+                children: [
+                  PrayerGlyph(prayer: p, size: 22, color: Colors.white.withValues(alpha: 0.85)),
+                  const SizedBox(height: 6),
+                  Text(p.displayName, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.7))),
+                  const SizedBox(height: 2),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 350),
+                    switchInCurve: AppCurves.emphasized,
+                    switchOutCurve: AppCurves.exit,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween(begin: const Offset(0, 0.4), end: Offset.zero).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      AppFormatters.formatTime(times[p]!.startTime),
+                      key: ValueKey(times[p]!.startTime),
+                      style: AppTextStyles.tabular(AppTextStyles.bodyLarge(weight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MadhabTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final DateTime? asr;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _MadhabTile({
+    required this.title,
+    required this.subtitle,
+    required this.asr,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceTile(
+      selected: selected,
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTextStyles.body(weight: FontWeight.w600)),
+          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.tiny()),
+          if (asr != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Asr ${AppFormatters.formatTime(asr!)}',
+              style: AppTextStyles.tabular(AppTextStyles.small(
+                weight: FontWeight.w600,
+                color: selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.8),
+              )),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Al-Fatiha's opening verse, drawn as the reader will draw it.
+class _VersePreview extends StatelessWidget {
+  final QuranScript script;
+  final bool translation;
+  final bool transliteration;
+
+  const _VersePreview({required this.script, required this.translation, required this.transliteration});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.1,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: AnimatedSize(
+        duration: AppDurations.slow,
+        curve: AppCurves.emphasized,
+        alignment: Alignment.topCenter,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                    border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.5)),
+                  ),
+                  child: Text('1:1', style: AppTextStyles.tabular(AppTextStyles.tiny(color: AppColors.spiritualGold))),
+                ),
+                const SizedBox(width: 8),
+                Text('Al-Fatihah', style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.7))),
+              ],
+            ),
+            const SizedBox(height: 10),
+            AnimatedSwitcher(
+              duration: AppDurations.slow,
+              child: Text(
+                script == QuranScript.indopak ? _bismillahIndoPak : _bismillahUthmani,
+                key: ValueKey(script),
+                textAlign: TextAlign.right,
+                textDirection: TextDirection.rtl,
+                style: AppTextStyles.arabic(size: 28, color: Colors.white, script: script).copyWith(height: 1.8),
+              ),
+            ),
+            if (transliteration) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Bismillāhir-raḥmānir-raḥīm',
+                style: AppTextStyles.small(color: AppColors.spiritualGold.withValues(alpha: 0.9))
+                    .copyWith(fontStyle: FontStyle.italic),
+              ),
+            ],
+            if (translation) ...[
+              const SizedBox(height: 6),
+              Text(
+                'In the name of Allah, the Entirely Merciful, the Especially Merciful.',
+                style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.8)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// What a reminder will look like, for the next prayer at this location.
+class _NotificationMock extends StatelessWidget {
+  final Prayer? prayer;
+  final DateTime? time;
+
+  const _NotificationMock({required this.prayer, required this.time});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = prayer ?? Prayer.maghrib;
+    final when = time == null ? 'now' : AppFormatters.formatTime(time!);
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.16,
+      edge: 0.2,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(9),
+            child: Image.asset('assets/icon/thumbs/${_thumbFor(p)}.png', width: 38, height: 38, fit: BoxFit.cover),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text('WIRD', style: AppTextStyles.sectionLabel(color: Colors.white.withValues(alpha: 0.6)).copyWith(fontSize: 10)),
+                    const Spacer(),
+                    Text(when, style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.6))),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text("It's time for ${p.displayName}", style: AppTextStyles.body(weight: FontWeight.w600)),
+                Text(
+                  'حَيَّ عَلَى الصَّلَاةِ · Come to prayer',
+                  style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.75)),
+                ),
               ],
             ),
           ),
@@ -272,532 +1490,112 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // --- Components ---
+  static String _thumbFor(Prayer p) => switch (p) {
+        Prayer.fajr => 'fajr',
+        Prayer.dhuhr => 'dhuhr',
+        Prayer.asr => 'asr',
+        Prayer.maghrib => 'maghrib',
+        _ => 'isha',
+      };
+}
 
-  Widget _buildProgressHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(4, (index) {
-          final isActive = index <= _currentPage;
-          final isCurrent = index == _currentPage;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            margin: const EdgeInsets.symmetric(horizontal: 4),
-            height: 4,
-            width: isCurrent ? 32 : 12,
-            decoration: BoxDecoration(
-              color: isActive ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(2),
-              boxShadow: isActive ? [
-                BoxShadow(
-                  color: AppColors.spiritualGold.withValues(alpha: 0.5),
-                  blurRadius: 8,
-                )
-              ] : null,
-            ),
-          );
-        }),
-      ),
-    );
-  }
+class _Summary extends StatelessWidget {
+  final String city;
+  final String method;
+  final String madhab;
+  final String script;
 
-  Widget _buildWelcomePage() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Spacer(),
-                    // Hero Icon
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.03),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.activeGlow.withValues(alpha: 0.1),
-                            blurRadius: 40,
-                            spreadRadius: 10,
-                          )
-                        ],
-                      ),
-                      child: const Icon(Icons.mosque_rounded, size: 64, color: Colors.white),
-                    ),
-                    const SizedBox(height: 40),
+  const _Summary({required this.city, required this.method, required this.madhab, required this.script});
 
-                    Text("Wird", style: AppTextStyles.h1(color: Colors.white)),
-                    const SizedBox(height: 16),
-                    Text(
-                      "Your mindful companion for\nstaying connected to the Divine.",
-                      style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.7)),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 48),
-
-                    // Features List (Single Column)
-                    Column(
-                      children: [
-                        _buildFeatureRow(WirdGlyph.quran, "Quran with Translation"),
-                        _buildFeatureRow(WirdGlyph.schedule, "Precise Prayer Times"),
-                        _buildFeatureRow(WirdGlyph.qibla, "Qibla Direction"),
-                        _buildFeatureRow(WirdGlyph.sunnah, "Sunnah Revival"),
-                        _buildFeatureRow(WirdGlyph.tasbih, "Digital Tasbih"),
-                        _buildFeatureRow(Icons.notifications_active_rounded, "Adhan Reminders"),
-                        _buildFeatureRow(Icons.wallpaper_rounded, "Dynamic Backgrounds"),
-                      ],
-                    ),
-                    const Spacer(flex: 2),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  /// [icon] is an [IconData] or, for the app's own sections, a [WirdGlyph].
-  Widget _buildFeatureRow(Object icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          icon is WirdGlyph
-              ? WirdGlyphIcon(icon, size: 18, color: AppColors.spiritualGold)
-              : Icon(icon as IconData, size: 18, color: AppColors.spiritualGold),
-          const SizedBox(width: 12),
-          Text(text, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.6))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLocationPage() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildHeroIcon(Icons.location_on_rounded, AppColors.spiritualGold),
-                    const SizedBox(height: 32),
-                    Text("Set Location", style: AppTextStyles.h2()),
-                    const SizedBox(height: 12),
-                    Text(
-                      "We calculate prayer times based on\nthe sun's position at your coordinates.",
-                      style: AppTextStyles.body(color: Colors.white60),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 40),
-
-                    // Glass Card for Status
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: AppBackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                        child: Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                          ),
-                          child: Column(
-                            children: [
-                              if (_location != null) ...[
-                                const Icon(Icons.check_circle, color: AppColors.statusOnTime, size: 32),
-                                const SizedBox(height: 12),
-                                Text(
-                                  _location!.displayName,
-                                  style: AppTextStyles.h3(),
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "Coordinates set successfully",
-                                  style: AppTextStyles.tiny(color: Colors.white54),
-                                ),
-                              ] else ...[
-                                const Icon(Icons.public, color: Colors.white30, size: 32),
-                                const SizedBox(height: 12),
-                                Text("Location not set", style: AppTextStyles.body(color: Colors.white54)),
-                              ],
-
-                              if (_error != null) ...[
-                                const SizedBox(height: 16),
-                                Text(_error!, style: AppTextStyles.small(color: AppColors.statusMissed)),
-                              ]
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    _buildPrimaryButton(
-                      label: _location != null ? "Refresh Location" : "Detect Location",
-                      icon: Icons.my_location,
-                      onPressed: _isLoading ? null : _getLocation,
-                      isLoading: _isLoading,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCalculationPage() {
-    return SingleChildScrollView(
-      physics: const BouncingScrollPhysics(),
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          _buildHeroIcon(Icons.calculate_rounded, Colors.white),
-          const SizedBox(height: 24),
-          Text("Calculation Method", style: AppTextStyles.h2()),
-          const SizedBox(height: 8),
-          Text(
-            "Select the convention used in your region.",
-            style: AppTextStyles.body(color: Colors.white60),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-
-          // Methods List
-          ...CalculationMethodType.values.take(5).map((method) {
-            return _buildGlassSelectionTile(
-              title: method.shortName,
-              subtitle: method.regions,
-              isSelected: _calculationMethod == method,
-              onTap: () => setState(() => _calculationMethod = method),
-            );
-          }),
-
-          const SizedBox(height: 32),
-          Text("Asr Juristic Method", style: AppTextStyles.tiny(color: AppColors.spiritualGold).copyWith(letterSpacing: 2)),
-          const SizedBox(height: 16),
-
-          Row(
+  @override
+  Widget build(BuildContext context) {
+    Widget item(String label, String value) => Expanded(
+          child: Column(
             children: [
-              Expanded(
-                child: _buildGlassSelectionTile(
-                  title: "Standard",
-                  subtitle: "Shafi, Maliki, Hanbali",
-                  isSelected: _madhab == MadhabType.shafi,
-                  onTap: () => setState(() => _madhab = MadhabType.shafi),
-                  compact: true,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildGlassSelectionTile(
-                  title: "Hanafi",
-                  subtitle: "Later Asr Time",
-                  isSelected: _madhab == MadhabType.hanafi,
-                  onTap: () => setState(() => _madhab = MadhabType.hanafi),
-                  compact: true,
-                ),
-              ),
+              Text(label.toUpperCase(), style: AppTextStyles.sectionLabel().copyWith(fontSize: 10)),
+              const SizedBox(height: 4),
+              Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.small(color: Colors.white)),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNotificationPage() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildHeroIcon(Icons.notifications_active_rounded, AppColors.spiritualGold),
-                    const SizedBox(height: 32),
-                    Text("Stay Connected", style: AppTextStyles.h2()),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Gentle reminders for the 5 daily prayers.",
-                      style: AppTextStyles.body(color: Colors.white60),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 40),
-
-                    // Status Card
-                    if (_notificationPermissionGranted == true)
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: AppColors.statusOnTime.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.statusOnTime.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.check_circle, color: AppColors.statusOnTime),
-                            const SizedBox(width: 12),
-                            Text("Enabled Successfully", style: AppTextStyles.body(color: AppColors.statusOnTime)),
-                          ],
-                        ),
-                      )
-                    else
-                      _buildPrimaryButton(
-                        label: "Enable Notifications",
-                        icon: Icons.notifications_none_rounded,
-                        onPressed: _isLoading ? null : _requestNotificationPermission,
-                        isLoading: _isLoading,
-                      ),
-
-                    const Spacer(),
-
-                    // Summary Card
-                    if (_location != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: AppBackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                          child: Container(
-                            padding: const EdgeInsets.all(24),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                            ),
-                            child: Column(
-                              children: [
-                                Text("SUMMARY", style: AppTextStyles.tiny(color: Colors.white30)),
-                                const SizedBox(height: 16),
-                                _buildSummaryRow("City", _location!.city ?? "Unknown"),
-                                const Divider(color: Colors.white10),
-                                _buildSummaryRow("Method", _calculationMethod.shortName),
-                                const Divider(color: Colors.white10),
-                                _buildSummaryRow("Asr", _madhab == MadhabType.hanafi ? "Hanafi" : "Standard"),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ),
-          ),
         );
-      },
-    );
-  }
-
-  // --- Helper Widgets ---
-
-  Widget _buildHeroIcon(IconData icon, Color glowColor) {
-    return Container(
-      width: 100,
-      height: 100,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withValues(alpha: 0.05),
-        boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: 0.2),
-            blurRadius: 40,
-            spreadRadius: 5,
-          )
-        ],
-      ),
-      child: Icon(icon, size: 40, color: Colors.white),
-    );
-  }
-
-  Widget _buildGlassSelectionTile({
-    required String title,
-    required String subtitle,
-    required bool isSelected,
-    required VoidCallback onTap,
-    bool compact = false,
-  }) {
-    return Pressable(
-      pressedScale: 0.96,
-      haptic: PressableHaptic.none,
-      onTap: () {
-        HapticService().light();
-        onTap();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: compact ? 12 : 16),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.spiritualGold.withValues(alpha: 0.15) : Colors.white.withValues(alpha: 0.03),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? AppColors.spiritualGold.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.05),
-          ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: compact
-                        ? AppTextStyles.body(weight: FontWeight.bold)
-                        : AppTextStyles.bodyLarge(weight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: AppTextStyles.tiny(color: Colors.white54),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              const Icon(Icons.check_circle, color: AppColors.spiritualGold, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.06,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [item('City', city), item('Method', method), item('Asr', madhab), item('Mushaf', script)],
+      ),
+    );
+  }
+}
+
+/// Fills the screen as onboarding ends: the phrase the user is answering,
+/// over the sky turning to night.
+class _FinishVeil extends StatelessWidget {
+  const _FinishVeil();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: AppColors.background.withValues(alpha: 0.35),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: AppTextStyles.small(color: Colors.white54)),
           Text(
-              value,
-              style: AppTextStyles.tabular(AppTextStyles.small(color: Colors.white))
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPrimaryButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
-    bool isLoading = false,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.buttonPrimary,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-        ),
-        child: isLoading
-            ? const PremiumFlowingLoader(size: 20, color: Colors.white)
-            : Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20),
-            const SizedBox(width: 12),
-            Text(label, style: AppTextStyles.button()),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNavigation() {
-    final isLastPage = _currentPage == 3;
-    final canProceed = (_currentPage != 1) || (_location != null);
-
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            AppColors.background,
-            AppColors.background.withValues(alpha: 0),
-          ],
-        ),
-      ),
-      child: Row(
-        children: [
-          if (_currentPage > 0)
-            TextButton(
-              onPressed: _previousPage,
-              child: Text("Back", style: AppTextStyles.body(color: Colors.white60)),
-            )
-          else
-            const SizedBox(width: 64), // Placeholder to balance layout
-
-          const Spacer(),
-
-          if (isLastPage)
-            ElevatedButton(
-              onPressed: (_isLoading || _location == null) ? null : _completeOnboarding,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.spiritualGold,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.pill)),
-              ),
-              child: _isLoading
-                  ? const PremiumFlowingLoader(size: 20, color: Colors.black)
-                  : const Text("Get Started", style: TextStyle(fontWeight: FontWeight.bold)),
-            )
-          else
-            ElevatedButton(
-              onPressed: canProceed ? _nextPage : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.all(16),
-                shape: const CircleBorder(),
-              ),
-              child: const Icon(Icons.arrow_forward_rounded),
+            AthanCue.falah.arabic,
+            textAlign: TextAlign.center,
+            textDirection: TextDirection.rtl,
+            style: AppTextStyles.arabic(size: 44, color: Colors.white).copyWith(
+              height: 1.4,
+              shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.4), blurRadius: 28)],
             ),
+          ),
+          const SizedBox(height: 12),
+          Text(AthanCue.falah.transliteration, style: AppTextStyles.body(color: AppColors.spiritualGold)),
+          const SizedBox(height: 4),
+          Text(AthanCue.falah.meaning, style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.75))),
         ],
+      ),
+    );
+  }
+}
+
+/// Asks to open the "Alarms & reminders" setting on Android 12+.
+class _ExactAlarmDialog extends StatelessWidget {
+  const _ExactAlarmDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      child: GlassPanel(
+        radius: AppRadii.panel,
+        color: AppColors.background.withValues(alpha: 0.9),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.alarm_on_rounded, color: AppColors.spiritualGold, size: 40),
+            const SizedBox(height: 14),
+            Text('On the minute', style: AppTextStyles.h3()),
+            const SizedBox(height: 10),
+            Text(
+              "To ring exactly as a prayer begins, Wird needs 'Alarms & reminders' turned on in your phone's settings.",
+              textAlign: TextAlign.center,
+              style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.75)),
+            ),
+            const SizedBox(height: 22),
+            OnboardingButton(label: 'Open settings', onPressed: () => Navigator.pop(context, true)),
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('Not now', style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.6))),
+            ),
+          ],
+        ),
       ),
     );
   }

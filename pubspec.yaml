@@ -53,6 +53,7 @@ dependencies:
   url_launcher: ^6.3.2
   share_plus: ^12.0.1
   wakelock_plus: ^1.5.2
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -79,6 +80,8 @@ flutter:
     - assets/quran/
     # Small previews of the home screen icons for Settings.
     - assets/icon/thumbs/
+    # Phrases of the adhan played during onboarding (see AthanCueService).
+    - assets/audio/
 
   # Mushaf fonts for the Quran reader, each drawn for the matching Quran.com
   # text (text_uthmani / text_indopak), including its waqf marks.
