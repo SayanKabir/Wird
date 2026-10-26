@@ -10,7 +10,7 @@ import '../../../core/constants/text_styles.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
 import '../../../core/utils/hijri_date.dart';
 import '../../../core/utils/islamic_day_utils.dart';
-import '../../../widgets/common/string_lights_overlay.dart';
+import '../../../widgets/common/festive_canopy.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../core/services/haptic_service.dart';
@@ -96,8 +96,10 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
     final screenHeight = MediaQuery.sizeOf(context).height;
     final gutter = AppSpacing.gutter(context);
     final gradientColors = AppColors.getGradientForPeriod(widget.prayerPeriod);
-    final hasSpecialDay =
-        IslamicDayUtils.messageForDate(DateTime.now(), maghribTime: widget.maghribTime) != null;
+    // Follows the selected day, so tapping onto Eid brings the lanterns out.
+    final canopy = _sameDay(_selectedDate, _today)
+        ? IslamicDayUtils.canopyFor(DateTime.now(), maghribTime: widget.maghribTime)
+        : IslamicDayUtils.canopyFor(_selectedDate);
     final atToday = _sameDay(_selectedDate, _today) &&
         _focusedMonth.month == _today.month &&
         _focusedMonth.year == _today.year;
@@ -130,14 +132,19 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
             bottom: false,
             child: Stack(
               children: [
-                if (hasSpecialDay)
-                  Positioned(
-                    top: screenHeight * 0.02,
-                    left: 0,
-                    right: 0,
-                    height: screenHeight * 0.18,
-                    child: const StringLightsOverlay(),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: screenHeight * 0.16,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 600),
+                    child: canopy == null
+                        ? const SizedBox.shrink()
+                        // Starts right of the back button and title.
+                        : FestiveCanopy(key: ValueKey(canopy), mood: canopy, start: 0.42),
                   ),
+                ),
                 CustomScrollView(
                   physics: const BouncingScrollPhysics(),
                   slivers: [
@@ -377,7 +384,7 @@ class _MonthGrid extends StatelessWidget {
   }
 
   Widget _buildCell(DateTime date) {
-    final event = IslamicDayUtils.messageForDate(date);
+    final event = IslamicDayUtils.messageForDaytime(date);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: _DayCell(
@@ -554,7 +561,7 @@ class _DayDetail extends StatelessWidget {
         : _hijriFor(date);
     final event = isToday
         ? IslamicDayUtils.messageForDate(DateTime.now(), maghribTime: maghribTime)
-        : IslamicDayUtils.messageForDate(date);
+        : IslamicDayUtils.messageForDaytime(date);
     final accent = event != null ? IslamicDayUtils.accentColor(event.type) : AppColors.kaabaGold;
 
     return AnimatedSize(

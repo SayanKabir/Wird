@@ -15,7 +15,7 @@ import '../../../models/prayer.dart';
 import '../../../models/prayer_status.dart';
 import '../bloc/prayer_bloc.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
-import '../../../widgets/common/string_lights_overlay.dart';
+import '../../../widgets/common/festive_canopy.dart';
 import '../widgets/celestial_background.dart';
 import '../widgets/countdown_timer.dart';
 import 'schedule_view.dart';
@@ -42,6 +42,8 @@ import '../../../widgets/common/glass_snackbar.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/app_route.dart';
 import '../../../core/constants/radii.dart';
+import '../../../core/festive/festive_occasion.dart';
+import '../../../widgets/common/festive_greeting.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -59,6 +61,10 @@ class _HomeScreenState extends State<HomeScreen>
   final LocationService _locationService = LocationService();
   final DebugService _debugService = DebugService();
   final StorageService _storageService = StorageService();
+
+  /// Set once today's festive greeting has been dismissed, so it doesn't
+  /// come back before the stored flag is read again.
+  bool _greetingDone = false;
 
   /// Index of [SettingsScreen] within the PageView below.
   static const int _settingsPageIndex = 0;
@@ -109,6 +115,10 @@ class _HomeScreenState extends State<HomeScreen>
   );
   Animation<double>? _highlightTween;
 
+  /// 1 on the Home tab and falling to 0 a page away, following the swipe.
+  /// The festive lanterns hang full on Home and shrink everywhere else.
+  final ValueNotifier<double> _festiveFocus = ValueNotifier<double>(1);
+
   /// Keeps the highlight where it is while a jumped-to page builds its
   /// first frame.
   bool _highlightHeld = false;
@@ -126,6 +136,9 @@ class _HomeScreenState extends State<HomeScreen>
     _highlightGlide.addListener(() {
       final tween = _highlightTween;
       if (tween != null) _highlightPage.value = tween.value;
+    });
+    _highlightPage.addListener(() {
+      _festiveFocus.value = (1 - (_highlightPage.value - 2).abs()).clamp(0.0, 1.0);
     });
     _checkPermissions();
     _fetchWeather();
@@ -253,6 +266,7 @@ class _HomeScreenState extends State<HomeScreen>
     _celestialOpacity.dispose();
     _jumpFade.dispose();
     _highlightPage.dispose();
+    _festiveFocus.dispose();
     _highlightGlide.dispose();
     _weatherTimer?.cancel();
     _debugService.overriddenWeather.removeListener(_onDebugChanged);
@@ -478,6 +492,17 @@ class _HomeScreenState extends State<HomeScreen>
             if (state is PrayerError) return _ErrorView(message: state.message);
 
             if (state is PrayerLoaded) {
+              // Ramadan, the Eids and Arafah dress up every tab: lanterns in
+              // the shared sky, accents, and on the big days a greeting.
+              final occasion = FestiveOccasion.today(
+                maghribTime: state.prayerTimes[Prayer.maghrib]?.startTime,
+                enabled: settings.islamicEventsEnabled,
+              );
+              final greet = occasion != null &&
+                  occasion.tier == FestiveTier.celebration &&
+                  !_greetingDone &&
+                  _storageService.getFlag(occasion.greetingKey) == null;
+
               return CelestialBackground(
                 prayerPeriod: state.prayerPeriod,
                 weatherCondition:
@@ -493,7 +518,9 @@ class _HomeScreenState extends State<HomeScreen>
                 latitude: _latitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
                 celestialOpacity: _celestialOpacity,
-                child: PopScope(
+                child: FestiveScope(
+                  occasion: occasion,
+                  child: PopScope(
                   canPop: false,
                   onPopInvokedWithResult: (didPop, _) {
                     if (!didPop) _handleBack();
@@ -504,6 +531,20 @@ class _HomeScreenState extends State<HomeScreen>
                   extendBody: true,
                   body: Stack(
                     children: [
+                      // Behind every tab, so content is never covered.
+                      if (occasion != null)
+                        Positioned.fill(
+                          child: FestiveCanopy(
+                            mood: occasion.mood,
+                            // Full on Home; on other tabs, small lanterns to
+                            // the right of their left-aligned titles.
+                            start: 0.38,
+                            focus: _festiveFocus,
+                            skyStars: 26,
+                            bursts: occasion.tier == FestiveTier.celebration,
+                            dropHeight: MediaQuery.sizeOf(context).height * 0.22,
+                          ),
+                        ),
                       _JumpFade(
                         animation: _jumpFade,
                         direction: () => _jumpDirection,
@@ -540,6 +581,7 @@ class _HomeScreenState extends State<HomeScreen>
                             builder: (context, page, _) => _buildMinimalIndicator(
                               MediaQuery.sizeOf(context).width,
                               page,
+                              festive: occasion != null,
                             ),
                           ),
                         ),
@@ -553,9 +595,22 @@ class _HomeScreenState extends State<HomeScreen>
                           right: 0,
                           child: _buildPermissionWarning(),
                         ),
+
+                      // Once per Eid or Arafah day, on the first open.
+                      if (greet)
+                        Positioned.fill(
+                          child: FestiveGreeting(
+                            occasion: occasion,
+                            onDone: () {
+                              _storageService.setFlag(occasion.greetingKey, 'seen');
+                              setState(() => _greetingDone = true);
+                            },
+                          ),
+                        ),
                     ],
                   ),
                   ),
+                ),
                 ),
               );
             }
@@ -567,7 +622,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildMinimalIndicator(double screenWidth, int currentPage) {
+  Widget _buildMinimalIndicator(double screenWidth, int currentPage, {bool festive = false}) {
     // Determine responsive sizing based on screen width
     final isSmallScreen = screenWidth < 380;
     final containerHeight = isSmallScreen ? 48.0 : 56.0;
@@ -589,7 +644,10 @@ class _HomeScreenState extends State<HomeScreen>
                 color: Colors.black.withValues(alpha: AppEffects.blur ? 0.4 : 0.7), // Darker for contrast
                 borderRadius: BorderRadius.circular(32),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.08), // Subtle glass edge
+                  // Gold on festive days; otherwise a subtle glass edge.
+                  color: festive
+                      ? const Color(0xFFE9B95A).withValues(alpha: 0.55)
+                      : Colors.white.withValues(alpha: 0.08),
                   width: 1,
                 ),
                 boxShadow: [
@@ -603,6 +661,7 @@ class _HomeScreenState extends State<HomeScreen>
               child: Stack(
                 alignment: Alignment.centerLeft,
                 children: [
+                  if (festive) const Positioned.fill(child: GirihPattern()),
                   // A softly lit capsule behind the current icon. It follows
                   // the page during swipes, glides across on taps, and
                   // stretches a little mid-move so it reads as travelling.
@@ -618,7 +677,7 @@ class _HomeScreenState extends State<HomeScreen>
                       final w = iconWidth - 6 + 10 * transit;
                       return Transform.translate(
                         offset: Offset(p * iconWidth + (iconWidth - w) / 2, 0),
-                        child: _TabHighlight(width: w, height: iconHeight - 6),
+                        child: _TabHighlight(width: w, height: iconHeight - 6, festive: festive),
                       );
                     },
                   ),
@@ -774,8 +833,8 @@ class _DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.sizeOf(context).height;
     final textColor = AppColors.getContentColor(state.prayerPeriod);
+    final occasion = FestiveScope.of(context);
     final now = DateTime.now();
     final maghribTime = state.prayerTimes[Prayer.maghrib]?.startTime;
     final isRamadanMode = IslamicDayUtils.isRamadanDate(now, maghribTime: maghribTime);
@@ -809,14 +868,6 @@ class _DashboardView extends StatelessWidget {
       bottom: false,
       child: Stack(
         children: [
-          if (isRamadanMode && showIslamicEvents)
-            Positioned(
-              top: screenHeight * 0.02,   // 2% of the screen height
-              left: 0,
-              right: 0,
-              height: screenHeight * 0.18, // 18% of the screen height gives the cables room to hang
-              child: const StringLightsOverlay(),
-            ),
           LayoutBuilder(
             builder: (context, constraints) {
               return SingleChildScrollView(
@@ -853,6 +904,10 @@ class _DashboardView extends StatelessWidget {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
+                                if (occasion != null) ...[
+                                  _FestiveGreetingLine(occasion: occasion),
+                                  const SizedBox(height: 28),
+                                ],
 
                                 // SCENARIO A: Active Prayer Window
                                 if (hasActivePrayer) ...[
@@ -1791,7 +1846,10 @@ class _TabHighlight extends StatelessWidget {
   final double width;
   final double height;
 
-  const _TabHighlight({required this.width, required this.height});
+  /// Lantern-gold on festive days.
+  final bool festive;
+
+  const _TabHighlight({required this.width, required this.height, this.festive = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1803,10 +1861,48 @@ class _TabHighlight extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Colors.white.withValues(alpha: 0.16), Colors.white.withValues(alpha: 0.06)],
+          colors: festive
+              ? [const Color(0xFFFFC86B).withValues(alpha: 0.32), const Color(0xFFE9B95A).withValues(alpha: 0.1)]
+              : [Colors.white.withValues(alpha: 0.16), Colors.white.withValues(alpha: 0.06)],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14), width: 0.5),
+        border: Border.all(
+          color: festive ? const Color(0xFFFFE7A8).withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.14),
+          width: 0.5,
+        ),
+        boxShadow: festive
+            ? [BoxShadow(color: const Color(0xFFFFC86B).withValues(alpha: 0.35), blurRadius: 12)]
+            : null,
       ),
+    );
+  }
+}
+
+/// "RAMADAN KAREEM" or "EID MUBARAK" above the prayer, between two small
+/// eight-pointed stars, on festive days.
+class _FestiveGreetingLine extends StatelessWidget {
+  final FestiveOccasion occasion;
+
+  const _FestiveGreetingLine({required this.occasion});
+
+  @override
+  Widget build(BuildContext context) {
+    const amber = Color(0xFFFFC86B);
+    Widget star() => Transform.rotate(
+          angle: math.pi / 4,
+          child: Container(width: 6, height: 6, color: amber.withValues(alpha: 0.8)),
+        );
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        star(),
+        const SizedBox(width: 12),
+        Text(
+          occasion.greeting.toUpperCase(),
+          style: AppTextStyles.tiny(color: amber).copyWith(letterSpacing: 4, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(width: 12),
+        star(),
+      ],
     );
   }
 }

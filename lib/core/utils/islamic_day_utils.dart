@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/common/festive_canopy.dart';
 import 'hijri_date.dart';
 
 enum IslamicEventType {
@@ -242,6 +243,16 @@ class IslamicDayUtils {
     return null;
   }
 
+  /// The occasion in the daylight hours of [date]: the Hijri day that began
+  /// at the previous evening's Maghrib, the same day the calendar grid shows
+  /// for it. [messageForDate] without a Maghrib time converts the date as is,
+  /// which lands one Hijri day later.
+  static IslamicDayMessage? messageForDaytime(DateTime date) =>
+      messageForDate(date, maghribTime: _nominalMaghrib(date));
+
+  /// Any evening hour works: only "is the moment before Maghrib" matters.
+  static DateTime _nominalMaghrib(DateTime date) => DateTime(date.year, date.month, date.day, 18);
+
   // =========================================================================
   // eventsForMonth — returns deduplicated events for the month.
   // Used by the calendar's "THIS MONTH'S EVENTS" section.
@@ -254,7 +265,7 @@ class IslamicDayUtils {
 
     for (var day = 1; day <= totalDays; day++) {
       final date = DateTime(month.year, month.month, day);
-      final event = messageForDate(date);
+      final event = messageForDaytime(date);
       if (event == null) continue;
 
       // Skip Jumu'ah — too frequent for a monthly list
@@ -272,6 +283,33 @@ class IslamicDayUtils {
     }
 
     return results;
+  }
+
+  // =========================================================================
+  // canopyFor — whether a day is great enough to decorate.
+  // =========================================================================
+
+  /// The lanterns come out only for the year's great occasions: all of
+  /// Ramadan, both Eids and Arafah, about a month in all. Weekly and monthly
+  /// days (Jumu'ah, the White Days) are worth a note on the calendar, but
+  /// decorating them made the lanterns ordinary.
+  ///
+  /// Pass the moment and today's Maghrib for today; for any other day just
+  /// the date, which reads its daylight hours like [messageForDaytime].
+  static CanopyMood? canopyFor(DateTime date, {DateTime? maghribTime}) {
+    maghribTime ??= _nominalMaghrib(date);
+    final message = messageForDate(date, maghribTime: maghribTime);
+    switch (message?.type) {
+      case IslamicEventType.eidAlFitr:
+      case IslamicEventType.eidAlAdha:
+      case IslamicEventType.arafah:
+        return CanopyMood.celebration;
+      case IslamicEventType.ramadan:
+      case IslamicEventType.laylatAlQadr:
+        return CanopyMood.night;
+      default:
+        return null;
+    }
   }
 
   // =========================================================================

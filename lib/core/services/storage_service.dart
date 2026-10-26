@@ -18,6 +18,9 @@ class StorageService {
   Box<PrayerLog>? _prayerLogsBox;
   Box<StreakData>? _streaksBox;
 
+  /// Small one-off markers, like the day the Eid greeting was last shown.
+  Box<String>? _flagsBox;
+
   /// Singleton instance
   static final StorageService _instance = StorageService._internal();
   factory StorageService() => _instance;
@@ -40,7 +43,12 @@ class StorageService {
     _settingsBox = await Hive.openBox<AppSettings>(_settingsBoxName);
     _prayerLogsBox = await Hive.openBox<PrayerLog>(_prayerLogsBoxName);
     _streaksBox = await Hive.openBox<StreakData>(_streaksBoxName);
+    _flagsBox = await Hive.openBox<String>('flags');
   }
+
+  String? getFlag(String key) => _flagsBox?.get(key);
+
+  Future<void> setFlag(String key, String value) async => _flagsBox?.put(key, value);
 
   void _registerAdapters() {
     // Only register if not already registered

@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import '../../../widgets/common/premium_flowing_loader.dart';
-import '../../../widgets/common/string_lights_overlay.dart';
+import '../../../widgets/common/festive_canopy.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/quran/quran_translations.dart';
@@ -17,7 +17,6 @@ import '../../../core/repositories/quran_progress_repository.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
 import '../../../core/services/storage_service.dart';
 import '../../../models/settings.dart';
-import '../../../core/utils/islamic_day_utils.dart';
 import '../../../models/verse.dart';
 import '../../../models/surah.dart';
 import '../../../models/quran_bookmark.dart';
@@ -32,6 +31,8 @@ import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/constants/radii.dart';
+import '../../../widgets/common/kaaba_icon.dart';
+import '../../../core/festive/festive_occasion.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -648,9 +649,9 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
 
     final isMakki = surahDetails?.revelationPlace.toLowerCase() == 'makkah';
 
-    final now = DateTime.now();
-    final isRamadanMode = IslamicDayUtils.isRamadanDate(now);
     final settings = StorageService().getSettings();
+    // Same occasions as the rest of the app (Ramadan, the Eids, Arafah).
+    final occasion = FestiveOccasion.today(enabled: settings.islamicEventsEnabled);
 
     // Back clears a selection before it leaves the surah.
     return PopScope(
@@ -686,15 +687,13 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
               _buildScrollView(isSmallPhone, hPad, isMakki, surahDetails),
 
             // 2. Put the decoration LAST (at the front)
-            if (isRamadanMode && settings.islamicEventsEnabled)
+            if (occasion != null)
               Positioned(
                 top: size.height * 0.02,
                 left: 0,
                 right: 0,
                 height: size.height * 0.18,
-                child: const IgnorePointer( // Added IgnorePointer so it doesn't block App Bar taps!
-                  child: StringLightsOverlay(),
-                ),
+                child: FestiveCanopy(mood: occasion.mood),
               ),
 
             // 3. Multi-select actions
@@ -841,10 +840,13 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Opacity(
-                                        opacity: 0.6,
-                                        child: Text(isMakki ? '🕋' : '🕌', style: TextStyle(fontSize: isSmallPhone ? 12 : 14))
-                                    ),
+                                    isMakki
+                                        ? KaabaIcon(size: isSmallPhone ? 13 : 15)
+                                        : Icon(
+                                            Icons.mosque_rounded,
+                                            size: isSmallPhone ? 13 : 15,
+                                            color: Colors.white.withValues(alpha: 0.6),
+                                          ),
                                     const SizedBox(width: 6),
                                     Text(
                                         // Matches the surah list screen's badge.
