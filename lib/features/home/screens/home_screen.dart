@@ -631,7 +631,7 @@ class _HomeScreenState extends State<HomeScreen>
     final horizontalPadding = isSmallScreen ? 4.0 : 6.0;
     final iconWidth = isSmallScreen ? 42.0 : 48.0;
     final iconHeight = isSmallScreen ? 40.0 : 44.0;
-    final iconSize = isSmallScreen ? 20.0 : 22.0;
+    final iconSize = isSmallScreen ? 22.0 : 24.0;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),

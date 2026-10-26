@@ -72,7 +72,7 @@
         <activity-alias
             android:name=".IconFajr"
             android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_fajr"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -83,7 +83,7 @@
         <activity-alias
             android:name=".IconDhuhr"
             android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_dhuhr"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -94,7 +94,7 @@
         <activity-alias
             android:name=".IconAsr"
             android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_asr"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
@@ -105,7 +105,7 @@
         <activity-alias
             android:name=".IconIsha"
             android:targetActivity=".MainActivity"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_isha"
             android:enabled="false"
             android:exported="true">
             <intent-filter>
