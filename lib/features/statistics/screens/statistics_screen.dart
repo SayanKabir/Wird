@@ -27,6 +27,8 @@ import '../../../core/services/prayer_service.dart';
 import '../../../widgets/common/app_route.dart';
 import '../../../core/constants/radii.dart';
 import '../../../widgets/common/count_up_text.dart';
+import '../../../widgets/common/wird_icons.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 // -----------------------------------------------------------------------------
 // MAIN STATISTICS SCREEN
@@ -84,22 +86,20 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   // rather than a dashboard of identical tiles.
 
   Widget _card({required Widget child, EdgeInsets padding = const EdgeInsets.all(20)}) {
-    return Container(
+    return GlassPanel(
       padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
+      fill: 0.06,
+      edge: 0.1,
       child: child,
     );
   }
 
-  /// Icon and title along the top of a card, with an optional note at the end.
-  Widget _cardTitle(IconData icon, String title, {String? note}) {
+  /// Icon and title along the top of a card, with an optional note at the
+  /// end. [glyph] replaces the icon with a drawn one.
+  Widget _cardTitle(IconData icon, String title, {String? note, Widget? glyph}) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+        glyph ?? Icon(icon, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
         const SizedBox(width: 10),
         Text(title, style: AppTextStyles.body(weight: FontWeight.w500)),
         const Spacer(),
@@ -146,11 +146,16 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   }
 
   /// A titled card of figures, for Sunnah, Quran and Dhikr.
-  Widget _statCard({required IconData icon, required String title, required List<(String, String)> figures}) {
+  Widget _statCard({
+    required IconData icon,
+    required String title,
+    required List<(String, String)> figures,
+    Widget? glyph,
+  }) {
     return _card(
       child: Column(
         children: [
-          _cardTitle(icon, title),
+          _cardTitle(icon, title, glyph: glyph),
           const SizedBox(height: 20),
           _figures(figures),
         ],
@@ -384,7 +389,8 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     return [
       _padded(_statCard(
-        icon: Icons.fingerprint_rounded,
+        icon: Icons.circle_outlined,
+        glyph: TasbihIcon(size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
         title: 'Dhikr',
         figures: [
           (_formatCount(totalLifetime), 'all time'),
@@ -421,20 +427,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
       },
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
-        child: Container(
+        child: GlassPanel(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.spiritualGold.withValues(alpha: 0.15),
-                AppColors.spiritualGold.withValues(alpha: 0.05),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
+          gradient: LinearGradient(
+            colors: [
+              AppColors.spiritualGold.withValues(alpha: 0.15),
+              AppColors.spiritualGold.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
+          edgeColor: AppColors.spiritualGold.withValues(alpha: 0.2),
           child: Row(
             children: [
               Container(
@@ -478,13 +481,10 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-        ),
+        fill: 0.05,
+        edge: 0.1,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -562,20 +562,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildMostRecitedCard(Tasbih tasbih) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.spiritualGold.withValues(alpha: 0.15),
-              AppColors.spiritualGold.withValues(alpha: 0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.spiritualGold.withValues(alpha: 0.15),
+            AppColors.spiritualGold.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        edgeColor: AppColors.spiritualGold.withValues(alpha: 0.2),
         child: Row(
           children: [
             Container(
@@ -584,7 +581,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 color: AppColors.spiritualGold.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.fingerprint_rounded, color: AppColors.spiritualGold, size: 24),
+              child: const TasbihIcon(color: AppColors.spiritualGold, size: 24),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -627,20 +624,17 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(24),
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              accent.withValues(alpha: 0.15),
-              accent.withValues(alpha: 0.05),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: accent.withValues(alpha: 0.2)),
+        gradient: LinearGradient(
+          colors: [
+            accent.withValues(alpha: 0.15),
+            accent.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        edgeColor: accent.withValues(alpha: 0.2),
         child: Row(
           children: [
             Container(
@@ -829,13 +823,10 @@ class _AchievementsHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassPanel(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-      ),
+      fill: 0.06,
+      edge: 0.1,
       child: Row(
         children: [
           SizedBox.square(

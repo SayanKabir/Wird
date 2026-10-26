@@ -15,6 +15,7 @@ import '../../home/widgets/celestial_background.dart';
 import 'dhikr_motion.dart';
 import '../../../core/constants/radii.dart';
 import '../../../core/constants/durations.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 /// The sky behind the dhikr screens, matching the time of day like the rest
 /// of the app. The sun or moon is hidden so nothing competes with the text.
@@ -180,18 +181,17 @@ class DhikrTextCard extends StatelessWidget {
       script: quranic ? QuranScript.uthmani : null,
     ).copyWith(height: long ? 1.9 : 1.6);
 
-    return Container(
+    return GlassPanel(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Colors.white.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.03)],
-        ),
-        borderRadius: BorderRadius.circular(AppRadii.panel),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09), width: 0.5),
+      radius: AppRadii.panel,
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.white.withValues(alpha: 0.08), Colors.white.withValues(alpha: 0.03)],
       ),
+      edge: 0.09,
+      edgeWidth: 0.5,
       child: ClipRRect(
         borderRadius: BorderRadius.circular(AppRadii.panel),
         child: FoldingScrollView(

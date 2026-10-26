@@ -17,6 +17,8 @@ import '../widgets/sunnah_check.dart';
 import '../widgets/sunnah_detail_sheet.dart';
 import '../widgets/sunnah_format.dart';
 import '../../../core/constants/radii.dart';
+import '../../../widgets/common/wird_icons.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 /// The Sunnah tab: this week's sunnah, the few the user has chosen to keep
 /// (ticked off day by day), and the library to choose them from.
@@ -180,13 +182,12 @@ class _SunnahScreenState extends State<SunnahScreen> {
             const SizedBox(height: 16),
             Pressable(
               onTap: () => context.read<SunnahBloc>().add(LoadSunnahs()),
-              child: Container(
+              child: GlassPanel(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(AppRadii.pill),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.12), width: 0.5),
-                ),
+                radius: AppRadii.pill,
+                fill: 0.08,
+                edge: 0.12,
+                edgeWidth: 0.5,
                 child: Text('Try again', style: AppTextStyles.small(color: Colors.white, weight: FontWeight.w600)),
               ),
             ),
@@ -224,16 +225,15 @@ class _DhikrCardState extends State<_DhikrCard> {
         return Pressable(
           onTap: () => _open(() => DhikrNav.openHub(context)),
           pressedScale: 0.98,
-          child: Container(
+          child: GlassPanel(
             padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(AppRadii.group),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
-            ),
+            radius: AppRadii.group,
+            fill: 0.05,
+            edge: 0.08,
+            edgeWidth: 0.5,
             child: Row(
               children: [
-                Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+                TasbihIcon(size: 22, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -414,12 +414,11 @@ class _PracticeList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(AppRadii.group),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
-      ),
+    return GlassPanel(
+      radius: AppRadii.group,
+      fill: 0.04,
+      edge: 0.06,
+      edgeWidth: 0.5,
       child: Column(
         children: [
           for (var i = 0; i < sunnahs.length; i++) ...[
@@ -488,14 +487,13 @@ class _PracticeEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassPanel(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(AppRadii.group),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
-      ),
+      radius: AppRadii.group,
+      fill: 0.04,
+      edge: 0.06,
+      edgeWidth: 0.5,
       child: Text(
         'Choose a few sunnahs to bring back into your days. Open any one from the library and add it to your practice, then tick it off as you go.',
         style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)).copyWith(height: 1.5),
@@ -529,14 +527,13 @@ class _LibraryRow extends StatelessWidget {
     return Pressable(
       onTap: () => showSunnahDetailSheet(context, sunnah),
       pressedScale: 0.975,
-      child: Container(
+      child: GlassPanel(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
-        ),
+        radius: 16,
+        fill: 0.04,
+        edge: 0.06,
+        edgeWidth: 0.5,
         child: Row(
           children: [
             Expanded(

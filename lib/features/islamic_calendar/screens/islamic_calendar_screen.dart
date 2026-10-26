@@ -14,6 +14,7 @@ import '../../../widgets/common/festive_canopy.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 /// The Hijri calendar: a month grid with Hijri dates leading, a detail card
 /// for whichever day is selected, and the month's occasions underneath.
@@ -284,13 +285,11 @@ class _MonthGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GlassPanel(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
-      ),
+      radius: AppSpacing.radiusXl,
+      fill: 0.06,
+      edge: 0.09,
       child: Column(
         children: [
           Row(
@@ -570,19 +569,17 @@ class _DayDetail extends StatelessWidget {
       alignment: Alignment.topCenter,
       child: AnimatedSwitcher(
         duration: const Duration(milliseconds: 200),
-        child: Container(
+        child: GlassPanel(
           key: ValueKey('${date.toIso8601String()}-$isToday'),
           width: double.infinity,
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [accent.withValues(alpha: 0.16), accent.withValues(alpha: 0.04)],
-            ),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-            border: Border.all(color: accent.withValues(alpha: 0.25)),
+          radius: AppSpacing.radiusLg,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [accent.withValues(alpha: 0.16), accent.withValues(alpha: 0.04)],
           ),
+          edgeColor: accent.withValues(alpha: 0.25),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -715,12 +712,10 @@ class _MonthEvents extends StatelessWidget {
             ),
           )
         else
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(AppSpacing.radiusLg),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-            ),
+          GlassPanel(
+            radius: AppSpacing.radiusLg,
+            fill: 0.05,
+            edge: 0.08,
             child: Column(
               children: [
                 for (var i = 0; i < events.length; i++) ...[
