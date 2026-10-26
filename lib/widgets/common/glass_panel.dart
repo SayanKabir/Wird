@@ -28,6 +28,9 @@ class GlassPanel extends StatelessWidget {
   /// Replaces the white fill, e.g. a gold-tinted highlight card.
   final Gradient? gradient;
 
+  /// A solid tint in place of the white fill.
+  final Color? color;
+
   /// Replaces the white edge colour.
   final Color? edgeColor;
 
@@ -42,6 +45,7 @@ class GlassPanel extends StatelessWidget {
     this.edge = 0.1,
     this.edgeWidth = 1,
     this.gradient,
+    this.color,
     this.edgeColor,
   });
 
@@ -56,7 +60,7 @@ class GlassPanel extends StatelessWidget {
       width: width,
       padding: padding,
       decoration: BoxDecoration(
-        color: gradient == null ? Colors.white.withValues(alpha: blur ? fill : fill + 0.05) : null,
+        color: gradient != null ? null : color ?? Colors.white.withValues(alpha: blur ? fill : fill + 0.05),
         gradient: gradient,
         borderRadius: shape,
         border: Border.all(

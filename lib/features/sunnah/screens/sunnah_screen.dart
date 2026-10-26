@@ -291,20 +291,19 @@ class _WeeklyCard extends StatelessWidget {
     return Pressable(
       onTap: () => showSunnahDetailSheet(context, sunnah),
       pressedScale: 0.98,
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.fromLTRB(16, 12, 6, 6),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.spiritualGold.withValues(alpha: 0.12),
-              AppColors.spiritualGold.withValues(alpha: 0.04),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2), width: 0.5),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.spiritualGold.withValues(alpha: 0.12),
+            AppColors.spiritualGold.withValues(alpha: 0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        radius: 20,
+        edgeColor: AppColors.spiritualGold.withValues(alpha: 0.2),
+        edgeWidth: 0.5,
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 260),
           layoutBuilder: (current, previous) => Stack(

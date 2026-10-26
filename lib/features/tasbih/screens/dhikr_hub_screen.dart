@@ -165,17 +165,16 @@ class _NowCard extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       pressedScale: 0.98,
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [AppColors.spiritualGold.withValues(alpha: 0.14), AppColors.spiritualGold.withValues(alpha: 0.04)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.25), width: 0.5),
+        gradient: LinearGradient(
+          colors: [AppColors.spiritualGold.withValues(alpha: 0.14), AppColors.spiritualGold.withValues(alpha: 0.04)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        radius: 20,
+        edgeColor: AppColors.spiritualGold.withValues(alpha: 0.25),
+        edgeWidth: 0.5,
         child: Row(
           children: [
             Expanded(

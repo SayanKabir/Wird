@@ -33,6 +33,7 @@ import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/constants/radii.dart';
 import '../../../widgets/common/wird_icons.dart';
 import '../../../core/festive/festive_occasion.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -1010,13 +1011,12 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
   Widget _buildTranslationOfflineNotice(double hPad) {
     return Padding(
       padding: EdgeInsets.fromLTRB(hPad, 4, hPad, 8),
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.5),
-        ),
+        fill: 0.05,
+        radius: 12,
+        edge: 0.08,
+        edgeWidth: 0.5,
         child: Row(
           children: [
             Icon(Icons.cloud_off_rounded, size: 16, color: Colors.white.withValues(alpha: 0.5)),

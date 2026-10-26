@@ -24,6 +24,7 @@ import '../../../widgets/common/glass_sheet.dart';
 import '../../../core/constants/spacing.dart';
 import '../../../widgets/common/app_route.dart';
 import '../../../core/constants/radii.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 enum _QuranTab { surah, juz, saved }
 
@@ -876,21 +877,20 @@ class _JumpCard extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       pressedScale: 0.975,
-      child: Container(
+      child: GlassPanel(
         margin: EdgeInsets.fromLTRB(horizontalPadding, 4, horizontalPadding, 8),
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              AppColors.spiritualGold.withValues(alpha: 0.14),
-              AppColors.spiritualGold.withValues(alpha: 0.04),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(AppRadii.group),
-          border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.25), width: 0.5),
+        gradient: LinearGradient(
+          colors: [
+            AppColors.spiritualGold.withValues(alpha: 0.14),
+            AppColors.spiritualGold.withValues(alpha: 0.04),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        radius: AppRadii.group,
+        edgeColor: AppColors.spiritualGold.withValues(alpha: 0.25),
+        edgeWidth: 0.5,
         child: Row(
           children: [
             Container(
@@ -949,14 +949,13 @@ class _VerseResultTile extends StatelessWidget {
     return Pressable(
       onTap: onTap,
       pressedScale: 0.98,
-      child: Container(
+      child: GlassPanel(
         margin: EdgeInsets.fromLTRB(horizontalPadding, 0, horizontalPadding, 10),
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.04),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06), width: 0.5),
-        ),
+        fill: 0.04,
+        radius: 16,
+        edge: 0.06,
+        edgeWidth: 0.5,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1248,13 +1247,11 @@ class _ContinueReadingCard extends StatelessWidget {
       child: Pressable(
         onTap: onTap,
         pressedScale: 0.98,
-        child: Container(
+        child: GlassPanel(
           padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
-          decoration: BoxDecoration(
-            color: AppColors.spiritualGold.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
-            border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.2)),
-          ),
+          color: AppColors.spiritualGold.withValues(alpha: 0.08),
+          radius: AppSpacing.radiusMd,
+          edgeColor: AppColors.spiritualGold.withValues(alpha: 0.2),
           child: Row(
             children: [
               const Icon(Icons.bookmark_rounded, color: AppColors.spiritualGold, size: 18),
