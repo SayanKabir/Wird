@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+<linearGradient id="sky" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="1024"><stop offset="0" stop-color="#2E1A47"/><stop offset=".45" stop-color="#4A2C6A"/><stop offset=".82" stop-color="#FFB88C"/><stop offset="1" stop-color="#FFD8B0"/></linearGradient>
+<linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFEBB5"/><stop offset=".5" stop-color="#EAB65A"/><stop offset="1" stop-color="#B9772A"/></linearGradient>
+<filter id="soft" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="28"/></filter>
+<filter id="glow" x="-.3" y="-.3" width="1.6" height="1.6"><feGaussianBlur stdDeviation="22"/></filter>
+</defs><g transform="translate(512 512) scale(.64) translate(-512 -500)"><rect x="-100" y="-100" width="1224" height="1224" fill="url(#sky)"/><ellipse cx="512" cy="800" rx="220" ry="120" fill="#FFE9C8" opacity=".7" filter="url(#soft)"/><path d="M560 404 Q560 420 576 420 Q560 420 560 436 Q560 420 544 420 Q560 420 560 404Z" fill="#FBE3A4" opacity="0.9"/><path d="M-40 772 C162 676, 383 682, 573 744 C740 798, 903 750, 1064 722 V1124 H-40Z" fill="#3A2452"/><path d="M-40 818 C122 774, 285 766, 448 798 C657 834, 865 774, 1064 790 V1124 H-40Z" fill="#24163A"/></g></svg>

@@ -8,6 +8,7 @@ import '../../../widgets/common/glass_sheet.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/services/device_profile.dart';
+import '../../../core/services/app_icon_service.dart';
 import '../../../core/constants/spacing.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/storage_service.dart';
@@ -461,6 +462,21 @@ class SettingsScreenState extends State<SettingsScreen> {
                   autoNote: mode == PerformanceMode.auto ? DeviceProfile.instance.reason : null,
                   onChanged: (m) => _saveSettings(_settings.copyWith(performanceMode: m.key)),
                 ),
+                _AppIconPicker(
+                  choice: AppIconChoice.fromKey(_settings.appIcon),
+                  showing: _shownAppIcon(),
+                  onChanged: (c) => _saveSettings(_settings.copyWith(appIcon: c.key)),
+                ),
+                _SwitchRow(
+                  icon: Icons.schedule_rounded,
+                  title: 'Follow prayer times',
+                  subtitle: 'Icon shows the current prayer',
+                  value: _settings.appIcon == AppIconChoice.auto.key,
+                  // Turning it off keeps whichever icon is showing now.
+                  onChanged: (v) => _saveSettings(_settings.copyWith(
+                    appIcon: v ? AppIconChoice.auto.key : _shownAppIcon().key,
+                  )),
+                ),
                 _SettingRow(
                   icon: Icons.wallpaper_rounded,
                   title: 'Background',
@@ -692,6 +708,14 @@ class SettingsScreenState extends State<SettingsScreen> {
         },
       ),
     );
+  }
+
+  /// The icon on the home screen right now (or about to be).
+  AppIconChoice _shownAppIcon() {
+    final choice = AppIconChoice.fromKey(_settings.appIcon);
+    if (choice != AppIconChoice.auto) return choice;
+    if (!_settings.isValid) return AppIconChoice.fallback;
+    return AppIconService.iconFor(_settings, DateTime.now());
   }
 
   String _getThemeDisplayName(WeatherTheme theme) {
@@ -982,6 +1006,111 @@ class _PerformanceModePicker extends StatelessWidget {
               key: ValueKey('$mode$autoNote'),
               style: AppTextStyles.small(color: Colors.white54),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The five home screen icons, one per prayer. Tapping one fixes the icon;
+/// the "Follow prayer times" switch below hands it back to the clock.
+class _AppIconPicker extends StatelessWidget {
+  final AppIconChoice choice;
+
+  /// The icon on the home screen now; ringed in gold.
+  final AppIconChoice showing;
+  final ValueChanged<AppIconChoice> onChanged;
+
+  const _AppIconPicker({required this.choice, required this.showing, required this.onChanged});
+
+  String get _note {
+    final auto = choice == AppIconChoice.auto;
+    if (Platform.isIOS) {
+      return auto
+          ? 'Changes to the current prayer when you open Wird. iOS confirms each change.'
+          : 'iOS confirms the change with a short message.';
+    }
+    return auto
+        ? 'Changes with each prayer through the day.'
+        : 'The new icon appears once you leave Wird.';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _RowIcon(icon: Icons.apps_rounded, tint: Colors.white.withValues(alpha: 0.85)),
+              const SizedBox(width: 14),
+              Text('App icon', style: AppTextStyles.body(weight: FontWeight.w500)),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              for (final c in AppIconChoice.prayers) ...[
+                if (c != AppIconChoice.prayers.first) const SizedBox(width: 10),
+                Expanded(child: _tile(c)),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          AnimatedSwitcher(
+            duration: AppDurations.normal,
+            child: Text(
+              _note,
+              key: ValueKey(choice == AppIconChoice.auto),
+              style: AppTextStyles.small(color: Colors.white54),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tile(AppIconChoice c) {
+    final selected = c == showing;
+    return Pressable(
+      haptic: PressableHaptic.selection,
+      pressedScale: 0.92,
+      onTap: () {
+        if (c != choice) onChanged(c);
+      },
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: AppDurations.normal,
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.all(2.5),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected ? AppColors.spiritualGold : Colors.transparent,
+                width: 2,
+              ),
+            ),
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: ClipRRect(
+                // Roughly the curve of a real home screen icon.
+                borderRadius: BorderRadius.circular(11),
+                child: Image.asset('assets/icon/thumbs/${c.key}.png', fit: BoxFit.cover),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            c.label,
+            maxLines: 1,
+            style: AppTextStyles.small(
+              color: selected ? Colors.white : Colors.white.withValues(alpha: 0.55),
+              weight: FontWeight.w600,
+            ).copyWith(fontSize: 12),
           ),
         ],
       ),

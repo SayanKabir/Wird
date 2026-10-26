@@ -474,6 +474,11 @@ class AppSettings extends Equatable {
   @HiveField(26, defaultValue: 'auto')
   final String performanceMode;
 
+  /// Home screen icon: 'auto' follows the current prayer, otherwise the key
+  /// of one fixed [AppIconChoice]. See AppIconService.
+  @HiveField(27, defaultValue: 'auto')
+  final String appIcon;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -502,6 +507,7 @@ class AppSettings extends Equatable {
     this.quranTransliterationScript = 'latin',
     this.reduceMotionUserSet = false,
     this.performanceMode = 'auto',
+    this.appIcon = 'auto',
   });
 
   /// Default settings
@@ -538,6 +544,7 @@ class AppSettings extends Equatable {
     String? quranTransliterationScript,
     bool? reduceMotionUserSet,
     String? performanceMode,
+    String? appIcon,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -567,6 +574,7 @@ class AppSettings extends Equatable {
       quranTransliterationScript: quranTransliterationScript ?? this.quranTransliterationScript,
       reduceMotionUserSet: reduceMotionUserSet ?? this.reduceMotionUserSet,
       performanceMode: performanceMode ?? this.performanceMode,
+      appIcon: appIcon ?? this.appIcon,
     );
   }
 
@@ -598,6 +606,7 @@ class AppSettings extends Equatable {
     quranTransliterationScript,
     reduceMotionUserSet,
     performanceMode,
+    appIcon,
   ];
 }
 
@@ -626,6 +635,32 @@ enum PerformanceMode {
 
   static PerformanceMode fromKey(String key) => PerformanceMode.values
       .firstWhere((m) => m.key == key, orElse: () => PerformanceMode.auto);
+}
+
+/// Which home screen icon to show. Stored on [AppSettings.appIcon] by [key].
+/// The prayer keys match the icon names the platform code knows.
+enum AppIconChoice {
+  /// Switches to the current prayer's icon through the day.
+  auto('auto', 'Follow prayer times'),
+  fajr('fajr', 'Fajr'),
+  dhuhr('dhuhr', 'Dhuhr'),
+  asr('asr', 'Asr'),
+  maghrib('maghrib', 'Maghrib'),
+  isha('isha', 'Isha');
+
+  const AppIconChoice(this.key, this.label);
+
+  final String key;
+  final String label;
+
+  /// The five fixed icons, in the order of the day.
+  static const prayers = [fajr, dhuhr, asr, maghrib, isha];
+
+  /// The icon the app ships with.
+  static const fallback = maghrib;
+
+  static AppIconChoice fromKey(String key) =>
+      AppIconChoice.values.firstWhere((c) => c.key == key, orElse: () => AppIconChoice.auto);
 }
 
 /// Streak data

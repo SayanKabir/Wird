@@ -137,13 +137,14 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       // Hand-edited after generation: only trust a String here, so data
       // written by another build under this index can't block startup.
       performanceMode: fields[26] is String ? fields[26] as String : 'auto',
+      appIcon: fields[27] is String ? fields[27] as String : 'auto',
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(27)
+      ..writeByte(28)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -197,7 +198,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(25)
       ..write(obj.reduceMotionUserSet)
       ..writeByte(26)
-      ..write(obj.performanceMode);
+      ..write(obj.performanceMode)
+      ..writeByte(27)
+      ..write(obj.appIcon);
   }
 
   @override

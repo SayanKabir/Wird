@@ -29,6 +29,7 @@ import 'models/verse.dart';
 import 'models/quran_bookmark.dart';
 import 'models/quran_progress.dart';
 import 'core/services/device_profile.dart';
+import 'core/services/app_icon_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +40,9 @@ void main() async {
 
   // Decides the default for Reduce motion on this device.
   await DeviceProfile.instance.init();
+
+  // Keeps the home screen icon on the user's choice (or the current prayer).
+  AppIconService.instance.init();
 
   final notificationService = NotificationService();
   await notificationService.init();

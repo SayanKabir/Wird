@@ -36,10 +36,7 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"
                 />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-            </intent-filter>
+            <!-- The launcher entry lives on the IconXxx aliases below. -->
             <!-- Verse links shared from Wird point at quran.com. Android can't
                  verify another site's links for us, so these open in Wird only
                  once the user adds quran.com under the app's "Open by default"
@@ -58,6 +55,75 @@
             <!-- Links are routed by DeepLinkService, not Flutter's router. -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
         </activity>
+
+        <!-- One home screen icon per prayer; exactly one alias is enabled at a
+             time. AppIconManager swaps them, and Maghrib is the default. -->
+        <activity-alias
+            android:name=".IconMaghrib"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconFajr"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconDhuhr"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconAsr"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconIsha"
+            android:targetActivity=".MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Applies scheduled icon switches while the app is closed, and
+             re-arms the next one after a reboot or app update. -->
+        <receiver
+            android:name=".AppIconReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name="dev.fluttercommunity.plus.androidalarmmanager.AlarmService"

@@ -77,6 +77,8 @@ flutter:
   assets:
     - assets/
     - assets/quran/
+    # Small previews of the home screen icons for Settings.
+    - assets/icon/thumbs/
 
   # Mushaf fonts for the Quran reader, each drawn for the matching Quran.com
   # text (text_uthmani / text_indopak), including its waqf marks.
@@ -97,5 +99,8 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/wird4.png"
+  image_path: "assets/icon/wird-maghrib.png"
+  remove_alpha_ios: true
+  adaptive_icon_background: "assets/icon/adaptive-background.png"
+  adaptive_icon_foreground: "assets/icon/adaptive-foreground.png"
 

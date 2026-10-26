@@ -46,6 +46,21 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, APP_ICON_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "setIcon" -> {
+                        val name = call.argument<String>("name")
+                        if (name == null) {
+                            result.error("bad_args", "Missing icon name", null)
+                        } else {
+                            AppIconManager.update(this, name, call.argument<List<List<Any>>>("schedule") ?: emptyList())
+                            result.success(null)
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -136,12 +151,25 @@ class MainActivity : FlutterActivity() {
         private const val LOCATION_CHANNEL = "com.SayanKabir.wird2/location"
         private const val DEVICE_CHANNEL = "com.SayanKabir.wird2/device"
         private const val LINKS_CHANNEL = "com.SayanKabir.wird2/links"
+        private const val APP_ICON_CHANNEL = "com.SayanKabir.wird2/app_icon"
         private const val LOCATION_SETTINGS_REQUEST = 7301
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestHighestRefreshRate()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppIconManager.appVisible = true
+    }
+
+    /** The icon only changes once the app is off screen; see AppIconManager. */
+    override fun onStop() {
+        super.onStop()
+        AppIconManager.appVisible = false
+        AppIconManager.onAppStopped(this)
     }
 
     /**
