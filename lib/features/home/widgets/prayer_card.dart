@@ -14,6 +14,7 @@ import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/app_route.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 class PrayerCard extends StatefulWidget {
   final Prayer prayer;
@@ -305,7 +306,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.auto_awesome, size: 16, color: AppColors.spiritualGold),
+                const KhatimIcon(size: 16, color: AppColors.spiritualGold),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(

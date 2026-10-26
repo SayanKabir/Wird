@@ -31,7 +31,7 @@ import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../core/constants/radii.dart';
-import '../../../widgets/common/kaaba_icon.dart';
+import '../../../widgets/common/wird_icons.dart';
 import '../../../core/festive/festive_occasion.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient

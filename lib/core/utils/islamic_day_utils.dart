@@ -328,7 +328,8 @@ class IslamicDayUtils {
       case IslamicEventType.arafah:
         return Icons.landscape_rounded;
       case IslamicEventType.ashura:
-        return Icons.auto_awesome_rounded;
+        // The sea parted for Musa, which the day commemorates.
+        return Icons.waves_rounded;
       case IslamicEventType.isra:
         return Icons.flight_rounded;
 

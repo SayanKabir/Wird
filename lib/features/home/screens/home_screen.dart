@@ -44,6 +44,7 @@ import '../../../widgets/common/app_route.dart';
 import '../../../core/constants/radii.dart';
 import '../../../core/festive/festive_occasion.dart';
 import '../../../widgets/common/festive_greeting.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -1039,13 +1040,8 @@ class _DashboardView extends StatelessWidget {
                             color: accentColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: Icon(
-                            hasEvent
-                                ? IslamicDayUtils.iconForType(todayEvent.type)
-                                : Icons.calendar_month_rounded,
-                            size: 16,
-                            color: accentColor.withValues(alpha: 0.9),
-                          ),
+                          // Opens the Islamic calendar.
+                          child: HijriCalendarIcon(size: 16, color: accentColor.withValues(alpha: 0.9)),
                         ),
                         const SizedBox(width: 12),
                         // Expanded (not Flexible) so the date/event text claims
@@ -1189,11 +1185,7 @@ class _DashboardView extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.auto_awesome_rounded,
-              size: 16,
-              color: accent,
-            ),
+            KhatimIcon(size: 16, color: accent),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

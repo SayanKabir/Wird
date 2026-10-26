@@ -4,7 +4,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/repositories/surah_info_local_repository.dart';
 import '../../../core/constants/radii.dart';
-import '../../../widgets/common/kaaba_icon.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 class SurahInfoModal extends StatelessWidget {
   final SurahInfoData info;

@@ -9,6 +9,7 @@ import '../../../core/constants/text_styles.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/glass_sheet.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 /// Where a "stay a little longer" suggestion takes the user.
 enum ExitNudgeAction { quran, dhikr }
@@ -18,7 +19,9 @@ class ExitNudge {
   final String title;
   final String message;
   final String actionLabel;
-  final IconData icon;
+  /// Shown in the nudge's gold disc. Null draws prayer beads ([TasbihIcon]),
+  /// which Material has no icon for.
+  final IconData? icon;
   final ExitNudgeAction action;
 
   /// For a Quran nudge, the surah to open. Null goes to the Quran tab.
@@ -28,7 +31,7 @@ class ExitNudge {
     required this.title,
     required this.message,
     required this.actionLabel,
-    required this.icon,
+    this.icon,
     required this.action,
     this.surahId,
   });
@@ -55,14 +58,12 @@ const List<ExitNudge> exitNudges = [
     title: 'Before you go…',
     message: 'SubhanAllah thirty-three times takes under a minute.',
     actionLabel: 'Quick dhikr',
-    icon: Icons.fingerprint_rounded,
     action: ExitNudgeAction.dhikr,
   ),
   ExitNudge(
     title: 'A little more dhikr?',
     message: 'Keep your tongue moist with the remembrance of Allah.',
     actionLabel: 'Open tasbih',
-    icon: Icons.blur_circular_rounded,
     action: ExitNudgeAction.dhikr,
   ),
   ExitNudge(
@@ -146,7 +147,9 @@ class _ExitPromptBody extends StatelessWidget {
               color: AppColors.spiritualGold.withValues(alpha: 0.14),
               shape: BoxShape.circle,
             ),
-            child: Icon(nudge.icon, color: AppColors.spiritualGold, size: 24),
+            child: nudge.icon == null
+                ? const TasbihIcon(size: 26, color: AppColors.spiritualGold)
+                : Icon(nudge.icon, color: AppColors.spiritualGold, size: 24),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(nudge.title, style: AppTextStyles.h2()),

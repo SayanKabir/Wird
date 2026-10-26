@@ -9,7 +9,7 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
-import '../../../widgets/common/kaaba_icon.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 /// Qibla compass screen with Celestial Zen design
 class QiblaScreen extends StatefulWidget {

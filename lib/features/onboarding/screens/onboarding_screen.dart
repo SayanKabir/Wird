@@ -12,6 +12,7 @@ import '../../../widgets/common/location_off_prompt.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../core/constants/radii.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 
 class OnboardingScreen extends StatefulWidget {
@@ -351,7 +352,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _buildFeatureRow(Icons.access_time_rounded, "Precise Prayer Times"),
                         _buildFeatureRow(Icons.explore_rounded, "Qibla Direction"),
                         _buildFeatureRow(Icons.auto_stories_rounded, "Sunnah Revival"),
-                        _buildFeatureRow(Icons.fingerprint_rounded, "Digital Tasbih"),
+                        _buildFeatureRow(null, "Digital Tasbih"),
                         _buildFeatureRow(Icons.notifications_active_rounded, "Adhan Reminders"),
                         _buildFeatureRow(Icons.wallpaper_rounded, "Dynamic Backgrounds"),
                       ],
@@ -367,13 +368,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildFeatureRow(IconData icon, String text) {
+  /// A null [icon] draws prayer beads.
+  Widget _buildFeatureRow(IconData? icon, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 18, color: AppColors.spiritualGold),
+          icon == null
+              ? const TasbihIcon(size: 18, color: AppColors.spiritualGold)
+              : Icon(icon, size: 18, color: AppColors.spiritualGold),
           const SizedBox(width: 12),
           Text(text, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.6))),
         ],
