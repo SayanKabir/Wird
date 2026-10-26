@@ -285,7 +285,12 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return _card(
       child: Column(
         children: [
-          _cardTitle(Icons.timeline_rounded, 'By prayer', note: 'day streaks'),
+          _cardTitle(
+            Icons.timeline_rounded,
+            'By prayer',
+            note: 'day streaks',
+            glyph: WirdGlyphIcon(WirdGlyph.schedule, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+          ),
           const SizedBox(height: 8),
           for (final prayer in fardhPrayers) _prayerStreakRow(prayer, streaks[prayer.name] ?? 0, longest),
         ],
@@ -356,6 +361,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return [
       _padded(_statCard(
         icon: Icons.auto_stories_rounded,
+        glyph: WirdGlyphIcon(WirdGlyph.sunnah, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
         title: 'Sunnah',
         figures: [
           ('${p.liveStreak()}', 'streak'),
@@ -375,6 +381,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return [
       _padded(_statCard(
         icon: Icons.menu_book_rounded,
+        glyph: WirdGlyphIcon(WirdGlyph.quran, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
         title: 'Quran',
         figures: [
           (_formatCount(q.totalVersesRead), 'verses'),
@@ -401,7 +408,7 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     return [
       _padded(_statCard(
         icon: Icons.circle_outlined,
-        glyph: TasbihIcon(size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
+        glyph: WirdGlyphIcon(WirdGlyph.tasbih, size: 18, color: AppColors.spiritualGold.withValues(alpha: 0.85)),
         title: 'Dhikr',
         figures: [
           (_formatCount(totalLifetime), 'all time'),
@@ -995,11 +1002,17 @@ class _MedallionTile extends StatelessWidget {
             child: CustomPaint(
               painter: _MedallionPainter(earned: earned, progress: item.progress),
               child: Center(
-                child: Icon(
-                  item.icon,
-                  size: 26,
-                  color: earned ? const Color(0xFF3A2608) : Colors.white.withValues(alpha: 0.35),
-                ),
+                child: item.glyph != null
+                    ? WirdGlyphIcon(
+                        item.glyph!,
+                        size: 26,
+                        color: earned ? const Color(0xFF3A2608) : Colors.white.withValues(alpha: 0.35),
+                      )
+                    : Icon(
+                        item.icon,
+                        size: 26,
+                        color: earned ? const Color(0xFF3A2608) : Colors.white.withValues(alpha: 0.35),
+                      ),
               ),
             ),
           ),

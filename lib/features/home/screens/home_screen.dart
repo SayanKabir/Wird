@@ -686,13 +686,13 @@ class _HomeScreenState extends State<HomeScreen>
                   Row(
                 mainAxisSize: MainAxisSize.min, // Hug contents
                 children: [
-                  _buildIndicatorIcon(0, Icons.tune_rounded, iconWidth, iconHeight, iconSize, currentPage), // Settings
-                  _buildIndicatorIcon(1, Icons.menu_book_rounded, iconWidth, iconHeight, iconSize, currentPage), // Quran
-                  _buildIndicatorIcon(2, Icons.grid_view_rounded, iconWidth, iconHeight, iconSize, currentPage), // Home
-                  _buildIndicatorIcon(3, Icons.calendar_month_rounded, iconWidth, iconHeight, iconSize, currentPage), // Schedule
-                  _buildIndicatorIcon(4, Icons.auto_stories_rounded, iconWidth, iconHeight, iconSize, currentPage), // Sunnah
-                  _buildIndicatorIcon(5, Icons.explore_rounded, iconWidth, iconHeight, iconSize, currentPage), // Qibla
-                  _buildIndicatorIcon(6, Icons.bar_chart_rounded, iconWidth, iconHeight, iconSize, currentPage), // Stats
+                  _buildIndicatorIcon(0, WirdGlyph.settings, iconWidth, iconHeight, iconSize, currentPage), // Settings
+                  _buildIndicatorIcon(1, WirdGlyph.quran, iconWidth, iconHeight, iconSize, currentPage), // Quran
+                  _buildIndicatorIcon(2, WirdGlyph.home, iconWidth, iconHeight, iconSize, currentPage), // Home
+                  _buildIndicatorIcon(3, WirdGlyph.schedule, iconWidth, iconHeight, iconSize, currentPage), // Schedule
+                  _buildIndicatorIcon(4, WirdGlyph.sunnah, iconWidth, iconHeight, iconSize, currentPage), // Sunnah
+                  _buildIndicatorIcon(5, WirdGlyph.qibla, iconWidth, iconHeight, iconSize, currentPage), // Qibla
+                  _buildIndicatorIcon(6, WirdGlyph.stats, iconWidth, iconHeight, iconSize, currentPage), // Stats
                 ],
               ),
                 ],
@@ -703,7 +703,7 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildIndicatorIcon(int index, IconData icon, double width,
+  Widget _buildIndicatorIcon(int index, WirdGlyph glyph, double width,
       double height, double size, int currentPage) {
     final isSelected = currentPage == index;
     final color =
@@ -723,7 +723,7 @@ class _HomeScreenState extends State<HomeScreen>
             tween: ColorTween(end: color),
             duration: AppDurations.normal,
             curve: AppCurves.emphasized,
-            builder: (context, c, _) => Icon(icon, size: size, color: c),
+            builder: (context, c, _) => WirdGlyphIcon(glyph, size: size, color: c),
           ),
         ),
       ),
@@ -1511,11 +1511,7 @@ class _CurrentPrayerSection extends StatelessWidget {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(
-                                Icons.auto_stories_rounded,
-                                size: 14,
-                                color: AppColors.spiritualGold,
-                              ),
+                              const WirdGlyphIcon(WirdGlyph.tasbih, size: 15, color: AppColors.spiritualGold),
                               const SizedBox(width: 8),
                               Text(
                                 "READ AZKAR",

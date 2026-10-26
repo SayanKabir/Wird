@@ -348,11 +348,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     // Features List (Single Column)
                     Column(
                       children: [
-                        _buildFeatureRow(Icons.menu_book_rounded, "Quran with Translation"),
-                        _buildFeatureRow(Icons.access_time_rounded, "Precise Prayer Times"),
-                        _buildFeatureRow(Icons.explore_rounded, "Qibla Direction"),
-                        _buildFeatureRow(Icons.auto_stories_rounded, "Sunnah Revival"),
-                        _buildFeatureRow(null, "Digital Tasbih"),
+                        _buildFeatureRow(WirdGlyph.quran, "Quran with Translation"),
+                        _buildFeatureRow(WirdGlyph.schedule, "Precise Prayer Times"),
+                        _buildFeatureRow(WirdGlyph.qibla, "Qibla Direction"),
+                        _buildFeatureRow(WirdGlyph.sunnah, "Sunnah Revival"),
+                        _buildFeatureRow(WirdGlyph.tasbih, "Digital Tasbih"),
                         _buildFeatureRow(Icons.notifications_active_rounded, "Adhan Reminders"),
                         _buildFeatureRow(Icons.wallpaper_rounded, "Dynamic Backgrounds"),
                       ],
@@ -368,16 +368,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  /// A null [icon] draws prayer beads.
-  Widget _buildFeatureRow(IconData? icon, String text) {
+  /// [icon] is an [IconData] or, for the app's own sections, a [WirdGlyph].
+  Widget _buildFeatureRow(Object icon, String text) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          icon == null
-              ? const TasbihIcon(size: 18, color: AppColors.spiritualGold)
-              : Icon(icon, size: 18, color: AppColors.spiritualGold),
+          icon is WirdGlyph
+              ? WirdGlyphIcon(icon, size: 18, color: AppColors.spiritualGold)
+              : Icon(icon as IconData, size: 18, color: AppColors.spiritualGold),
           const SizedBox(width: 12),
           Text(text, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.6))),
         ],

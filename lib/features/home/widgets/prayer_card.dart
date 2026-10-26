@@ -445,6 +445,7 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
           child: _ModernActionButton(
             label: buttonLabel,
             icon: buttonIcon,
+            glyph: isCompleted ? WirdGlyph.tasbih : null,
             color: buttonColor,
             onTap: isCompleted ? () {
               HapticService().selection();
@@ -635,6 +636,9 @@ class _StatusPill extends StatelessWidget {
 class _ModernActionButton extends StatelessWidget {
   final String label;
   final IconData icon;
+
+  /// A section glyph in place of [icon], e.g. prayer beads for azkar.
+  final WirdGlyph? glyph;
   final Color color;
   final VoidCallback? onTap;
   final bool isFilled;
@@ -642,6 +646,7 @@ class _ModernActionButton extends StatelessWidget {
   const _ModernActionButton({
     required this.label,
     required this.icon,
+    this.glyph,
     required this.color,
     this.onTap,
     this.isFilled = false,
@@ -676,7 +681,9 @@ class _ModernActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 18, color: isFilled ? Colors.white : color),
+              glyph != null
+                  ? WirdGlyphIcon(glyph!, size: 18, color: isFilled ? Colors.white : color)
+                  : Icon(icon, size: 18, color: isFilled ? Colors.white : color),
               const SizedBox(width: 8),
               // FIX: Flexible + FittedBox to prevent text overflow on small screens
               Flexible(

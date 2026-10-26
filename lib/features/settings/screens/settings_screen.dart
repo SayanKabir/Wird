@@ -28,6 +28,7 @@ import '../../../core/quran/transliterator.dart';
 import '../../../core/repositories/quran_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import '../../../widgets/common/wird_icons.dart';
 
 /// Settings, grouped by what the user is trying to change:
 ///
@@ -307,6 +308,7 @@ class SettingsScreenState extends State<SettingsScreen> {
             group(
               'prayer',
               icon: Icons.access_time_rounded,
+              leading: _RowIcon(glyph: WirdGlyph.schedule, tint: Colors.white.withValues(alpha: 0.85)),
               title: 'Prayer times',
               summary: '${_settings.calculationMethod.displayName} · '
                   '${_settings.madhab == MadhabType.shafi ? 'Standard' : 'Hanafi'} Asr',
@@ -410,7 +412,7 @@ class SettingsScreenState extends State<SettingsScreen> {
                   for (final prayer in fardhPrayers) _buildPrayerAlertRow(prayer),
               ],
               _SwitchRow(
-                icon: Icons.auto_stories_rounded,
+                glyph: WirdGlyph.sunnah,
                 title: 'Weekly sunnah',
                 subtitle: 'Mondays at 9:00 AM',
                 value: _settings.sunnahNotificationsEnabled,
@@ -449,6 +451,7 @@ class SettingsScreenState extends State<SettingsScreen> {
             group(
               'quran',
               icon: Icons.menu_book_rounded,
+              leading: _RowIcon(glyph: WirdGlyph.quran, tint: Colors.white.withValues(alpha: 0.85)),
               title: 'Quran',
               summary: '${_settings.quranSelectedScript.displayName} · ${translation.name}',
               rows: [
@@ -853,10 +856,14 @@ class _GlassSection extends StatelessWidget {
 
 /// The tinted square every row leads with.
 class _RowIcon extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+
+  /// The app's own glyph for a section concept (Quran, prayer times,
+  /// Sunnah), used instead of [icon].
+  final WirdGlyph? glyph;
   final Color tint;
 
-  const _RowIcon({required this.icon, required this.tint});
+  const _RowIcon({this.icon, this.glyph, required this.tint});
 
   @override
   Widget build(BuildContext context) {
@@ -867,7 +874,8 @@ class _RowIcon extends StatelessWidget {
         color: tint.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(9),
       ),
-      child: Icon(icon, size: 18, color: tint),
+      alignment: Alignment.center,
+      child: glyph != null ? WirdGlyphIcon(glyph!, size: 18, color: tint) : Icon(icon, size: 18, color: tint),
     );
   }
 }
@@ -945,6 +953,9 @@ class _SettingRow extends StatelessWidget {
 
 class _SwitchRow extends StatelessWidget {
   final IconData? icon;
+
+  /// A section glyph in place of [icon].
+  final WirdGlyph? glyph;
   final String title;
   final String? subtitle;
   final bool value;
@@ -957,6 +968,7 @@ class _SwitchRow extends StatelessWidget {
 
   const _SwitchRow({
     this.icon,
+    this.glyph,
     required this.title,
     this.subtitle,
     required this.value,
@@ -970,8 +982,8 @@ class _SwitchRow extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(indent ? 60 : 14, indent ? 6 : 10, 8, indent ? 6 : 10),
       child: Row(
         children: [
-          if (icon != null) ...[
-            _RowIcon(icon: icon!, tint: Colors.white.withValues(alpha: 0.85)),
+          if (icon != null || glyph != null) ...[
+            _RowIcon(icon: icon, glyph: glyph, tint: Colors.white.withValues(alpha: 0.85)),
             const SizedBox(width: 14),
           ],
           Expanded(

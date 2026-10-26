@@ -69,11 +69,7 @@ class SurahInfoModal extends StatelessWidget {
                           color: AppColors.spiritualGold.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(
-                          Icons.menu_book_rounded,
-                          color: AppColors.spiritualGold,
-                          size: 28,
-                        ),
+                        child: const WirdGlyphIcon(WirdGlyph.quran, color: AppColors.spiritualGold, size: 28),
                       ),
                       const SizedBox(height: 16),
                       Text(

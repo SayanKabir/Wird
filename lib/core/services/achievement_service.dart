@@ -5,6 +5,7 @@ import '../../models/prayer_log.dart';
 import '../../models/prayer_status.dart';
 import '../../models/settings.dart';
 import 'storage_service.dart';
+import '../../widgets/common/wird_icons.dart';
 
 /// Achievement definitions with unlock criteria
 class Achievement {
@@ -12,6 +13,10 @@ class Achievement {
   final String title;
   final String description;
   final IconData icon;
+
+  /// The section's own glyph (Quran, Sunnah, dhikr) for milestones that
+  /// belong to one, shown in place of [icon] so a symbol keeps one meaning.
+  final WirdGlyph? glyph;
   final bool isUnlocked;
   final DateTime? unlockedDate;
   final double progress; // 0.0 to 1.0
@@ -22,6 +27,7 @@ class Achievement {
     required this.title,
     required this.description,
     required this.icon,
+    this.glyph,
     this.isUnlocked = false,
     this.unlockedDate,
     this.progress = 0.0,
@@ -39,6 +45,7 @@ class Achievement {
       title: title,
       description: description,
       icon: icon,
+      glyph: glyph,
       isUnlocked: isUnlocked ?? this.isUnlocked,
       unlockedDate: unlockedDate ?? this.unlockedDate,
       progress: progress ?? this.progress,
@@ -171,42 +178,49 @@ class AchievementService {
       title: 'Remembrance',
       description: 'Complete 1,000 dhikr',
       icon: Icons.all_inclusive_rounded,
+      glyph: WirdGlyph.tasbih,
     ),
     const Achievement(
       id: 'dhikr_10k',
       title: 'A Moist Tongue',
       description: 'Complete 10,000 dhikr. "Keep your tongue moist with the remembrance of Allah."',
       icon: Icons.water_drop_rounded,
+      glyph: WirdGlyph.tasbih,
     ),
     const Achievement(
       id: 'dhikr_100k',
       title: 'Ocean of Dhikr',
       description: 'Complete 100,000 dhikr',
       icon: Icons.waves_rounded,
+      glyph: WirdGlyph.tasbih,
     ),
     const Achievement(
       id: 'quran_100',
       title: 'Reciter',
       description: 'Read 100 verses of the Quran',
       icon: Icons.menu_book_rounded,
+      glyph: WirdGlyph.quran,
     ),
     const Achievement(
       id: 'quran_1000',
       title: 'Companion of the Quran',
       description: 'Read 1,000 verses of the Quran',
       icon: Icons.auto_stories_rounded,
+      glyph: WirdGlyph.quran,
     ),
     const Achievement(
       id: 'quran_khatm',
       title: 'Khatm',
       description: 'Read all 6,236 verses of the Quran',
       icon: Icons.import_contacts_rounded,
+      glyph: WirdGlyph.quran,
     ),
     const Achievement(
       id: 'sunnah_50',
       title: 'Living the Sunnah',
       description: 'Keep a sunnah 50 times',
       icon: Icons.favorite_rounded,
+      glyph: WirdGlyph.sunnah,
     ),
   ];
 

@@ -19,9 +19,11 @@ class ExitNudge {
   final String title;
   final String message;
   final String actionLabel;
-  /// Shown in the nudge's gold disc. Null draws prayer beads ([TasbihIcon]),
-  /// which Material has no icon for.
+  /// Shown in the nudge's gold disc, unless [glyph] is set.
   final IconData? icon;
+
+  /// The section's own glyph (Quran, prayer beads), used in place of [icon].
+  final WirdGlyph? glyph;
   final ExitNudgeAction action;
 
   /// For a Quran nudge, the surah to open. Null goes to the Quran tab.
@@ -32,6 +34,7 @@ class ExitNudge {
     required this.message,
     required this.actionLabel,
     this.icon,
+    this.glyph,
     required this.action,
     this.surahId,
   });
@@ -44,14 +47,14 @@ const List<ExitNudge> exitNudges = [
     title: 'Leaving already?',
     message: 'A single ayah takes ten seconds. Read one before you go?',
     actionLabel: 'Read an ayah',
-    icon: Icons.menu_book_rounded,
+    glyph: WirdGlyph.quran,
     action: ExitNudgeAction.quran,
   ),
   ExitNudge(
     title: 'One more page?',
     message: 'The Quran will come as an intercessor for its companions.',
     actionLabel: 'Keep reading',
-    icon: Icons.auto_stories_rounded,
+    glyph: WirdGlyph.quran,
     action: ExitNudgeAction.quran,
   ),
   ExitNudge(
@@ -147,9 +150,9 @@ class _ExitPromptBody extends StatelessWidget {
               color: AppColors.spiritualGold.withValues(alpha: 0.14),
               shape: BoxShape.circle,
             ),
-            child: nudge.icon == null
-                ? const TasbihIcon(size: 26, color: AppColors.spiritualGold)
-                : Icon(nudge.icon, color: AppColors.spiritualGold, size: 24),
+            child: nudge.icon != null
+                ? Icon(nudge.icon, color: AppColors.spiritualGold, size: 24)
+                : WirdGlyphIcon(nudge.glyph ?? WirdGlyph.tasbih, size: 26, color: AppColors.spiritualGold),
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(nudge.title, style: AppTextStyles.h2()),

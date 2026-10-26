@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 /// Wird's own drawn icons, for the things Material has no good symbol for:
 /// the Kaaba, prayer beads, the Hijri calendar and an eight-pointed star.
@@ -298,4 +299,104 @@ class _KhatimPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _KhatimPainter old) => old.color != color;
+}
+
+/// One icon per concept, used everywhere that concept appears: the tab bar,
+/// settings groups, stats cards, achievements, onboarding. A screen never
+/// picks its own symbol for the Quran or the Sunnah, so an icon can't come
+/// to mean two things.
+///
+/// Drawn on a 24-unit grid in one line weight, from the app's own motifs:
+/// the icon's arch, the khatim star, the sun's path through the day.
+enum WirdGlyph {
+  /// The arch from the app icon.
+  home,
+
+  /// An open mushaf on its rahl.
+  quran,
+
+  /// The sun's arc over the horizon, a point for each prayer.
+  schedule,
+
+  /// Footsteps: following the Prophet's way.
+  sunnah,
+
+  /// A compass needle pointing at the Kaaba.
+  qibla,
+
+  /// Rising bars topped with small arches.
+  stats,
+
+  /// A gear made from the eight-pointed star.
+  settings,
+
+  /// Prayer beads, for dhikr and azkar. Drawn by [TasbihIcon].
+  tasbih,
+}
+
+/// Draws a [WirdGlyph] like an [Icon].
+class WirdGlyphIcon extends StatelessWidget {
+  final WirdGlyph glyph;
+  final double size;
+  final Color? color;
+
+  const WirdGlyphIcon(this.glyph, {super.key, this.size = 24, this.color});
+
+  static const _stroke =
+      'stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"';
+  static const _fill = 'fill="#fff"';
+  static const _arch =
+      'M7 21V11.5c0-3.2 2.6-4.6 3.8-5.7C11.6 5 12 4.1 12 3c0 1.1.4 2 1.2 2.8C14.4 6.9 17 8.3 17 11.5V21';
+
+  static String _svg(String body) => '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">$body</svg>';
+
+  static final Map<WirdGlyph, String> _art = {
+    WirdGlyph.home: _svg('<path d="$_arch" $_stroke/><path d="M4 21h16" $_stroke/>'),
+    WirdGlyph.quran: _svg(
+      '<path d="M3.5 6.5c3-1.2 5.8-.9 8.5 1 2.7-1.9 5.5-2.2 8.5-1V15c-3-1.1-5.8-.8-8.5 1-2.7-1.8-5.5-2.1-8.5-1z" $_stroke/>'
+      '<path d="M12 7.5V16" $_stroke/><path d="M6.5 16.5 17.5 21.5M17.5 16.5 6.5 21.5" $_stroke/>',
+    ),
+    WirdGlyph.schedule: _svg(
+      '<path d="M3 18h18" $_stroke/>'
+      // A faint solid arc: dashes this fine vanish at tab-bar size.
+      '<path d="M4.5 18a7.5 7.5 0 0 1 15 0" $_stroke stroke-width="1.2" stroke-opacity=".55"/>'
+      '<circle cx="4.95" cy="15.43" r="1.6" $_fill/><circle cx="8.25" cy="11.5" r="1.6" $_fill/>'
+      '<circle cx="12" cy="10.5" r="2.3" $_fill/><circle cx="16.82" cy="12.25" r="1.6" $_fill/>'
+      '<circle cx="19.05" cy="15.43" r="1.6" $_fill/>',
+    ),
+    WirdGlyph.sunnah: _svg(
+      '<path d="M8.4 15.6c-2 .2-3.4-1.6-3.4-4.3S6.4 6 8.4 6s3 2 2.8 4.7c-.2 2.7-.9 4.7-2.8 4.9z" $_stroke/>'
+      '<path d="M6.3 18.2c.6 1.4 2.3 1.7 3.1.6" $_stroke/>'
+      '<path d="M15.6 12.6c2 .2 3.4-1.6 3.4-4.3S17.6 3 15.6 3s-3 2-2.8 4.7c.2 2.7.9 4.7 2.8 4.9z" $_stroke/>'
+      '<path d="M17.7 15.2c-.6 1.4-2.3 1.7-3.1.6" $_stroke/>',
+    ),
+    WirdGlyph.qibla: _svg(
+      '<circle cx="12" cy="12" r="8.5" $_stroke/><path d="M12 12 14.6 8.2" $_stroke/>'
+      '<rect x="13.9" y="3.6" width="5" height="5" rx=".6" $_fill/>'
+      '<circle cx="12" cy="12" r="1.4" $_fill/>',
+    ),
+    WirdGlyph.stats: _svg(
+      '<path d="M4 21h16" $_stroke/>'
+      '<path d="M4.2 21v-4.5c0-1 .9-1.5 1.8-2.4.9.9 1.8 1.4 1.8 2.4V21" $_stroke/>'
+      '<path d="M10.2 21v-8.5c0-1 .9-1.5 1.8-2.4.9.9 1.8 1.4 1.8 2.4V21" $_stroke/>'
+      '<path d="M16.2 21V7.5c0-1 .9-1.5 1.8-2.4.9.9 1.8 1.4 1.8 2.4V21" $_stroke/>',
+    ),
+    WirdGlyph.settings: _svg(
+      '<rect x="5.7" y="5.7" width="12.6" height="12.6" rx="1" $_stroke/>'
+      '<rect x="5.7" y="5.7" width="12.6" height="12.6" rx="1" $_stroke transform="rotate(45 12 12)"/>'
+      '<circle cx="12" cy="12" r="2.6" $_stroke/>',
+    ),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final c = _iconColor(context, color);
+    if (glyph == WirdGlyph.tasbih) return TasbihIcon(size: size, color: c);
+    return SvgPicture.string(
+      _art[glyph]!,
+      width: size,
+      height: size,
+      colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
+    );
+  }
 }
