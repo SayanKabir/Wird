@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:ui';
@@ -7,6 +8,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/constants/effects.dart';
+import '../widgets/sky_debug_panel.dart';
 import '../widgets/exit_prompt.dart';
 import '../../quran/screens/surah_reading_screen.dart';
 import '../../../core/utils/hijri_date.dart';
@@ -131,6 +133,10 @@ class _HomeScreenState extends State<HomeScreen>
   Timer? _weatherTimer;
   double _latitude = 0.0; // Default to equator if unknown
 
+  /// Null until a location is known; the sky follows the prayer period until
+  /// then rather than drawing the sky over 0°, 0°.
+  double? _longitude;
+
   @override
   void initState() {
     super.initState();
@@ -153,10 +159,22 @@ class _HomeScreenState extends State<HomeScreen>
     // Listen to debug overrides
     _debugService.overriddenWeather.addListener(_onDebugChanged);
     _debugService.overriddenMoonPhase.addListener(_onDebugChanged);
+    _debugService.overriddenWind.addListener(_onDebugChanged);
+    _debugService.skyTime.addListener(_onSkyTime);
   }
 
   void _onDebugChanged() {
     if (mounted) setState(() {});
+  }
+
+  /// The sky follows the debug clock on its own; home only rebuilds when the
+  /// clock crosses into another prayer period.
+  PrayerPeriod? _skyPeriod;
+  void _onSkyTime() {
+    final state = context.read<PrayerBloc>().state;
+    if (!mounted || state is! PrayerLoaded) return;
+    final period = _debugService.periodAt(state.prayerTimes, state.prayerPeriod);
+    if (period != _skyPeriod) setState(() => _skyPeriod = period);
   }
 
   void _startWeatherTimer() {
@@ -203,7 +221,10 @@ class _HomeScreenState extends State<HomeScreen>
     final location = _locationService.getStoredLocation();
     if (location != null) {
       if (mounted) {
-        setState(() => _latitude = location.latitude);
+        setState(() {
+          _latitude = location.latitude;
+          _longitude = location.longitude;
+        });
       }
       final weather = await _weatherService.getWeather(
         latitude: location.latitude,
@@ -275,6 +296,8 @@ class _HomeScreenState extends State<HomeScreen>
     _weatherTimer?.cancel();
     _debugService.overriddenWeather.removeListener(_onDebugChanged);
     _debugService.overriddenMoonPhase.removeListener(_onDebugChanged);
+    _debugService.overriddenWind.removeListener(_onDebugChanged);
+    _debugService.skyTime.removeListener(_onSkyTime);
     super.dispose();
   }
 
@@ -508,18 +531,28 @@ class _HomeScreenState extends State<HomeScreen>
                   _storageService.getFlag(occasion.greetingKey) == null;
 
               return CelestialBackground(
-                prayerPeriod: state.prayerPeriod,
+                prayerPeriod: _debugService.periodAt(state.prayerTimes, state.prayerPeriod),
                 weatherCondition:
                     effectiveWeather?.condition ?? WeatherCondition.clear,
                 cloudCoverage:
                     effectiveWeather != null
                         ? effectiveWeather.cloudCoverage
                         : 0,
+                windSpeed: _debugService.overriddenWind.value ?? effectiveWeather?.windSpeed ?? 0,
+                adhanAt: switch (state.prayerPeriod) {
+                  PrayerPeriod.fajr => state.prayerTimes[Prayer.fajr]?.startTime,
+                  PrayerPeriod.dhuhr => state.prayerTimes[Prayer.dhuhr]?.startTime,
+                  PrayerPeriod.asr => state.prayerTimes[Prayer.asr]?.startTime,
+                  PrayerPeriod.maghrib => state.prayerTimes[Prayer.maghrib]?.startTime,
+                  PrayerPeriod.isha => state.prayerTimes[Prayer.isha]?.startTime,
+                  _ => null,
+                },
                 // The background widgets have always supported this, but nothing
                 // ever supplied it, so the setting had no effect.
                 reduceMotion: motionStill(),
                 lite: lighterVisuals(),
                 latitude: _latitude,
+                longitude: _longitude,
                 fixedMoonPhase: _debugService.overriddenMoonPhase.value,
                 celestialOpacity: _celestialOpacity,
                 child: FestiveScope(
@@ -598,6 +631,14 @@ class _HomeScreenState extends State<HomeScreen>
                           left: 0,
                           right: 0,
                           child: _buildPermissionWarning(),
+                        ),
+
+                      if (kDebugMode)
+                        Positioned(
+                          left: 16,
+                          right: 16,
+                          bottom: MediaQuery.paddingOf(context).bottom + 96,
+                          child: const SkyDebugPanel(),
                         ),
 
                       // Once per Eid or Arafah day, on the first open.
@@ -1773,7 +1814,7 @@ class _LoadingView extends StatelessWidget {
     return const Scaffold(
       backgroundColor: AppColors.background,
       body: Center(
-        child: PremiumFlowingLoader(color: AppColors.activeGlow),
+        child: PremiumFlowingLoader(color: AppColors.activeGlow, chimeWhenDone: true),
       ),
     );
   }

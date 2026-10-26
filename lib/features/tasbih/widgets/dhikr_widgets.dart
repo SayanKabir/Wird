@@ -26,6 +26,8 @@ class DhikrBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // With a location the sky moves on its own; the period is only its
+    // fallback.
     return BlocBuilder<PrayerBloc, PrayerState>(
       buildWhen: (a, b) => _period(a) != _period(b),
       builder: (context, prayerState) {
@@ -37,6 +39,7 @@ class DhikrBackdrop extends StatelessWidget {
           weatherCondition: _condition(settings.weatherTheme),
           cloudCoverage: _clouds(settings.weatherTheme),
           latitude: settings.location?.latitude ?? 0.0,
+          longitude: settings.location?.longitude,
           showCelestialBody: false,
           child: child,
         );

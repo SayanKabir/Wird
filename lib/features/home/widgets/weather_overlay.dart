@@ -2,7 +2,59 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import '../../../core/constants/durations.dart';
 import '../../../core/services/weather_service.dart';
+
+/// What the real sky tells the weather: where the light comes from and how
+/// hard the wind blows. Given only with the live sky, in full visuals; without
+/// it the weather draws as it always has.
+class SkyLight {
+  /// The sun's colour and place on screen, and its height in degrees.
+  final Color sunColor;
+  final Alignment sun;
+  final double sunAltitude;
+
+  /// 0..1: how much moonlight there is.
+  final double moonlight;
+
+  /// km/h, from Open-Meteo.
+  final double windSpeed;
+
+  const SkyLight({
+    required this.sunColor,
+    required this.sun,
+    required this.sunAltitude,
+    required this.moonlight,
+    required this.windSpeed,
+  });
+
+  /// Clouds drift with the wind: about as before in a light breeze, up to
+  /// three times faster in a gale.
+  double get drift => (0.5 + windSpeed / 12).clamp(0.5, 3.0);
+
+  /// Rain slants with the wind, horizontal travel per unit of fall.
+  double get slant => (0.04 + windSpeed / 70).clamp(0.04, 0.6);
+
+  /// 0..1: how strongly a low sun colours the clouds, strongest just after
+  /// sunrise and before sunset, gone by mid-morning or deep twilight.
+  double get goldenHour =>
+      _smooth(-7, -1, sunAltitude) * (1 - _smooth(5, 16, sunAltitude));
+
+  /// The body colour of a cloud: white by day, slate at night, silvered by
+  /// the moon.
+  Color get cloudColor {
+    // Indigo rather than grey, so night clouds deepen the sky instead of
+    // greying it; the moon silvers them only a little.
+    final night = Color.lerp(const Color(0xFF343E66), const Color(0xFFAEB8DA), moonlight * 0.45)!;
+    final day = Color.lerp(Colors.white, sunColor, goldenHour * 0.35)!;
+    return Color.lerp(night, day, _smooth(-8, 4, sunAltitude))!;
+  }
+
+  static double _smooth(double a, double b, double v) {
+    final k = ((v - a) / (b - a)).clamp(0.0, 1.0);
+    return k * k * (3 - 2 * k);
+  }
+}
 
 /// Weather overlay that renders clouds, rain, or snow on top of the background
 class WeatherOverlay extends StatelessWidget {
@@ -13,6 +65,9 @@ class WeatherOverlay extends StatelessWidget {
   /// Lighter visuals: clouds step at a lower rate.
   final bool lite;
 
+  /// The live sky's light and wind; null draws the plain weather.
+  final SkyLight? light;
+
   const WeatherOverlay({
     super.key,
     required this.condition,
@@ -20,6 +75,7 @@ class WeatherOverlay extends StatelessWidget {
     this.reduceMotion = false,
     this.lite = false,
     this.isNight = false,
+    this.light,
   });
 
   final bool isNight;
@@ -34,15 +90,27 @@ class WeatherOverlay extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // Cloud layer
-          if (_shouldShowClouds())
-            RepaintBoundary(
-              child: _CloudOverlay(
-                cloudCoverage: cloudCoverage,
-                reduceMotion: reduceMotion,
-                lite: lite,
-              ),
+          // Cloud layer. Fades in and out as the weather turns cloudy or
+          // clears, rather than appearing all at once.
+          AnimatedSwitcher(
+            duration: AppDurations.weatherFade * 4,
+            // Fill the screen like the other layers, also mid-fade.
+            layoutBuilder: (current, previous) => Stack(
+              fit: StackFit.expand,
+              children: [...previous, if (current != null) current],
             ),
+            child: _shouldShowClouds()
+                ? RepaintBoundary(
+                    key: const ValueKey('clouds'),
+                    child: _CloudOverlay(
+                      cloudCoverage: cloudCoverage,
+                      reduceMotion: reduceMotion,
+                      lite: lite,
+                      light: light,
+                    ),
+                  )
+                : const SizedBox.expand(),
+          ),
 
           // Rain particles
           if (condition == WeatherCondition.rain ||
@@ -53,6 +121,7 @@ class WeatherOverlay extends StatelessWidget {
                 intensity: condition == WeatherCondition.drizzle ? 0.3 : 1.0,
                 reduceMotion: reduceMotion,
                 hasLightning: condition == WeatherCondition.thunderstorm,
+                light: light,
               ),
             ),
 
@@ -86,11 +155,13 @@ class _CloudOverlay extends StatefulWidget {
   final int cloudCoverage;
   final bool reduceMotion;
   final bool lite;
+  final SkyLight? light;
 
   const _CloudOverlay({
     required this.cloudCoverage,
     required this.reduceMotion,
     this.lite = false,
+    this.light,
   });
 
   @override
@@ -101,6 +172,20 @@ class _CloudOverlayState extends State<_CloudOverlay>
     with SingleTickerProviderStateMixin {
   late Ticker _ticker;
   double _time = 0.0;
+
+  /// How many clouds are showing, eased toward [_targetCount] so a change in
+  /// cover fades a cloud in or out instead of adding or removing it at once.
+  /// Fractional: the last cloud is partly faded.
+  late double _shown = _targetCount;
+  late double _opacity = _targetOpacity;
+
+  double get _targetCount => (widget.cloudCoverage / 25).clamp(1, 4).toInt().toDouble();
+
+  // Reduced max opacity for moon visibility
+  double get _targetOpacity => (widget.cloudCoverage / 100).clamp(0.15, 0.45);
+
+  /// Share of the way to the target covered per second.
+  static const double _easePerSecond = 0.4;
 
   /// The clouds drift at `time * speed * 0.1`, so one traverse of the screen
   /// takes roughly 47 seconds — about 0.27 logical pixels per frame at 120Hz.
@@ -124,7 +209,12 @@ class _CloudOverlayState extends State<_CloudOverlay>
     _ticker = createTicker((elapsed) {
       final next = elapsed.inMilliseconds / 1000.0;
       if (next - _time < (widget.lite ? _liteStepSeconds : _stepSeconds)) return;
-      setState(() => _time = next);
+      final step = ((next - _time) * _easePerSecond).clamp(0.0, 1.0);
+      setState(() {
+        _time = next;
+        _shown += (_targetCount - _shown) * step;
+        _opacity += (_targetOpacity - _opacity) * step;
+      });
     });
 
     if (!widget.reduceMotion) {
@@ -152,15 +242,18 @@ class _CloudOverlayState extends State<_CloudOverlay>
 
   @override
   Widget build(BuildContext context) {
-    // Number of clouds based on coverage
-    final int cloudCount = (widget.cloudCoverage / 25).clamp(1, 4).toInt();
-    final double opacity = (widget.cloudCoverage / 100).clamp(0.15, 0.45); // Reduced max opacity for moon visibility
+    // Still clouds have nothing to ease them; show the target directly.
+    if (!_ticker.isActive) {
+      _shown = _targetCount;
+      _opacity = _targetOpacity;
+    }
 
     return CustomPaint(
       painter: _CloudPainter(
         time: _time,
-        cloudCount: cloudCount,
-        opacity: opacity,
+        cloudCount: _shown,
+        opacity: _opacity,
+        light: widget.light,
       ),
       size: Size.infinite,
     );
@@ -169,42 +262,72 @@ class _CloudOverlayState extends State<_CloudOverlay>
 
 class _CloudPainter extends CustomPainter {
   final double time;
-  final int cloudCount;
+
+  /// Clouds to draw; the fraction past a whole number is how far the last
+  /// one has faded in.
+  final double cloudCount;
   final double opacity;
+  final SkyLight? light;
 
   _CloudPainter({
     required this.time,
     required this.cloudCount,
     required this.opacity,
+    this.light,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
     final random = math.Random(42); // Deterministic for consistent clouds
 
-    for (int i = 0; i < cloudCount; i++) {
+    for (int i = 0; i < cloudCount.ceil(); i++) {
       final baseY = random.nextDouble() * size.height * 0.35; // Upper 35%
       final speed = 0.3 + random.nextDouble() * 0.4; // Speed variation
       final cloudWidth = size.width * (0.35 + random.nextDouble() * 0.3);
       final cloudHeight = cloudWidth * 0.35;
 
-      // Drift position — wraps around seamlessly
-      // Time-based movement: (time * speed + offset) % period
-      // Period is 1.4 (screen width + buffer)
-      final period = 1.4;
+      // Drift left to right and wrap. The loop starts with the whole cloud
+      // (and its blur) past the left edge and ends with it past the right,
+      // so a cloud never vanishes or appears while still on screen.
+      final margin = cloudWidth * 0.5 + 40;
+      final span = size.width + margin * 2;
       final offset = i * 0.35;
-      final rawX = ((time * speed * 0.1 + offset) % period); 
-      // Shift so 0 is left edge, start slightly off-screen left (-0.2)
-      final dx = (rawX - 0.2) * size.width;
+      final travelled = (time * speed * 0.1 * (light?.drift ?? 1) + offset) * size.width;
+      final dx = travelled % span - margin;
 
-      _drawCloud(
-        canvas,
-        Offset(dx, baseY),
-        cloudWidth,
-        cloudHeight,
-        opacity * (0.6 + random.nextDouble() * 0.4),
-      );
+      final fade = (cloudCount - i).clamp(0.0, 1.0);
+      final cloudOpacity = opacity * (0.6 + random.nextDouble() * 0.4) * fade;
+      _drawCloud(canvas, Offset(dx, baseY), cloudWidth, cloudHeight, cloudOpacity);
+      _lightCloud(canvas, size, Offset(dx, baseY), cloudWidth, cloudHeight, cloudOpacity);
     }
+  }
+
+  /// Near sunrise and sunset, the side of a cloud facing the sun and its
+  /// underside catch the low light. Two more soft ovals, only then.
+  void _lightCloud(Canvas canvas, Size size, Offset position, double width, double height, double cloudOpacity) {
+    final light = this.light;
+    if (light == null || light.goldenHour < 0.02) return;
+    final sunX = size.width / 2 + light.sun.x * size.width / 2;
+    final towardSun = ((sunX - position.dx) / size.width).clamp(-1.0, 1.0);
+    final paint = Paint()
+      ..color = light.sunColor.withValues(alpha: cloudOpacity * light.goldenHour * 0.9)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: position + Offset(towardSun * width * 0.18, height * 0.28),
+        width: width * 0.62,
+        height: height * 0.32,
+      ),
+      paint,
+    );
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: position + Offset(towardSun * width * 0.3, height * 0.05),
+        width: width * 0.3,
+        height: height * 0.45,
+      ),
+      paint,
+    );
   }
 
   void _drawCloud(
@@ -215,7 +338,7 @@ class _CloudPainter extends CustomPainter {
     double cloudOpacity,
   ) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(cloudOpacity)
+      ..color = (light?.cloudColor ?? Colors.white).withOpacity(cloudOpacity)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
 
     final cx = position.dx;
@@ -258,7 +381,7 @@ class _CloudPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CloudPainter oldDelegate) =>
-      oldDelegate.time != time;
+      oldDelegate.time != time || oldDelegate.light != light;
 }
 
 // =============================================================
@@ -269,11 +392,13 @@ class _RainOverlay extends StatefulWidget {
   final double intensity; // 0.0 - 1.0
   final bool reduceMotion;
   final bool hasLightning;
+  final SkyLight? light;
 
   const _RainOverlay({
     required this.intensity,
     required this.reduceMotion,
     this.hasLightning = false,
+    this.light,
   });
 
   @override
@@ -304,6 +429,9 @@ class _RainOverlayState extends State<_RainOverlay>
   Timer? _lightningTimer;
   bool _showFlash = false;
 
+  /// Where the strike lights the clouds from, as a share of the screen.
+  Offset _flashAt = const Offset(0.5, 0.2);
+
   void _scheduleLightning() {
     if (!mounted) return;
     // Random delay between 5 and 15 seconds
@@ -313,7 +441,9 @@ class _RainOverlayState extends State<_RainOverlay>
 
   void _triggerFlash() async {
     if (!mounted) return;
-    
+    final random = math.Random();
+    _flashAt = Offset(0.2 + random.nextDouble() * 0.6, 0.12 + random.nextDouble() * 0.2);
+
     // Flash on
     setState(() => _showFlash = true);
     await Future.delayed(const Duration(milliseconds: 100));
@@ -355,18 +485,35 @@ class _RainOverlayState extends State<_RainOverlay>
               painter: _RainPainter(
                 progress: _controller.value,
                 intensity: widget.intensity,
+                slant: widget.light?.slant,
               ),
             );
           },
         ),
         
-        // Lightning Flash
+        // Lightning Flash. With the live sky it glows out of the clouds
+        // from where it struck; otherwise the whole screen flashes.
         if (_showFlash)
-          Container(
-            color: Colors.white.withOpacity(0.3),
-            width: double.infinity,
-            height: double.infinity,
-          ),
+          widget.light != null
+              ? DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment(_flashAt.dx * 2 - 1, _flashAt.dy * 2 - 1),
+                      radius: 0.95,
+                      colors: [
+                        const Color(0xFFE4E8FF).withValues(alpha: 0.55),
+                        const Color(0xFFC9D0FF).withValues(alpha: 0.18),
+                        const Color(0x00C9D0FF),
+                      ],
+                      stops: const [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                )
+              : Container(
+                  color: Colors.white.withOpacity(0.3),
+                  width: double.infinity,
+                  height: double.infinity,
+                ),
       ],
     );
   }
@@ -376,7 +523,11 @@ class _RainPainter extends CustomPainter {
   final double progress;
   final double intensity;
 
-  _RainPainter({required this.progress, required this.intensity});
+  /// Horizontal travel per unit of fall, from the wind. Null keeps the old
+  /// fixed lean.
+  final double? slant;
+
+  _RainPainter({required this.progress, required this.intensity, this.slant});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -396,15 +547,17 @@ class _RainPainter extends CustomPainter {
 
       // Each drop falls continuously
       final y = ((baseY + progress * speed) % 1.2) * size.height;
-      
-      // Slight wind angle (5-10 degrees)
-      final windOffset = length * 0.12;
 
-      canvas.drawLine(
-        Offset(x, y),
-        Offset(x + windOffset, y + length),
-        paint,
-      );
+      final lean = slant;
+      if (lean == null) {
+        // Slight wind angle (5-10 degrees)
+        final windOffset = length * 0.12;
+        canvas.drawLine(Offset(x, y), Offset(x + windOffset, y + length), paint);
+      } else {
+        // Blown along its slant as it falls, wrapping at the edges.
+        final drifted = (x + y * lean) % size.width;
+        canvas.drawLine(Offset(drifted, y), Offset(drifted + length * lean, y + length), paint);
+      }
     }
   }
 
