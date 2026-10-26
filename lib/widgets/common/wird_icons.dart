@@ -188,7 +188,8 @@ class _TasbihPainter extends CustomPainter {
   bool shouldRepaint(covariant _TasbihPainter old) => old.color != color;
 }
 
-/// A calendar page with a crescent and star on it: the Hijri calendar.
+/// The Hijri calendar: a calendar page across which the moon waxes, from a
+/// thin crescent through half to full, since its months follow the moon.
 class HijriCalendarIcon extends StatelessWidget {
   final double size;
   final Color? color;
@@ -212,24 +213,39 @@ class _HijriCalendarPainter extends CustomPainter {
     final line = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = s * 0.08
+      ..strokeWidth = s * 0.075
       ..strokeCap = StrokeCap.round;
-    final page = RRect.fromLTRBR(s * 0.12, s * 0.2, s * 0.88, s * 0.9, Radius.circular(s * 0.14));
+    // Page, with a filled header band and two binding rings.
+    final page = RRect.fromLTRBR(s * 0.08, s * 0.16, s * 0.92, s * 0.9, Radius.circular(s * 0.14));
     canvas.drawRRect(page, line);
-    // Header rule and the two rings.
-    canvas.drawLine(Offset(s * 0.14, s * 0.38), Offset(s * 0.86, s * 0.38), line..strokeWidth = s * 0.07);
-    canvas.drawLine(Offset(s * 0.33, s * 0.1), Offset(s * 0.33, s * 0.27), line..strokeWidth = s * 0.08);
-    canvas.drawLine(Offset(s * 0.67, s * 0.1), Offset(s * 0.67, s * 0.27), line);
+    canvas.save();
+    canvas.clipRRect(page);
+    canvas.drawRect(Rect.fromLTRB(0, 0, s, s * 0.36), Paint()..color = color.withValues(alpha: 0.35));
+    canvas.restore();
+    canvas.drawLine(Offset(s * 0.32, s * 0.06), Offset(s * 0.32, s * 0.24), line);
+    canvas.drawLine(Offset(s * 0.68, s * 0.06), Offset(s * 0.68, s * 0.24), line);
 
-    // Crescent and star on the page.
-    final c = Offset(s * 0.45, s * 0.64);
-    final moon = Path.combine(
-      PathOperation.difference,
-      Path()..addOval(Rect.fromCircle(center: c, radius: s * 0.17)),
-      Path()..addOval(Rect.fromCircle(center: c + Offset(s * 0.08, -s * 0.05), radius: s * 0.14)),
-    );
-    canvas.drawPath(moon, Paint()..color = color);
-    _fourPoint(canvas, Offset(s * 0.66, s * 0.57), s * 0.075, Paint()..color = color);
+    // Three phases across the page: crescent, half, full. The unlit part
+    // of each moon is a faint disc rather than an outline, so they stay
+    // legible at list size.
+    final r = s * 0.125;
+    final y = s * 0.63;
+    final lit = Paint()..color = color;
+    final dark = Paint()..color = color.withValues(alpha: 0.28);
+    for (final (i, x) in [s * 0.235, s * 0.5, s * 0.765].indexed) {
+      final c = Offset(x, y);
+      final disc = Path()..addOval(Rect.fromCircle(center: c, radius: r));
+      canvas.drawPath(disc, dark);
+      final shape = switch (i) {
+        // Waxing crescent: the disc minus a circle shifted left.
+        0 => Path.combine(PathOperation.difference, disc,
+            Path()..addOval(Rect.fromCircle(center: c - Offset(r * 0.6, 0), radius: r))),
+        // First quarter: the right half.
+        1 => Path.combine(PathOperation.intersect, disc, Path()..addRect(Rect.fromLTRB(x, y - r, x + r, y + r))),
+        _ => disc,
+      };
+      canvas.drawPath(shape, lit);
+    }
   }
 
   @override
@@ -282,19 +298,4 @@ class _KhatimPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _KhatimPainter old) => old.color != color;
-}
-
-/// A small four-pointed star.
-void _fourPoint(Canvas canvas, Offset c, double r, Paint paint) {
-  final w = r * 0.3;
-  canvas.drawPath(
-    Path()
-      ..moveTo(c.dx, c.dy - r)
-      ..quadraticBezierTo(c.dx + w, c.dy - w, c.dx + r, c.dy)
-      ..quadraticBezierTo(c.dx + w, c.dy + w, c.dx, c.dy + r)
-      ..quadraticBezierTo(c.dx - w, c.dy + w, c.dx - r, c.dy)
-      ..quadraticBezierTo(c.dx - w, c.dy - w, c.dx, c.dy - r)
-      ..close(),
-    paint,
-  );
 }

@@ -45,6 +45,7 @@ import '../../../core/constants/radii.dart';
 import '../../../core/festive/festive_occasion.dart';
 import '../../../widgets/common/festive_greeting.dart';
 import '../../../widgets/common/wird_icons.dart';
+import '../../../widgets/common/glass_panel.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -1034,14 +1035,14 @@ class _DashboardView extends StatelessWidget {
                       // takes the room and the chevron is pinned to the end.
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.all(5),
                           decoration: BoxDecoration(
                             // Slightly adjusted opacity for the icon background to pop on glass
                             color: accentColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(11),
                           ),
                           // Opens the Islamic calendar.
-                          child: HijriCalendarIcon(size: 16, color: accentColor.withValues(alpha: 0.9)),
+                          child: HijriCalendarIcon(size: 24, color: accentColor.withValues(alpha: 0.95)),
                         ),
                         const SizedBox(width: 12),
                         // Expanded (not Flexible) so the date/event text claims
@@ -1169,20 +1170,18 @@ class _DashboardView extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              accent.withValues(alpha: 0.14),
-              accent.withValues(alpha: 0.06),
-            ],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(AppRadii.card),
-          border: Border.all(color: accent.withValues(alpha: 0.3)),
+        gradient: LinearGradient(
+          colors: [
+            accent.withValues(alpha: 0.14),
+            accent.withValues(alpha: 0.06),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
+        radius: AppRadii.card,
+        edgeColor: accent.withValues(alpha: 0.3),
         child: Row(
           children: [
             KhatimIcon(size: 16, color: accent),
@@ -1211,20 +1210,18 @@ class _DashboardView extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-      child: Container(
+      child: GlassPanel(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              accent.withValues(alpha: 0.12),
-              accent.withValues(alpha: 0.04),
-            ],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
-          borderRadius: BorderRadius.circular(AppRadii.card),
-          border: Border.all(color: accent.withValues(alpha: 0.25)),
+        gradient: LinearGradient(
+          colors: [
+            accent.withValues(alpha: 0.12),
+            accent.withValues(alpha: 0.04),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
         ),
+        radius: AppRadii.card,
+        edgeColor: accent.withValues(alpha: 0.25),
         child: Row(
           children: [
             Container(
