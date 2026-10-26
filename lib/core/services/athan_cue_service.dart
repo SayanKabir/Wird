@@ -1,15 +1,22 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
-/// A short phrase of the adhan, played as a cue at a meaningful moment:
-/// "come to prayer" as the user begins onboarding, "come to success" as they
-/// finish it.
+/// A short phrase of the adhan, played as a cue at a meaningful moment in
+/// onboarding: the takbir as the user begins, "come to prayer" as they turn
+/// on reminders, "come to success" as they finish.
 ///
-/// The clips are the first call of each phrase from "Beautiful adhan.ogg" by
-/// Adam-synagda on Wikimedia Commons (CC0, public domain), cut at 82.6s and
-/// 102.1s, faded and loudness-normalised:
+/// The clips are cut from "Beautiful adhan.ogg" by Adam-synagda on Wikimedia
+/// Commons (CC0, public domain), faded and loudness-normalised:
 /// https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
+/// To use another muezzin, replace the files under assets/audio/ keeping
+/// their names; nothing else depends on the recording.
 enum AthanCue {
+  takbir(
+    'audio/allahu_akbar.m4a',
+    'اللَّهُ أَكْبَرُ',
+    'Allāhu akbar',
+    'God is the greatest',
+  ),
   salah(
     'audio/hayya_alas_salah.m4a',
     'حَيَّ عَلَى الصَّلَاةِ',
@@ -40,7 +47,14 @@ class AthanCueService {
   AthanCueService._();
   static final AthanCueService instance = AthanCueService._();
 
-  AudioPlayer? _player;
+  /// One player per cue, each with its clip already loaded, so a cue sounds
+  /// the moment it's asked for. Android's MediaPlayer took about a second to
+  /// start even with the clip prepared (Galaxy S21 FE), long enough to miss
+  /// the moment it belongs to, so these use the low-latency SoundPool. That
+  /// reports no completion, so the caption runs on [_captionFor] instead.
+  final Map<AthanCue, AudioPlayer> _players = {};
+  Future<void>? _warming;
+  AthanCue? _sounding;
 
   /// Set by the speaker button on the onboarding header.
   final ValueNotifier<bool> muted = ValueNotifier(false);
@@ -48,47 +62,58 @@ class AthanCueService {
   /// The cue now sounding, for a caption to follow along with.
   final ValueNotifier<AthanCue?> playing = ValueNotifier(null);
 
-  AudioPlayer _ensurePlayer() {
-    final existing = _player;
-    if (existing != null) return existing;
-    final player = AudioPlayer()..setReleaseMode(ReleaseMode.stop);
-    player.setAudioContext(AudioContextConfig(
-      respectSilence: true,
-      focus: AudioContextConfigFocus.mixWithOthers,
-    ).build());
-    player.onPlayerComplete.listen((_) => playing.value = null);
-    return _player = player;
+  static const _captionFor = Duration(milliseconds: 4500);
+
+  /// Prepares every clip. Safe to call more than once.
+  Future<void> warmUp() => _warming ??= _prepareAll();
+
+  Future<void> _prepareAll() async {
+    for (final cue in AthanCue.values) {
+      try {
+        final player = AudioPlayer();
+        await player.setPlayerMode(PlayerMode.lowLatency);
+        await player.setReleaseMode(ReleaseMode.stop);
+        await player.setAudioContext(AudioContextConfig(
+          respectSilence: true,
+          focus: AudioContextConfigFocus.mixWithOthers,
+        ).build());
+        await player.setVolume(0.85);
+        await player.setSource(AssetSource(cue.asset));
+        _players[cue] = player;
+      } catch (e) {
+        debugPrint('[AthanCue] ${cue.name} not prepared: $e');
+      }
+    }
   }
 
   /// Starts [cue] and returns once it has begun (or been skipped). Muted, the
-  /// caption still shows briefly so the moment isn't lost.
+  /// caption still shows so the moment isn't lost.
   Future<void> play(AthanCue cue) async {
+    debugPrint('[AthanCue] ${cue.name}${muted.value ? ' (muted)' : ''}');
     playing.value = cue;
-    if (muted.value) {
-      Future.delayed(const Duration(milliseconds: 2400), () {
-        if (playing.value == cue) playing.value = null;
-      });
-      return;
-    }
+    Future.delayed(_captionFor, () {
+      if (playing.value == cue) playing.value = null;
+    });
+    if (muted.value) return;
     try {
-      final player = _ensurePlayer();
+      await warmUp();
+      final player = _players[cue];
+      if (player == null) throw StateError('clip missing');
+      final sounding = _sounding;
+      if (sounding != null && sounding != cue) _players[sounding]?.stop();
+      _sounding = cue;
       await player.stop();
-      await player.setVolume(0.85);
-      await player.play(AssetSource(cue.asset));
+      await player.resume();
     } catch (e) {
       debugPrint('[AthanCue] ${cue.name} not played: $e');
-      playing.value = null;
+      if (playing.value == cue) playing.value = null;
     }
   }
 
   Future<void> stop() async {
     playing.value = null;
-    await _player?.stop();
-  }
-
-  Future<void> dispose() async {
-    await _player?.dispose();
-    _player = null;
-    playing.value = null;
+    for (final player in _players.values) {
+      await player.stop();
+    }
   }
 }

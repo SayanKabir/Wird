@@ -111,6 +111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     _transliteration = s.quranShowTransliteration;
     _endWarning = s.endTimeWarningMinutes;
     _suggestedMethod = _methodForCountry(_location?.country);
+    _cues.warmUp();
   }
 
   @override
@@ -138,7 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   void _next() {
     HapticService().light();
-    if (_page == 0) _cues.play(AthanCue.salah);
+    if (_page == 0) _cues.play(AthanCue.takbir);
     if (_page < _lastPage) _goTo(_page + 1);
   }
 
@@ -274,6 +275,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       _notificationsGranted = granted;
     });
     if (!granted) return;
+    // The call each reminder will carry.
+    _cues.play(AthanCue.salah);
 
     // Android 12+ needs a separate grant to ring exactly on time.
     final canScheduleExact = await _notificationService.canScheduleExactAlarms();
@@ -300,7 +303,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     HapticService().heavy();
     _celestialOpacity.value = 1;
     setState(() => _finishing = true);
-    _cues.play(AthanCue.falah);
+    final cue = _cues.play(AthanCue.falah);
 
     final settings = _storageService.getSettings().copyWith(
       onboardingCompleted: true,
@@ -319,6 +322,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       quranShowTransliteration: _transliteration,
     );
     await Future.wait([
+      cue,
       _storageService.saveSettings(settings),
       // Long enough for the phrase to land and the sky to turn to night.
       Future.delayed(Duration(milliseconds: motionStill() ? 600 : 2600)),
@@ -433,7 +437,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   ),
                 ),
                 const Spacer(),
-                DayArcProgress(step: _finishing ? _skies.length : _page, steps: _skies.length + 1),
+                DayProgress(step: _finishing ? _skies.length : _page, steps: _skies.length + 1),
                 const Spacer(),
                 const CueMuteButton(),
               ],
@@ -896,24 +900,8 @@ class _WelcomePage extends StatelessWidget {
               children: [
                 Column(
                   children: [
-                    SizedBox(height: constraints.maxHeight * 0.05),
-                    enter(
-                      Text(
-                        'وِرْد',
-                        textDirection: TextDirection.rtl,
-                        style: AppTextStyles.arabic(size: 84, color: Colors.white).copyWith(
-                          height: 1.45,
-                          shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.35), blurRadius: 30)],
-                        ),
-                      ),
-                      0,
-                      rise: 0.15,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    enter(
-                      Text('WIRD', style: AppTextStyles.display(size: 20, weight: FontWeight.w300, letterSpacing: 10)),
-                      1,
-                    ),
+                    SizedBox(height: constraints.maxHeight * 0.1),
+                    enter(const _Wordmark(), 0, rise: 0.15),
                     const SizedBox(height: AppSpacing.xl),
                     enter(
                       Text(
@@ -961,6 +949,56 @@ class _WelcomePage extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// ورد and Wird side by side, Arabic on the left, parted by a hairline of
+/// gold. The Arabic goes without harakat: at this size Amiri lifts the sukun
+/// far above the letters.
+class _Wordmark extends StatelessWidget {
+  const _Wordmark();
+
+  @override
+  Widget build(BuildContext context) {
+    final glow = [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.35), blurRadius: 28)];
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Amiri's letters sit low in their line; lifted to centre on Wird.
+          Transform.translate(
+            offset: const Offset(0, -7),
+            child: Text(
+              'ورد',
+              textDirection: TextDirection.rtl,
+              style: AppTextStyles.arabic(size: 68, color: Colors.white).copyWith(height: 1.3, shadows: glow),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Container(
+            width: 1.2,
+            height: 52,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  AppColors.spiritualGold.withValues(alpha: 0),
+                  AppColors.spiritualGold.withValues(alpha: 0.8),
+                  AppColors.spiritualGold.withValues(alpha: 0),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Text(
+            'Wird',
+            style: AppTextStyles.display(size: 54, weight: FontWeight.w200, letterSpacing: 1, height: 1.1, shadows: glow),
+          ),
+        ],
       ),
     );
   }

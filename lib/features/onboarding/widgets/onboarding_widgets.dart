@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/colors.dart';
@@ -11,90 +9,40 @@ import '../../../widgets/common/glass_panel.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
 
-/// Onboarding's progress bar: the sun's path across the sky, with a point for
-/// each step, echoing the Schedule icon. The sun glides along it as the user
-/// moves through the day.
-class DayArcProgress extends StatelessWidget {
+/// Onboarding's progress: one short capsule per step, gold once reached,
+/// with the current one drawn longer.
+class DayProgress extends StatelessWidget {
   final int step;
   final int steps;
 
-  const DayArcProgress({super.key, required this.step, required this.steps});
+  const DayProgress({super.key, required this.step, required this.steps});
 
   @override
   Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: step.toDouble()),
-      duration: const Duration(milliseconds: 700),
-      curve: AppCurves.move,
-      builder: (context, t, _) => CustomPaint(
-        size: const Size(148, 34),
-        painter: _DayArcPainter(t: t, steps: steps),
+    return Semantics(
+      label: 'Step ${step + 1} of $steps',
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < steps; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 450),
+              curve: AppCurves.emphasized,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: i == step ? 26 : 10,
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadii.pill),
+                color: i <= step ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.28),
+                boxShadow: i == step
+                    ? [BoxShadow(color: AppColors.spiritualGold.withValues(alpha: 0.5), blurRadius: 8)]
+                    : null,
+              ),
+            ),
+        ],
       ),
     );
   }
-}
-
-class _DayArcPainter extends CustomPainter {
-  final double t;
-  final int steps;
-
-  _DayArcPainter({required this.t, required this.steps});
-
-  // The arc runs from 200° to 340°, a shallow dome above the horizon.
-  static const _from = math.pi * 1.1;
-  static const _sweep = math.pi * 0.8;
-
-  Offset _at(Rect oval, double fraction) {
-    final angle = _from + _sweep * fraction;
-    return oval.center + Offset(math.cos(angle) * oval.width / 2, math.sin(angle) * oval.height / 2);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final oval = Rect.fromCenter(
-      center: Offset(size.width / 2, size.height * 1.55),
-      width: size.width * 1.05,
-      height: size.height * 2.6,
-    );
-    final progress = steps <= 1 ? 1.0 : t / (steps - 1);
-
-    final track = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round
-      ..color = Colors.white.withValues(alpha: 0.22);
-    canvas.drawArc(oval, _from, _sweep, false, track);
-
-    final travelled = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round
-      ..color = AppColors.spiritualGold.withValues(alpha: 0.85);
-    canvas.drawArc(oval, _from, _sweep * progress, false, travelled);
-
-    for (var i = 0; i < steps; i++) {
-      final f = steps <= 1 ? 0.0 : i / (steps - 1);
-      final reached = i <= t + 0.01;
-      canvas.drawCircle(
-        _at(oval, f),
-        2.2,
-        Paint()..color = reached ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.35),
-      );
-    }
-
-    final sun = _at(oval, progress);
-    canvas.drawCircle(
-      sun,
-      9,
-      Paint()
-        ..color = AppColors.spiritualGold.withValues(alpha: 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
-    canvas.drawCircle(sun, 4.6, Paint()..color = AppColors.spiritualGold);
-  }
-
-  @override
-  bool shouldRepaint(covariant _DayArcPainter old) => old.t != t || old.steps != steps;
 }
 
 /// The phrase of the adhan now playing, in Arabic with its meaning, fading in
