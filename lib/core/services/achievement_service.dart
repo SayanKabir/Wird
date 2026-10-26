@@ -1,3 +1,4 @@
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import '../../models/prayer.dart';
 import '../../models/prayer_log.dart';
@@ -127,18 +128,120 @@ class AchievementService {
       description: 'Complete all prayers for an entire week',
       icon: Icons.workspace_premium_rounded,
     ),
+
+    // Milestones: running totals, in tiers.
+    const Achievement(
+      id: 'prayers_50',
+      title: 'Taking Root',
+      description: 'Pray 50 prayers',
+      icon: Icons.spa_rounded,
+    ),
+    const Achievement(
+      id: 'prayers_250',
+      title: 'Steadfast',
+      description: 'Pray 250 prayers',
+      icon: Icons.park_rounded,
+    ),
+    const Achievement(
+      id: 'prayers_1000',
+      title: 'A Thousand Prostrations',
+      description: 'Pray 1,000 prayers',
+      icon: Icons.mosque_rounded,
+    ),
+    const Achievement(
+      id: 'prayers_5000',
+      title: 'A Life of Salah',
+      description: 'Pray 5,000 prayers',
+      icon: Icons.diamond_rounded,
+    ),
+    const Achievement(
+      id: 'fajr_100',
+      title: 'Hundred Dawns',
+      description: 'Pray Fajr on time 100 times',
+      icon: Icons.wb_twilight_rounded,
+    ),
+    const Achievement(
+      id: 'jamaah_100',
+      title: 'Heart of the Masjid',
+      description: "Perform 100 prayers in Jama'ah",
+      icon: Icons.groups_2_rounded,
+    ),
+    const Achievement(
+      id: 'dhikr_1k',
+      title: 'Remembrance',
+      description: 'Complete 1,000 dhikr',
+      icon: Icons.all_inclusive_rounded,
+    ),
+    const Achievement(
+      id: 'dhikr_10k',
+      title: 'A Moist Tongue',
+      description: 'Complete 10,000 dhikr. "Keep your tongue moist with the remembrance of Allah."',
+      icon: Icons.water_drop_rounded,
+    ),
+    const Achievement(
+      id: 'dhikr_100k',
+      title: 'Ocean of Dhikr',
+      description: 'Complete 100,000 dhikr',
+      icon: Icons.waves_rounded,
+    ),
+    const Achievement(
+      id: 'quran_100',
+      title: 'Reciter',
+      description: 'Read 100 verses of the Quran',
+      icon: Icons.menu_book_rounded,
+    ),
+    const Achievement(
+      id: 'quran_1000',
+      title: 'Companion of the Quran',
+      description: 'Read 1,000 verses of the Quran',
+      icon: Icons.auto_stories_rounded,
+    ),
+    const Achievement(
+      id: 'quran_khatm',
+      title: 'Khatm',
+      description: 'Read all 6,236 verses of the Quran',
+      icon: Icons.import_contacts_rounded,
+    ),
+    const Achievement(
+      id: 'sunnah_50',
+      title: 'Living the Sunnah',
+      description: 'Keep a sunnah 50 times',
+      icon: Icons.favorite_rounded,
+    ),
   ];
 
-  /// Calculate achievements based on actual stored data
-  List<Achievement> calculateAchievements() {
+  /// Calculate achievements based on actual stored data.
+  ///
+  /// Dhikr, Quran and Sunnah totals live in their own stores, which load
+  /// asynchronously; pass them in once loaded. Until then those milestones
+  /// show as not started.
+  List<Achievement> calculateAchievements({int totalDhikr = 0, int versesRead = 0, int sunnahKept = 0}) {
     final streakData = _storageService.getStreakData();
     final recentLogs = _storageService.getRecentPrayerLogs(30); // Get 30 days for analysis
     final allTimeLogs = _storageService.getRecentPrayerLogs(365); // Get up to a year for counting
+    final everyLog = _storageService.getAllPrayerLogs();
 
     final achievements = <Achievement>[];
 
     for (final definition in _achievementDefinitions) {
-      final achievement = _evaluateAchievement(definition, streakData, recentLogs, allTimeLogs);
+      final achievement = switch (definition.id) {
+        'prayers_50' => _evaluatePrayerTotal(definition, everyLog, 50),
+        'prayers_250' => _evaluatePrayerTotal(definition, everyLog, 250),
+        'prayers_1000' => _evaluatePrayerTotal(definition, everyLog, 1000),
+        'prayers_5000' => _evaluatePrayerTotal(definition, everyLog, 5000),
+        'fajr_100' => _evaluatePrayerTotal(definition, everyLog, 100,
+            counts: (prayer, entry) => prayer == Prayer.fajr && entry.status == PrayerStatus.onTime, unit: 'Fajr'),
+        'jamaah_100' => _evaluatePrayerTotal(definition, everyLog, 100,
+            counts: (_, entry) => entry.isJamaah, unit: 'in jamaah'),
+        'dhikr_1k' => _evaluateTotal(definition, totalDhikr, 1000, 'dhikr'),
+        'dhikr_10k' => _evaluateTotal(definition, totalDhikr, 10000, 'dhikr'),
+        'dhikr_100k' => _evaluateTotal(definition, totalDhikr, 100000, 'dhikr'),
+        'quran_100' => _evaluateTotal(definition, versesRead, 100, 'verses'),
+        'quran_1000' => _evaluateTotal(definition, versesRead, 1000, 'verses'),
+        'quran_khatm' => _evaluateTotal(definition, versesRead, 6236, 'verses'),
+        'sunnah_50' => _evaluateTotal(definition, sunnahKept, 50, 'times'),
+        _ => _evaluateAchievement(definition, streakData, recentLogs, allTimeLogs),
+      };
       achievements.add(achievement);
     }
 
@@ -198,6 +301,44 @@ class AchievementService {
       default:
         return definition;
     }
+  }
+
+  static final _number = NumberFormat.decimalPattern();
+
+  /// A running total of logged prayers (all completed ones, or those
+  /// [counts] picks), unlocked on the day it reached [target].
+  Achievement _evaluatePrayerTotal(
+    Achievement definition,
+    List<PrayerLog> logsOldestFirst,
+    int target, {
+    bool Function(Prayer prayer, PrayerEntry entry)? counts,
+    String unit = 'prayers',
+  }) {
+    final test = counts ?? (Prayer _, PrayerEntry entry) => entry.status.isCompleted;
+    var total = 0;
+    DateTime? reached;
+    for (final log in logsOldestFirst) {
+      for (final MapEntry(key: prayer, value: entry) in log.entries.entries) {
+        if (test(prayer, entry)) total++;
+      }
+      if (reached == null && total >= target) reached = log.date;
+    }
+    return definition.copyWith(
+      isUnlocked: reached != null,
+      unlockedDate: reached,
+      progress: (total / target).clamp(0.0, 1.0),
+      progressText: '${_number.format(total)} / ${_number.format(target)} $unit',
+    );
+  }
+
+  /// A running total kept elsewhere (dhikr, verses, sunnahs). Those stores
+  /// don't keep dates, so no unlock date is shown.
+  Achievement _evaluateTotal(Achievement definition, int total, int target, String unit) {
+    return definition.copyWith(
+      isUnlocked: total >= target,
+      progress: (total / target).clamp(0.0, 1.0),
+      progressText: '${_number.format(total)} / ${_number.format(target)} $unit',
+    );
   }
 
   /// Evaluate prayer-specific streak (e.g., Fajr 7-day streak)

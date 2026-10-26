@@ -175,6 +175,13 @@ class StorageService {
     return logs;
   }
 
+  /// Every prayer log ever saved, oldest first.
+  List<PrayerLog> getAllPrayerLogs() {
+    final logs = _prayerLogsBox?.values.toList() ?? <PrayerLog>[];
+    logs.sort((a, b) => a.date.compareTo(b.date));
+    return logs;
+  }
+
   /// Get prayer logs for the past N days
   List<PrayerLog> getRecentPrayerLogs(int days) {
     final end = DateTime.now();

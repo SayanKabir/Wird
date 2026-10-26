@@ -170,7 +170,11 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   @override
   Widget build(BuildContext context) {
     final stats = _achievementService.getStatistics();
-    final achievements = _achievementService.calculateAchievements();
+    final achievements = _achievementService.calculateAchievements(
+      totalDhikr: _totalDhikr(),
+      versesRead: _quranProgress?.totalVersesRead ?? 0,
+      sunnahKept: _sunnahProgress?.totalPracticeActions ?? 0,
+    );
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -207,6 +211,13 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
         ),
       ),
     );
+  }
+
+  /// Every bead counted, from the live counters when they're loaded.
+  int _totalDhikr() {
+    final live = context.watch<TasbihBloc>().state;
+    final tasbihs = live is TasbihLoaded ? live.tasbihs : _tasbihs;
+    return tasbihs?.fold<int>(0, (sum, t) => sum + t.totalCount) ?? 0;
   }
 
   // ─── Prayer ───
@@ -798,11 +809,14 @@ class AchievementsScreen extends StatelessWidget {
   Widget _grid(BuildContext context, List<Achievement> items) => SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 18),
         sliver: SliverGrid(
+          // A fixed height rather than an aspect ratio: an earned medallion
+          // carries a two-line title and its date, which overflowed the
+          // ratio's cell on narrower phones.
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 3,
-            mainAxisSpacing: 10,
+            mainAxisSpacing: 14,
             crossAxisSpacing: 8,
-            childAspectRatio: 0.9,
+            mainAxisExtent: 142,
           ),
           delegate: SliverChildBuilderDelegate(
             (context, i) => _MedallionTile(item: items[i]),
