@@ -11,6 +11,7 @@ import '../../../models/prayer_log.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../tasbih/screens/session_screen.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/app_route.dart';
 import '../../../widgets/common/pressable.dart';
@@ -445,7 +446,9 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       children: [
         Expanded(
           flex: 3,
-          child: _ModernActionButton(
+          child: _PrayedBounce(
+            prayed: isCompleted,
+            child: _ModernActionButton(
             label: buttonLabel,
             icon: buttonIcon,
             glyph: isCompleted ? WirdGlyph.tasbih : null,
@@ -459,10 +462,13 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
                 ),
               );
             } : canMarkComplete ? () {
+              // Before the haptic, so the bell wins over the haptic's pop.
+              SoundService().prayed(jamaah: widget.entry?.isJamaah ?? false);
               HapticService().medium();
               widget.onMarkComplete?.call();
             } : null,
             isFilled: isFilled && (canMarkComplete || isCompleted),
+          ),
           ),
         ),
         const SizedBox(width: 12),
@@ -633,6 +639,56 @@ class _StatusPill extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Gives the action button one small bounce as the prayer is marked
+/// prayed: a quick swell, then a soft overshoot back to rest. Plays only on
+/// the change, never when a card first appears already prayed.
+class _PrayedBounce extends StatefulWidget {
+  final bool prayed;
+  final Widget child;
+
+  const _PrayedBounce({required this.prayed, required this.child});
+
+  @override
+  State<_PrayedBounce> createState() => _PrayedBounceState();
+}
+
+class _PrayedBounceState extends State<_PrayedBounce> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 480),
+  );
+
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 1.06).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 25,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.06, end: 1.0).chain(CurveTween(curve: AppCurves.settle)),
+      weight: 75,
+    ),
+  ]).animate(_controller);
+
+  @override
+  void didUpdateWidget(covariant _PrayedBounce oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.prayed && !oldWidget.prayed && !motionStill()) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(scale: _scale, child: widget.child);
   }
 }
 

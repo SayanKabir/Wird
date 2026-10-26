@@ -48,7 +48,7 @@ class _SunnahScreenState extends State<SunnahScreen> {
             if (state is SunnahLoaded) return _buildLoaded(context, state);
             if (state is SunnahError) return _buildError(context);
             return const Center(
-              child: PremiumFlowingLoader(size: 50.0, color: AppColors.spiritualGold),
+              child: PremiumFlowingLoader(size: 50.0, color: AppColors.spiritualGold, chimeWhenDone: true),
             );
           },
         ),

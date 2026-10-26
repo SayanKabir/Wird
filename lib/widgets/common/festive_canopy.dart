@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/services/device_profile.dart';
+import '../../core/services/sound_service.dart';
 
 /// Which light the lanterns give off.
 enum CanopyMood {
@@ -19,7 +21,9 @@ enum CanopyMood {
 /// at different lengths, swaying a little, their glass glowing and the flame
 /// inside flickering.
 ///
-/// Size it with a [Positioned] or [SizedBox]; it never takes touches. With
+/// Size it with a [Positioned] or [SizedBox]. It sits behind the screen's
+/// content and never takes a touch from it, but it hears every touch: one
+/// on a lantern sets it swinging. With
 /// "Remove animations" on it draws one still frame.
 class FestiveCanopy extends StatefulWidget {
   final CanopyMood mood;
@@ -71,6 +75,17 @@ class _FestiveCanopyState extends State<FestiveCanopy> with SingleTickerProvider
     duration: const Duration(seconds: 8),
   );
 
+  /// The decorations chime in once per launch, not on every screen that
+  /// shows them.
+  static bool _announced = false;
+
+  /// When each lantern was last touched, in [_clock] seconds, and which way
+  /// it was pushed.
+  final Stopwatch _clock = Stopwatch()..start();
+  final List<double?> _touchedAt = List.filled(_CanopyPainter._lanterns.length, null);
+  final List<double> _pushedFrom = List.filled(_CanopyPainter._lanterns.length, 1);
+  late _CanopyPainter _painter;
+
   @override
   void initState() {
     super.initState();
@@ -79,34 +94,84 @@ class _FestiveCanopyState extends State<FestiveCanopy> with SingleTickerProvider
     } else {
       _loop.repeat();
     }
+    if (!_announced) {
+      _announced = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => SoundService().festive());
+    }
+    // Content above the canopy takes the touches, so it listens to all of
+    // them instead of hit testing for its own.
+    GestureBinding.instance.pointerRouter.addGlobalRoute(_onPointer);
   }
 
   @override
   void dispose() {
+    GestureBinding.instance.pointerRouter.removeGlobalRoute(_onPointer);
     _loop.dispose();
     super.dispose();
   }
 
+  void _onPointer(PointerEvent event) {
+    if (event is! PointerDownEvent || !mounted) return;
+    // Not through a sheet or a screen pushed on top.
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final local = box.globalToLocal(event.position);
+    if (!(Offset.zero & box.size).contains(local)) return;
+
+    final hangs = _painter.hangs(box.size);
+    for (var i = 0; i < hangs.length; i++) {
+      final hang = hangs[i];
+      final body = hang.body;
+      // A finger-sized target even for the small lanterns.
+      if ((local - body).distance > math.max(hang.unit * 1.4, 28)) continue;
+      _touchedAt[i] = _clock.elapsedMilliseconds / 1000;
+      _pushedFrom[i] = local.dx < body.dx ? -1 : 1;
+      return;
+    }
+  }
+
+  /// Extra swing from a touch: a push away from the finger that rings down
+  /// over a few seconds.
+  double _swing(int i) {
+    final at = _touchedAt[i];
+    if (at == null) return 0;
+    final age = _clock.elapsedMilliseconds / 1000 - at;
+    if (age > 4) return 0;
+    return -_pushedFrom[i] * 0.3 * math.exp(-age * 1.4) * math.sin(age * 2 * math.pi * 0.85);
+  }
+
   @override
   Widget build(BuildContext context) {
+    _painter = _CanopyPainter(
+      mood: widget.mood,
+      start: widget.start,
+      garlands: widget.garlands,
+      skyStars: widget.skyStars,
+      bursts: widget.bursts,
+      dropHeight: widget.dropHeight,
+      focus: widget.focus,
+      t: _loop,
+      swing: _swing,
+    );
     return IgnorePointer(
       child: RepaintBoundary(
-        child: CustomPaint(
-          size: Size.infinite,
-          painter: _CanopyPainter(
-            mood: widget.mood,
-            start: widget.start,
-            garlands: widget.garlands,
-            skyStars: widget.skyStars,
-            bursts: widget.bursts,
-            dropHeight: widget.dropHeight,
-            focus: widget.focus,
-            t: _loop,
-          ),
-        ),
+        child: CustomPaint(size: Size.infinite, painter: _painter),
       ),
     );
   }
+}
+
+/// Where one lantern hangs, in the canopy's own coordinates.
+class _Hang {
+  final Offset anchor;
+  final double drop;
+  final double unit;
+
+  const _Hang(this.anchor, this.drop, this.unit);
+
+  /// Middle of the glass body.
+  Offset get body => anchor + Offset(0, drop + unit * 1.3);
 }
 
 class _Lantern {
@@ -131,6 +196,9 @@ class _CanopyPainter extends CustomPainter {
   final ValueListenable<double>? focus;
   final Animation<double> t;
 
+  /// Extra swing for the lantern at an index, from a touch.
+  final double Function(int)? swing;
+
   _CanopyPainter({
     required this.mood,
     required this.start,
@@ -140,6 +208,7 @@ class _CanopyPainter extends CustomPainter {
     required this.dropHeight,
     this.focus,
     required this.t,
+    this.swing,
   }) : super(repaint: focus == null ? t : Listenable.merge([t, focus]));
 
   static const _gold = Color(0xFFE9B95A);
@@ -160,13 +229,13 @@ class _CanopyPainter extends CustomPainter {
 
   double _wave(double phase, [double speed = 1]) => math.sin(2 * math.pi * (t.value * speed + phase));
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (skyStars > 0) _starField(canvas, size);
-    if (bursts) _bursts(canvas, size);
+  /// Full canopy at focus 1, compact beside the titles at 0.
+  double? get _focus => focus == null ? null : Curves.easeInOut.transform(focus!.value.clamp(0.0, 1.0));
 
-    // Full canopy at focus 1, compact beside the titles at 0.
-    final f = focus == null ? null : Curves.easeInOut.transform(focus!.value.clamp(0.0, 1.0));
+  /// Where each lantern hangs at the current focus. Painting and touch both
+  /// use this, so a touch always finds the lantern where it's drawn.
+  List<_Hang> hangs(Size size) {
+    final f = _focus;
     final from = f == null ? start : start * (1 - f);
     final left = from * size.width;
     final w = size.width - left;
@@ -174,6 +243,23 @@ class _CanopyPainter extends CustomPainter {
     // Shorter drops and smaller lanterns when tucked beside a header.
     final reach = f == null ? (start > 0 ? 0.55 : 1.0) : 0.45 + 0.55 * f;
     final shrink = f == null ? (start > 0 ? 0.85 : 1.0) : 0.7 + 0.3 * f;
+    final unit = math.min(size.width * 0.065, h * 0.2) * shrink;
+    return [
+      for (final l in _lanterns) _Hang(Offset(left + l.x * w, 0), l.drop * h * reach, unit * l.scale),
+    ];
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (skyStars > 0) _starField(canvas, size);
+    if (bursts) _bursts(canvas, size);
+
+    final f = _focus;
+    final from = f == null ? start : start * (1 - f);
+    final left = from * size.width;
+    final w = size.width - left;
+    final h = dropHeight ?? size.height;
+    final reach = f == null ? (start > 0 ? 0.55 : 1.0) : 0.45 + 0.55 * f;
     final garlandAlpha = f ?? 1.0;
 
     canvas.save();
@@ -189,13 +275,14 @@ class _CanopyPainter extends CustomPainter {
       if (fading) canvas.restore();
     }
 
-    final unit = math.min(size.width * 0.065, h * 0.2) * shrink;
-    for (var i = 0; i < _lanterns.length; i++) {
-      final l = _lanterns[i];
-      _lantern(canvas, Offset(l.x * w, 0), l.drop * h * reach, unit * l.scale, _glass[i % _glass.length],
-          l.phase, crowned: i == 2);
-    }
     canvas.restore();
+
+    final placed = hangs(size);
+    for (var i = 0; i < placed.length; i++) {
+      final hang = placed[i];
+      _lantern(canvas, hang.anchor, hang.drop, hang.unit, _glass[i % _glass.length], _lanterns[i].phase,
+          crowned: i == 2, swing: swing?.call(i) ?? 0);
+    }
   }
 
   /// Small gold stars scattered over the whole area, each on its own
@@ -314,11 +401,11 @@ class _CanopyPainter extends CustomPainter {
 
   /// A fanous on a cord from [anchor], [drop] long, about [u] wide.
   void _lantern(Canvas canvas, Offset anchor, double drop, double u, Color glass, double phase,
-      {bool crowned = false}) {
+      {bool crowned = false, double swing = 0}) {
     canvas.save();
     canvas.translate(anchor.dx, anchor.dy);
     // Swing from the anchor like a pendulum.
-    canvas.rotate(0.05 * _wave(phase));
+    canvas.rotate(0.05 * _wave(phase) + swing);
 
     canvas.drawLine(
       Offset.zero,

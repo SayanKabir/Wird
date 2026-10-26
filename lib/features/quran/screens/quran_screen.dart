@@ -19,6 +19,7 @@ import '../bloc/quran_bloc.dart';
 import 'surah_reading_screen.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_sheet.dart';
 import '../../../core/constants/spacing.dart';
@@ -152,6 +153,7 @@ class _QuranScreenState extends State<QuranScreen> {
 
   Future<void> _loadOnline(String q, int generation, {required int page}) async {
     setState(() => _searchingOnline = true);
+    final took = Stopwatch()..start();
     try {
       final result = await _repo.searchOnline(q, page: page);
       if (!mounted || generation != _searchGeneration) return;
@@ -166,6 +168,7 @@ class _QuranScreenState extends State<QuranScreen> {
         _onlineTotal = result.totalResults;
         _searchingOnline = false;
       });
+      SoundService().loaded(took.elapsed);
     } catch (_) {
       if (!mounted || generation != _searchGeneration) return;
       setState(() {
@@ -1387,6 +1390,7 @@ class _QuranLoadingView extends StatelessWidget {
             const PremiumFlowingLoader(
               size: 50.0,
               color: AppColors.spiritualGold,
+              chimeWhenDone: true,
             ),
             const SizedBox(height: 24),
             Text(

@@ -138,13 +138,14 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       // written by another build under this index can't block startup.
       performanceMode: fields[26] is String ? fields[26] as String : 'auto',
       appIcon: fields[27] is String ? fields[27] as String : 'auto',
+      soundsEnabled: fields[28] is bool ? fields[28] as bool : true,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(28)
+      ..writeByte(29)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -200,7 +201,9 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(26)
       ..write(obj.performanceMode)
       ..writeByte(27)
-      ..write(obj.appIcon);
+      ..write(obj.appIcon)
+      ..writeByte(28)
+      ..write(obj.soundsEnabled);
   }
 
   @override

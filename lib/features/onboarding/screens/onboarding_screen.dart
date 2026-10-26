@@ -11,6 +11,7 @@ import '../../../core/constants/spacing.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/athan_cue_service.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/prayer_service.dart';
@@ -237,6 +238,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   }
 
   void _setLocation(LocationData location) {
+    SoundService().ready();
     HapticService().medium();
     final suggested = _methodForCountry(location.country);
     setState(() {

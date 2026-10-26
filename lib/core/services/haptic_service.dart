@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 
+import 'sound_service.dart';
 import 'storage_service.dart';
 
 /// Single entry point for tactile feedback.
@@ -14,6 +15,10 @@ import 'storage_service.dart';
 ///    reads as buzzy over a long session. Each level here maps down one step —
 ///    see [_fire]. Call sites keep their original intent (light/medium/heavy);
 ///    the softening happens in one place and can be retuned in one place.
+///
+/// Each level also plays its matching UI sound through [SoundService], which
+/// has its own toggle, so every tap that is felt can also be heard without
+/// each call site asking for both.
 class HapticService {
   static HapticService? _instance;
   factory HapticService({StorageService? storageService}) {
@@ -47,6 +52,7 @@ class HapticService {
   void heavy() => _fire(_Level.heavy);
 
   void _fire(_Level level) {
+    _sound(level);
     if (!_enabled) return;
     switch (level) {
       // Each case is one step gentler than its name suggests.
@@ -57,6 +63,20 @@ class HapticService {
         HapticFeedback.lightImpact();
       case _Level.heavy:
         HapticFeedback.mediumImpact();
+    }
+  }
+
+  void _sound(_Level level) {
+    final sounds = SoundService();
+    switch (level) {
+      case _Level.selection:
+        sounds.tick();
+      case _Level.light:
+        sounds.tap();
+      case _Level.medium:
+        sounds.pop();
+      case _Level.heavy:
+        sounds.complete();
     }
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'core/constants/colors.dart';
+import 'core/services/sound_service.dart';
 import 'core/services/storage_service.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/deep_link_service.dart';
@@ -44,6 +45,9 @@ void main() async {
 
   // Keeps the home screen icon on the user's choice (or the current prayer).
   AppIconService.instance.init();
+
+  // Loads the UI sounds in the background so the first tap isn't silent.
+  SoundService().warmUp();
 
   final notificationService = NotificationService();
   await notificationService.init();

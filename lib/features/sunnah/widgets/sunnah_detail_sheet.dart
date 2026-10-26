@@ -7,6 +7,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/dhikr/dhikr_catalog.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../models/sunnah.dart';
 import '../../../widgets/common/pressable.dart';
 import '../bloc/sunnah_bloc.dart';
@@ -228,6 +229,7 @@ class _Controls extends StatelessWidget {
                   ? 'On your Sunnah page to tick off each day'
                   : 'Keep it on your Sunnah page to tick off each day',
               onTap: () {
+                SoundService().toggle(!inPractice);
                 HapticService().selection();
                 context.read<SunnahBloc>().add(ToggleSunnahPractice(sunnah.id));
               },

@@ -1,16 +1,24 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+import '../../core/services/sound_service.dart';
+
 /// A simple, elegant crescent moon that smoothly "fills up" with light,
 /// surrounded by tiny, twinkling 4-pointed stars.
 class PremiumFlowingLoader extends StatefulWidget {
   final double size;
   final Color color;
 
+  /// For a loader standing in for a whole page: when it gives way to the
+  /// content after a noticeable wait, the ready chime plays. Leaving the
+  /// screen before it finishes stays silent.
+  final bool chimeWhenDone;
+
   const PremiumFlowingLoader({
     super.key,
     this.size = 55.0, // Slightly bumped to accommodate the sparkles
     this.color = const Color(0xFFD4AF37), // AppColors.spiritualGold
+    this.chimeWhenDone = false,
   });
 
   @override
@@ -21,6 +29,8 @@ class _PremiumFlowingLoaderState extends State<PremiumFlowingLoader>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fillAnimation;
+  final Stopwatch _shown = Stopwatch()..start();
+  ModalRoute<dynamic>? _route;
 
   @override
   void initState() {
@@ -40,7 +50,17 @@ class _PremiumFlowingLoaderState extends State<PremiumFlowingLoader>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
+  }
+
+  @override
   void dispose() {
+    // Gone while its screen is still the one on top: the content arrived.
+    if (widget.chimeWhenDone && (_route?.isCurrent ?? true)) {
+      SoundService().loaded(_shown.elapsed);
+    }
     _controller.dispose();
     super.dispose();
   }

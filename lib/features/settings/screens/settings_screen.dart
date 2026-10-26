@@ -22,6 +22,7 @@ import '../../../widgets/common/page_header.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../core/constants/durations.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/location_off_prompt.dart';
 import '../../../core/quran/quran_translations.dart';
 import '../../../core/quran/transliterator.dart';
@@ -141,6 +142,7 @@ class SettingsScreenState extends State<SettingsScreen> {
     try {
       final result = await _locationService.getCurrentLocation();
       if (result.isSuccess && result.data != null) {
+        SoundService().ready();
         final newSettings = _settings.copyWith(location: result.data);
         await _saveSettings(newSettings);
         HapticService().medium();
@@ -479,8 +481,14 @@ class SettingsScreenState extends State<SettingsScreen> {
                   onSelected: (index) {
                     final t = QuranTranslations.all[index];
                     _saveSettings(_settings.copyWith(quranSelectedTranslation: '${t.id}'));
-                    // Save the whole translation for offline reading.
-                    context.read<QuranRepository>().downloadTranslation(t.id).catchError((_) {});
+                    // Save the whole translation for offline reading, with a
+                    // chime when it's ready.
+                    final took = Stopwatch()..start();
+                    context
+                        .read<QuranRepository>()
+                        .downloadTranslation(t.id)
+                        .then((_) => SoundService().loaded(took.elapsed))
+                        .catchError((_) {});
                   },
                 ),
               ),
@@ -582,6 +590,18 @@ class SettingsScreenState extends State<SettingsScreen> {
                   title: 'Haptic feedback',
                   value: _settings.hapticsEnabled,
                   onChanged: (v) => _saveSettings(_settings.copyWith(hapticsEnabled: v)),
+                ),
+                _SwitchRow(
+                  icon: Icons.volume_up_rounded,
+                  title: 'Sound effects',
+                  subtitle: 'Soft clicks on taps. Silent when your phone is.',
+                  value: _settings.soundsEnabled,
+                  // The row's toggle sound plays before the save, so switching
+                  // on would be silent; sound the "on" once it's saved.
+                  onChanged: (v) async {
+                    await _saveSettings(_settings.copyWith(soundsEnabled: v));
+                    if (v) SoundService().toggle(true);
+                  },
                 ),
               ],
             ),
@@ -1003,7 +1023,12 @@ class _SwitchRow extends StatelessWidget {
           ),
           Switch.adaptive(
             value: value,
-            onChanged: onChanged,
+            onChanged: onChanged == null
+                ? null
+                : (v) {
+                    SoundService().toggle(v);
+                    onChanged!(v);
+                  },
             activeThumbColor: AppColors.spiritualGold,
             activeTrackColor: AppColors.spiritualGold.withValues(alpha: 0.3),
             inactiveTrackColor: Colors.white10,

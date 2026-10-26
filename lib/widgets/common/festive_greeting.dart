@@ -6,6 +6,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/text_styles.dart';
 import '../../core/festive/festive_occasion.dart';
 import '../../core/services/device_profile.dart';
+import '../../core/services/sound_service.dart';
 import 'festive_canopy.dart';
 
 /// The full-screen greeting on the first open of an Eid or Arafah day: a
@@ -42,6 +43,7 @@ class _FestiveGreetingState extends State<FestiveGreeting> with TickerProviderSt
   void initState() {
     super.initState();
     if (!motionStill()) _rise.repeat();
+    SoundService().festive();
     _auto = Timer(const Duration(milliseconds: 4500), _dismiss);
   }
 

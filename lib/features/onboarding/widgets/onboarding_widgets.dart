@@ -5,6 +5,8 @@ import '../../../core/constants/durations.dart';
 import '../../../core/constants/radii.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/athan_cue_service.dart';
+import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/glass_panel.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
@@ -171,8 +173,13 @@ class ToggleTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Pressable(
       pressedScale: 0.98,
-      haptic: PressableHaptic.selection,
-      onTap: () => onChanged(!value),
+      // The toggle sound goes first so it wins over the haptic's tick.
+      haptic: PressableHaptic.none,
+      onTap: () {
+        SoundService().toggle(!value);
+        HapticService().selection();
+        onChanged(!value);
+      },
       child: GlassPanel(
         radius: AppRadii.card,
         fill: value ? 0.12 : 0.07,
@@ -191,7 +198,10 @@ class ToggleTile extends StatelessWidget {
             ),
             Switch.adaptive(
               value: value,
-              onChanged: onChanged,
+              onChanged: (v) {
+                SoundService().toggle(v);
+                onChanged(v);
+              },
               activeThumbColor: AppColors.spiritualGold,
               activeTrackColor: AppColors.spiritualGold.withValues(alpha: 0.3),
               inactiveTrackColor: Colors.white10,

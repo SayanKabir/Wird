@@ -38,6 +38,7 @@ import '../../tasbih/screens/session_screen.dart';
 import '../../tasbih/screens/dhikr_hub_screen.dart';
 import '../../../core/services/device_profile.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/app_route.dart';
@@ -218,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen>
   Future<void> _autoDetectLocation() async {
     final moved = await _locationService.autoDetectIfMoved();
     if (moved == null || !mounted) return;
+    SoundService().ready();
     context.read<PrayerBloc>().add(RefreshPrayerTimes());
     _fetchWeather();
     GlassSnackBar.show(
@@ -1371,6 +1373,8 @@ class _CurrentPrayerSection extends StatelessWidget {
       onTap:
           !isCompleted
               ? () {
+                // Before the haptic, so the bell wins over the haptic's pop.
+                SoundService().prayed();
                 HapticService().medium();
                 context.read<PrayerBloc>().add(
                   MarkPrayerComplete(prayer: prayer, isOnTime: true),
@@ -1380,6 +1384,7 @@ class _CurrentPrayerSection extends StatelessWidget {
       onLongPress:
           !isCompleted
               ? () {
+                SoundService().prayed(jamaah: true);
                 HapticService().heavy();
                 context.read<PrayerBloc>().add(
                   MarkPrayerComplete(

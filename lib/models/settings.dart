@@ -479,6 +479,11 @@ class AppSettings extends Equatable {
   @HiveField(27, defaultValue: 'auto')
   final String appIcon;
 
+  /// Whether the soft UI sounds play on taps, switches and completions.
+  /// See SoundService.
+  @HiveField(28, defaultValue: true)
+  final bool soundsEnabled;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -508,6 +513,7 @@ class AppSettings extends Equatable {
     this.reduceMotionUserSet = false,
     this.performanceMode = 'auto',
     this.appIcon = 'auto',
+    this.soundsEnabled = true,
   });
 
   /// Default settings
@@ -545,6 +551,7 @@ class AppSettings extends Equatable {
     bool? reduceMotionUserSet,
     String? performanceMode,
     String? appIcon,
+    bool? soundsEnabled,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -575,6 +582,7 @@ class AppSettings extends Equatable {
       reduceMotionUserSet: reduceMotionUserSet ?? this.reduceMotionUserSet,
       performanceMode: performanceMode ?? this.performanceMode,
       appIcon: appIcon ?? this.appIcon,
+      soundsEnabled: soundsEnabled ?? this.soundsEnabled,
     );
   }
 
@@ -607,6 +615,7 @@ class AppSettings extends Equatable {
     reduceMotionUserSet,
     performanceMode,
     appIcon,
+    soundsEnabled,
   ];
 }
 

@@ -27,6 +27,7 @@ import '../widgets/surah_info_modal.dart';
 import '../../../widgets/common/glass_snackbar.dart';
 import '../bloc/quran_bloc.dart';
 import '../../../core/services/haptic_service.dart';
+import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/glass_snackbar.dart';
@@ -920,7 +921,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const PremiumFlowingLoader(size: 50.0, color: AppColors.spiritualGold),
+                            const PremiumFlowingLoader(size: 50.0, color: AppColors.spiritualGold, chimeWhenDone: true),
                             const SizedBox(height: 24),
                             Text(
                               'Loading verses...',
@@ -1419,7 +1420,8 @@ class _ReadingSettingsSheetState extends State<_ReadingSettingsSheet> {
 
   void _startDownload(Future<void> Function() run) {
     setState(() => _downloadError = null);
-    run().catchError((_) {
+    final took = Stopwatch()..start();
+    run().then((_) => SoundService().loaded(took.elapsed)).catchError((_) {
       if (mounted) setState(() => _downloadError = 'Download failed. Check your connection and try again.');
     }).whenComplete(_refreshOfflineState);
   }
@@ -1808,7 +1810,7 @@ class _SettingsToggle extends StatelessWidget {
           ),
           Switch(
             value: value,
-            onChanged: (val) { HapticService().selection(); onChanged(val); },
+            onChanged: (val) { SoundService().toggle(val); HapticService().selection(); onChanged(val); },
             activeColor: Colors.white,
             activeTrackColor: AppColors.spiritualGold.withValues(alpha: 0.6),
             inactiveThumbColor: Colors.white.withValues(alpha: 0.5),
