@@ -1,2 +1,7 @@
 #include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"
 #include "Generated.xcconfig"
+
+// Per-prayer home screen icons (AppIconChannel in AppDelegate.swift). Kept
+// here, not in project.pbxproj: flutter_launcher_icons rewrites every
+// ASSETCATALOG_* line there to the primary icon name.
+ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIcon-fajr AppIcon-dhuhr AppIcon-asr AppIcon-isha
