@@ -4,18 +4,61 @@ import 'package:intl/intl.dart';
 import 'package:wird2/models/prayer_status.dart'; // Ensure correct path
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/spacing.dart';
+import '../../../core/services/device_profile.dart';
 import '../../../widgets/common/page_header.dart';
 import '../../../core/utils/hijri_date.dart'; // Import Hijri utility
 import '../../../models/prayer.dart';
 import '../bloc/prayer_bloc.dart';
 import '../widgets/prayer_card.dart';
 
-class ScheduleView extends StatelessWidget {
+class ScheduleView extends StatefulWidget {
   final PrayerLoaded state;
   const ScheduleView({super.key, required this.state});
 
   @override
+  State<ScheduleView> createState() => _ScheduleViewState();
+}
+
+class _ScheduleViewState extends State<ScheduleView> {
+  /// How far the list is pulled past its top (positive) or bottom
+  /// (negative) edge. The timeline stretches by it like a rubber band, and
+  /// springs shut with the bounce as it returns to zero.
+  final ValueNotifier<double> _overscroll = ValueNotifier(0);
+
+  /// How much each gap between rows widens per pixel of overscroll.
+  static const double _stretchPerGap = 0.12;
+
+  @override
+  void dispose() {
+    _overscroll.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    final m = n.metrics;
+    if (n.depth != 0 || m.axis != Axis.vertical) return false;
+    _overscroll.value = m.pixels < m.minScrollExtent
+        ? m.minScrollExtent - m.pixels
+        : m.pixels > m.maxScrollExtent
+            ? m.maxScrollExtent - m.pixels
+            : 0;
+    return false;
+  }
+
+  /// Extra offset for row [index] of [count]. Pulled down, the rows fan out
+  /// from the header so the lowest moves most; pulled up, they fan out from
+  /// the bottom so the highest moves most. Either way every gap widens by
+  /// the same amount, which [_TimelineLine] bridges.
+  double _rowShift(int index, int count, double overscroll) {
+    final gaps = overscroll > 0 ? index + 1 : count - index;
+    return overscroll * _stretchPerGap * gaps;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
+    final still = motionStill();
+
     // 1. Format Dates
     final gregorianStr = DateFormat('EEEE, d MMM').format(state.date); // e.g., "Saturday, 31 Jan"
     final now = DateTime.now();
@@ -25,8 +68,12 @@ class ScheduleView extends StatelessWidget {
 
     return SafeArea(
       bottom: false,
-      child: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: still ? null : _onScroll,
+        child: CustomScrollView(
+        // Always scrollable: on most phones the day fits on one screen, and
+        // without this the list ignores drags, so it can't bounce or stretch.
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         slivers: [
           // Header: same PageHeader as every other tab, with the Hijri date
           // as the overline and today's date as the title.
@@ -52,13 +99,15 @@ class ScheduleView extends StatelessWidget {
                   final isLast = index == state.enabledPrayers.length - 1;
                   final isActive = prayer == state.currentPrayer;
 
-                  return IntrinsicHeight(
+                  final row = IntrinsicHeight(
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         // Timeline Column (Dot + Line)
-                        Column(
+                        Stack(
+                          clipBehavior: Clip.none,
                           children: [
+                            const SizedBox(width: 12),
                             // Dot
                             Container(
                               width: 12,
@@ -84,21 +133,18 @@ class ScheduleView extends StatelessWidget {
                                 ] : null,
                               ),
                             ),
-                            // Line (Connects dots)
+                            // Line (Connects dots). It reaches past the row's
+                            // bottom by however far the stretch has opened
+                            // the gap, so it stays joined to the next dot.
                             if (!isLast)
-                              Expanded(
-                                child: Container(
+                              ValueListenableBuilder<double>(
+                                valueListenable: _overscroll,
+                                builder: (context, overscroll, _) => Positioned(
+                                  top: 46,
+                                  bottom: -overscroll.abs() * _stretchPerGap,
+                                  left: 5,
                                   width: 2,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      begin: Alignment.topCenter,
-                                      end: Alignment.bottomCenter,
-                                      colors: [
-                                        Colors.white.withOpacity(0.1),
-                                        Colors.white.withOpacity(0.05),
-                                      ],
-                                    ),
-                                  ),
+                                  child: const _TimelineLine(),
                                 ),
                               ),
                           ],
@@ -141,6 +187,16 @@ class ScheduleView extends StatelessWidget {
                       ],
                     ),
                   );
+
+                  if (still) return row;
+                  return ValueListenableBuilder<double>(
+                    valueListenable: _overscroll,
+                    builder: (context, overscroll, child) => Transform.translate(
+                      offset: Offset(0, _rowShift(index, state.enabledPrayers.length, overscroll)),
+                      child: child,
+                    ),
+                    child: row,
+                  );
                 },
                 childCount: state.enabledPrayers.length,
               ),
@@ -150,6 +206,27 @@ class ScheduleView extends StatelessWidget {
           // Bottom Spacer
           SliverToBoxAdapter(child: SizedBox(height: AppSpacing.navClearance(context))),
         ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimelineLine extends StatelessWidget {
+  const _TimelineLine();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withOpacity(0.1),
+            Colors.white.withOpacity(0.05),
+          ],
+        ),
       ),
     );
   }
