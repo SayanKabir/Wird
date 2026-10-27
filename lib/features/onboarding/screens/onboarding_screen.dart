@@ -655,7 +655,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       const OnboardingHeading(
         eyebrow: 'Fajr · first light',
         title: 'Where do you pray?',
-        because: 'Because Fajr in Dhaka and Fajr in London are hours apart.',
+        quote: 'Indeed, prayer has been decreed upon the believers a decree of specified times.',
+        source: 'Quran 4:103',
       ),
       const SizedBox(height: AppSpacing.xl),
       GhostButton(
@@ -706,86 +707,71 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
         ..remove(_suggestedMethod)
         ..insert(0, _suggestedMethod!);
     }
+    String asr(MadhabType m) {
+      final t = _times(madhab: m)?[Prayer.asr]?.startTime;
+      return t == null ? '' : 'Asr at ${AppFormatters.formatTime(t)}';
+    }
+
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Sunrise · the day opens',
         title: 'Pick your method',
-        because: 'Because masjids don\'t all agree on when Fajr and Isha start.',
+        quote: 'The deed most beloved to Allah is prayer at its proper time.',
+        source: 'Sahih al-Bukhari 527',
       ),
       const SizedBox(height: AppSpacing.xl),
       if (times != null) _LiveTimesStrip(times: times),
       const SizedBox(height: AppSpacing.xl),
       Text('CALCULATION', style: AppTextStyles.sectionLabel()),
       const SizedBox(height: AppSpacing.md),
-      LayoutBuilder(builder: (context, constraints) {
-        final width = (constraints.maxWidth - AppSpacing.sm) / 2;
-        return Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            for (final m in methods)
-              SizedBox(
-                width: width,
-                child: ChoiceTile(
-                  selected: _method == m,
-                  onTap: () => setState(() => _method = m),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(m.shortName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.body(weight: FontWeight.w600)),
-                          ),
-                          if (m == _suggestedMethod) ...[
-                            const SizedBox(width: 6),
-                            Icon(Icons.auto_awesome_rounded, size: 14, color: AppColors.spiritualGold),
-                          ],
-                        ],
-                      ),
-                      Text(
-                        m == _suggestedMethod ? 'Suggested for you' : m.regions,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.tiny(
-                          color: m == _suggestedMethod
-                              ? AppColors.spiritualGold.withValues(alpha: 0.9)
-                              : Colors.white.withValues(alpha: 0.6),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-          ],
-        );
-      }),
+      // One scrolling row instead of ten tiles; the suggestion leads it.
+      SizedBox(
+        height: 44,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          clipBehavior: Clip.none,
+          itemCount: methods.length,
+          separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.sm),
+          itemBuilder: (context, i) => _MethodPill(
+            label: methods[i].shortName,
+            suggested: methods[i] == _suggestedMethod,
+            selected: methods[i] == _method,
+            onTap: () => setState(() => _method = methods[i]),
+          ),
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Text(
+        _method == _suggestedMethod ? 'Suggested for where you are' : 'Used in ${_method.regions}',
+        style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.65)),
+      ),
       const SizedBox(height: AppSpacing.xl),
       Text('ASR', style: AppTextStyles.sectionLabel()),
       const SizedBox(height: AppSpacing.md),
       Row(
         children: [
           Expanded(
-            child: _MadhabTile(
+            child: _TouchTile(
+              leading: const _SkyDisc(prayer: Prayer.asr, size: 38),
               title: 'Standard',
-              subtitle: "Shafi'i, Maliki, Hanbali",
-              asr: _times(madhab: MadhabType.shafi)?[Prayer.asr]?.startTime,
-              selected: _madhab == MadhabType.shafi,
-              onTap: () => setState(() => _madhab = MadhabType.shafi),
+              subtitle: asr(MadhabType.shafi),
+              on: _madhab == MadhabType.shafi,
+              showState: false,
+              height: 112,
+              onChanged: (_) => setState(() => _madhab = MadhabType.shafi),
             ),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: _MadhabTile(
+            child: _TouchTile(
+              leading: const _SkyDisc(prayer: Prayer.asr, size: 38),
               title: 'Hanafi',
-              subtitle: 'Shadow twice its length',
-              asr: _times(madhab: MadhabType.hanafi)?[Prayer.asr]?.startTime,
-              selected: _madhab == MadhabType.hanafi,
-              onTap: () => setState(() => _madhab = MadhabType.hanafi),
+              subtitle: asr(MadhabType.hanafi),
+              on: _madhab == MadhabType.hanafi,
+              showState: false,
+              height: 112,
+              onChanged: (_) => setState(() => _madhab = MadhabType.hanafi),
             ),
           ),
         ],
@@ -799,63 +785,64 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
 
   Widget _page3() {
     final times = _times();
-    String window(Prayer p, {bool startOnly = false}) {
-      final t = times?[p];
-      if (t == null) return '';
-      // Short enough for one line beside the switch: "6:01–6:31 AM".
-      final end = AppFormatters.formatTime(t.endTime);
-      return startOnly ? AppFormatters.formatTime(t.startTime) : '${_shortTime(t.startTime)}–$end';
+    String at(Prayer p) {
+      final t = times?[p]?.startTime;
+      return t == null ? '' : AppFormatters.formatTime(t);
     }
 
-    Widget disc(Prayer p) => _SkyDisc(prayer: p, size: 40);
+    Widget prayer(Prayer p, String name, bool on, ValueChanged<bool> changed) => Expanded(
+          child: _TouchTile(
+            leading: _SkyDisc(prayer: p, size: 38),
+            title: name,
+            subtitle: at(p),
+            on: on,
+            height: 116,
+            onChanged: changed,
+          ),
+        );
 
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Dhuhr · high noon',
         title: 'Add the extra prayers',
-        because: 'Because a few more rakʿahs a day add up.',
+        quote: 'The best prayer after the obligatory prayers is the night prayer.',
+        source: 'Sahih Muslim 1163',
       ),
       const SizedBox(height: AppSpacing.xl),
-      ToggleTile(
-        leading: disc(Prayer.tahajjud),
-        title: 'Tahajjud',
-        subtitle: 'Last third · from ${window(Prayer.tahajjud, startOnly: true)}',
-        value: _tahajjud,
-        onChanged: (v) => setState(() => _tahajjud = v),
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        leading: disc(Prayer.ishraq),
-        title: 'Ishraq',
-        subtitle: 'Sunrise · ${window(Prayer.ishraq)}',
-        value: _ishraq,
-        onChanged: (v) => setState(() => _ishraq = v),
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        leading: disc(Prayer.duha),
-        title: 'Duha',
-        subtitle: 'Forenoon · ${window(Prayer.duha)}',
-        value: _duha,
-        onChanged: (v) => setState(() => _duha = v),
+      Row(
+        children: [
+          prayer(Prayer.tahajjud, 'Tahajjud', _tahajjud, (v) => setState(() => _tahajjud = v)),
+          const SizedBox(width: AppSpacing.sm),
+          prayer(Prayer.ishraq, 'Ishraq', _ishraq, (v) => setState(() => _ishraq = v)),
+          const SizedBox(width: AppSpacing.sm),
+          prayer(Prayer.duha, 'Duha', _duha, (v) => setState(() => _duha = v)),
+        ],
       ),
       const SizedBox(height: AppSpacing.xl),
       Text('THE SUNNAH', style: AppTextStyles.sectionLabel()),
       const SizedBox(height: AppSpacing.md),
-      ToggleTile(
-        leading: const _GlyphBadge(WirdGlyph.sunnah),
-        title: 'Sunnah revival',
-        subtitle: 'A Sunnah to try each week',
-        value: _sunnahReminders,
-        onChanged: (v) => setState(() => _sunnahReminders = v),
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        leading: const _GlyphBadge(null, icon: Icons.nightlight_round),
-        title: 'Islamic days',
-        subtitle: 'Ramadan and the Eids',
-        value: _islamicEvents,
-        onChanged: (v) => setState(() => _islamicEvents = v),
+      Row(
+        children: [
+          Expanded(
+            child: _TouchTile(
+              leading: _GlyphBadge(WirdGlyph.sunnah, lit: _sunnahReminders),
+              title: 'Sunnah revival',
+              subtitle: 'One a week',
+              on: _sunnahReminders,
+              onChanged: (v) => setState(() => _sunnahReminders = v),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.nightlight_round,
+              title: 'Islamic days',
+              subtitle: 'Ramadan, Eids',
+              on: _islamicEvents,
+              onChanged: (v) => setState(() => _islamicEvents = v),
+            ),
+          ),
+        ],
       ),
     ]);
   }
@@ -869,7 +856,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       const OnboardingHeading(
         eyebrow: 'Asr · golden hour',
         title: 'Pick your script',
-        because: 'Because the Quran should look the way you learned it.',
+        quote: 'The best of you are those who learn the Quran and teach it.',
+        source: 'Sahih al-Bukhari 5027',
       ),
       const SizedBox(height: AppSpacing.xl),
       Row(
@@ -879,48 +867,57 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
           Expanded(child: _scriptTile(QuranScript.uthmani, _bismillahUthmani, 'Uthmani', 'Madinah')),
         ],
       ),
-      const SizedBox(height: AppSpacing.lg),
-      _VersePreview(script: _script, translation: _translation, transliteration: _transliteration),
-      const SizedBox(height: AppSpacing.lg),
-      ToggleTile(
-        title: 'Translation',
-        subtitle: 'Saheeh International',
-        value: _translation,
-        onChanged: (v) => setState(() => _translation = v),
-      ),
       const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        title: 'Transliteration',
-        subtitle: 'The Arabic, spelled out',
-        value: _transliteration,
-        onChanged: (v) => setState(() => _transliteration = v),
+      _VersePreview(script: _script, translation: _translation, transliteration: _transliteration),
+      const SizedBox(height: AppSpacing.sm),
+      Row(
+        children: [
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.translate_rounded,
+              title: 'Translation',
+              subtitle: 'Saheeh Intl.',
+              on: _translation,
+              height: 116,
+              onChanged: (v) => setState(() => _translation = v),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.record_voice_over_rounded,
+              title: 'Transliteration',
+              subtitle: 'To read along',
+              on: _transliteration,
+              height: 116,
+              onChanged: (v) => setState(() => _transliteration = v),
+            ),
+          ),
+        ],
       ),
     ]);
   }
 
   Widget _scriptTile(QuranScript script, String sample, String name, String note) {
-    return ChoiceTile(
-      selected: _script == script,
-      onTap: () => setState(() => _script = script),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 56,
-            child: Center(
-              child: FittedBox(
-                child: Text(
-                  sample,
-                  textDirection: TextDirection.rtl,
-                  style: AppTextStyles.arabic(size: 22, color: Colors.white, script: script),
-                ),
-              ),
-            ),
+    return _TouchTile(
+      leading: SizedBox(
+        height: 38,
+        width: 120,
+        child: FittedBox(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            sample,
+            textDirection: TextDirection.rtl,
+            style: AppTextStyles.arabic(size: 22, color: Colors.white, script: script),
           ),
-          const SizedBox(height: 6),
-          Text(name, style: AppTextStyles.body(weight: FontWeight.w600)),
-          Text(note, style: AppTextStyles.tiny()),
-        ],
+        ),
       ),
+      title: name,
+      subtitle: note,
+      on: _script == script,
+      showState: false,
+      height: 116,
+      onChanged: (_) => setState(() => _script = script),
     );
   }
 
@@ -936,7 +933,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       const OnboardingHeading(
         eyebrow: 'Maghrib · sunset',
         title: 'Turn on reminders',
-        because: 'Because it\'s easy to lose track of Asr at work.',
+        quote: 'Establish prayer for My remembrance.',
+        source: 'Quran 20:14',
       ),
       const SizedBox(height: AppSpacing.xl),
       _NotificationMock(prayer: upcoming?.$1, time: upcoming?.$2),
@@ -1022,7 +1020,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       const OnboardingHeading(
         eyebrow: 'Isha · nightfall',
         title: 'Make it yours',
-        because: 'Because some people like clicks and some like quiet.',
+        quote: 'Allah is beautiful and loves beauty.',
+        source: 'Sahih Muslim 91',
       ),
       const SizedBox(height: AppSpacing.xl),
       Row(
@@ -1401,21 +1400,32 @@ class _SkyDisc extends StatelessWidget {
   }
 }
 
-/// A square switch for the last step, lit gold while on, in the manner of
-/// a phone's quick settings.
+/// A tile lit gold while on, in the manner of a phone's quick settings.
+/// Most steps use it as a switch; with [showState] off it's one of a set to
+/// pick from (the Asr method).
 class _TouchTile extends StatelessWidget {
-  final IconData icon;
+  final IconData? icon;
+
+  /// Drawn in place of [icon]'s disc, e.g. a prayer's sky.
+  final Widget? leading;
   final String title;
   final String subtitle;
   final bool on;
   final ValueChanged<bool> onChanged;
+  final double height;
+
+  /// The ON / OFF label in the corner.
+  final bool showState;
 
   const _TouchTile({
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.title,
     required this.subtitle,
     required this.on,
     required this.onChanged,
+    this.height = 124,
+    this.showState = true,
   });
 
   @override
@@ -1433,7 +1443,7 @@ class _TouchTile extends StatelessWidget {
         child: AnimatedContainer(
           duration: AppDurations.slow,
           curve: AppCurves.emphasized,
-          height: 124,
+          height: height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppRadii.group),
             boxShadow: on ? [BoxShadow(color: gold.withValues(alpha: 0.22), blurRadius: 22)] : null,
@@ -1456,28 +1466,30 @@ class _TouchTile extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    AnimatedContainer(
-                      duration: AppDurations.slow,
-                      curve: AppCurves.emphasized,
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: on ? gold : Colors.white.withValues(alpha: 0.1),
-                      ),
-                      child: Icon(icon, size: 20, color: on ? const Color(0xFF0A0E21) : Colors.white70),
-                    ),
+                    leading ??
+                        AnimatedContainer(
+                          duration: AppDurations.slow,
+                          curve: AppCurves.emphasized,
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: on ? gold : Colors.white.withValues(alpha: 0.1),
+                          ),
+                          child: Icon(icon, size: 20, color: on ? const Color(0xFF0A0E21) : Colors.white70),
+                        ),
                     const Spacer(),
-                    AnimatedSwitcher(
-                      duration: AppDurations.normal,
-                      child: Text(
-                        on ? 'ON' : 'OFF',
-                        key: ValueKey(on),
-                        style: AppTextStyles.sectionLabel(
-                          color: on ? gold : Colors.white.withValues(alpha: 0.4),
-                        ).copyWith(fontSize: 10),
+                    if (showState)
+                      AnimatedSwitcher(
+                        duration: AppDurations.normal,
+                        child: Text(
+                          on ? 'ON' : 'OFF',
+                          key: ValueKey(on),
+                          style: AppTextStyles.sectionLabel(
+                            color: on ? gold : Colors.white.withValues(alpha: 0.4),
+                          ).copyWith(fontSize: 10),
+                        ),
                       ),
-                    ),
                   ],
                 ),
                 const Spacer(),
@@ -1586,26 +1598,75 @@ class _IconThumb extends StatelessWidget {
   }
 }
 
-class _GlyphBadge extends StatelessWidget {
-  final WirdGlyph? glyph;
-  final IconData? icon;
+/// One calculation method in the scrolling row, filled gold once chosen.
+class _MethodPill extends StatelessWidget {
+  final String label;
+  final bool suggested;
+  final bool selected;
+  final VoidCallback onTap;
 
-  const _GlyphBadge(this.glyph, {this.icon});
+  const _MethodPill({required this.label, required this.suggested, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 40,
-      height: 40,
+    final gold = AppColors.spiritualGold;
+    const ink = Color(0xFF0A0E21);
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Pressable(
+        pressedScale: 0.94,
+        haptic: PressableHaptic.selection,
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: AppDurations.slow,
+          curve: AppCurves.emphasized,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? gold : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(AppRadii.pill),
+            border: Border.all(color: selected ? gold : Colors.white.withValues(alpha: 0.16)),
+            boxShadow: selected ? [BoxShadow(color: gold.withValues(alpha: 0.3), blurRadius: 14)] : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (suggested) ...[
+                Icon(Icons.auto_awesome_rounded, size: 14, color: selected ? ink : gold),
+                const SizedBox(width: 6),
+              ],
+              Text(label, style: AppTextStyles.button(color: selected ? ink : Colors.white)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlyphBadge extends StatelessWidget {
+  final WirdGlyph glyph;
+
+  /// Filled gold, as a lit [_TouchTile]'s icon is.
+  final bool lit;
+
+  const _GlyphBadge(this.glyph, {this.lit = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = lit ? const Color(0xFF0A0E21) : Colors.white70;
+    return AnimatedContainer(
+      duration: AppDurations.slow,
+      curve: AppCurves.emphasized,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: AppColors.spiritualGold.withValues(alpha: 0.14),
-        border: Border.all(color: AppColors.spiritualGold.withValues(alpha: 0.35)),
+        color: lit ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.1),
       ),
       alignment: Alignment.center,
-      child: glyph != null
-          ? WirdGlyphIcon(glyph!, size: 20, color: AppColors.spiritualGold)
-          : Icon(icon, size: 20, color: AppColors.spiritualGold),
+      child: WirdGlyphIcon(glyph, size: 20, color: ink),
     );
   }
 }
@@ -1848,47 +1909,6 @@ class _LiveTimesStrip extends StatelessWidget {
                 ],
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MadhabTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final DateTime? asr;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _MadhabTile({
-    required this.title,
-    required this.subtitle,
-    required this.asr,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ChoiceTile(
-      selected: selected,
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: AppTextStyles.body(weight: FontWeight.w600)),
-          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: AppTextStyles.tiny()),
-          if (asr != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Asr ${AppFormatters.formatTime(asr!)}',
-              style: AppTextStyles.tabular(AppTextStyles.small(
-                weight: FontWeight.w600,
-                color: selected ? AppColors.spiritualGold : Colors.white.withValues(alpha: 0.8),
-              )),
-            ),
-          ],
         ],
       ),
     );

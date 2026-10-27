@@ -5,8 +5,6 @@ import '../../../core/constants/durations.dart';
 import '../../../core/constants/radii.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/services/athan_cue_service.dart';
-import '../../../core/services/haptic_service.dart';
-import '../../../core/services/sound_service.dart';
 import '../../../widgets/common/glass_panel.dart';
 import '../../../widgets/common/pressable.dart';
 import '../../../widgets/common/premium_flowing_loader.dart';
@@ -81,14 +79,21 @@ class CueMuteButton extends StatelessWidget {
 }
 
 /// Page title block: a small spaced label naming the prayer the sky now
-/// shows, the step's title, and one "Because…" line saying why it matters,
-/// in the same gold as the welcome's.
+/// shows, the step's title, and an ayah or hadith that speaks to it, in
+/// gold, with its reference.
 class OnboardingHeading extends StatelessWidget {
   final String eyebrow;
   final String title;
-  final String because;
+  final String quote;
+  final String source;
 
-  const OnboardingHeading({super.key, required this.eyebrow, required this.title, required this.because});
+  const OnboardingHeading({
+    super.key,
+    required this.eyebrow,
+    required this.title,
+    required this.quote,
+    required this.source,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -100,9 +105,11 @@ class OnboardingHeading extends StatelessWidget {
         Text(title, style: AppTextStyles.display(size: 34, weight: FontWeight.w300, height: 1.15)),
         const SizedBox(height: 10),
         Text(
-          because,
+          '“$quote”',
           style: AppTextStyles.body(color: AppColors.spiritualGold.withValues(alpha: 0.9)).copyWith(fontStyle: FontStyle.italic),
         ),
+        const SizedBox(height: 4),
+        Text(source.toUpperCase(), style: AppTextStyles.sectionLabel(color: Colors.white.withValues(alpha: 0.5)).copyWith(fontSize: 10)),
       ],
     );
   }
@@ -150,67 +157,6 @@ class ChoiceTile extends StatelessWidget {
             padding: padding,
             child: child,
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A labelled switch on a glass row, with an optional leading glyph.
-class ToggleTile extends StatelessWidget {
-  final Widget? leading;
-  final String title;
-  final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const ToggleTile({
-    super.key,
-    this.leading,
-    required this.title,
-    required this.subtitle,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      pressedScale: 0.98,
-      // The toggle sound goes first so it wins over the haptic's tick.
-      haptic: PressableHaptic.none,
-      onTap: () {
-        SoundService().toggle(!value);
-        HapticService().selection();
-        onChanged(!value);
-      },
-      child: GlassPanel(
-        radius: AppRadii.card,
-        fill: value ? 0.12 : 0.07,
-        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-        child: Row(
-          children: [
-            if (leading != null) ...[leading!, const SizedBox(width: 14)],
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: AppTextStyles.body(weight: FontWeight.w600)),
-                  Text(subtitle, style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.65))),
-                ],
-              ),
-            ),
-            Switch.adaptive(
-              value: value,
-              onChanged: (v) {
-                SoundService().toggle(v);
-                onChanged(v);
-              },
-              activeThumbColor: AppColors.spiritualGold,
-              activeTrackColor: AppColors.spiritualGold.withValues(alpha: 0.3),
-              inactiveTrackColor: Colors.white10,
-            ),
-          ],
         ),
       ),
     );
