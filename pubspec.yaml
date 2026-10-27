@@ -2,7 +2,7 @@ name: wird2
 description: "Wird - A minimalist Islamic prayer companion app"
 publish_to: 'none'
 
-version: 1.8.0+2
+version: 2.0.0+3
 
 environment:
   sdk: ^3.7.2
