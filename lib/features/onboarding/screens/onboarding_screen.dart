@@ -603,9 +603,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
         width: double.infinity,
         child: OnboardingButton(
           label: switch (_page) {
-            1 when _location == null => 'Set your location first',
+            1 when _location == null => 'Find your sky first',
             5 || 6 when _notificationsGranted != true => 'Allow reminders to continue',
-            6 => 'Begin with Wird',
+            6 => 'Bismillah, let\'s begin',
             _ => 'Continue',
           },
           icon: isLast ? null : Icons.arrow_forward_rounded,
@@ -648,9 +648,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     final location = _location;
     return _scroll([
       const OnboardingHeading(
-        eyebrow: 'Fajr · dawn',
-        title: 'Where do you pray?',
-        body: 'Your times follow the sun where you stand, to the minute, and the Qibla is worked out from the same spot.',
+        eyebrow: 'Fajr · first light',
+        title: 'Find your sky',
+        body: 'We\'ll work out every prayer to the minute, and point you to the Qibla.',
       ),
       const SizedBox(height: AppSpacing.xl),
       GhostButton(
@@ -704,8 +704,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Sunrise · the day opens',
-        title: 'Whose clock do you keep?',
-        body: 'Scholars measure dawn and nightfall a little differently. Choose what your mosque follows and watch your times move.',
+        title: 'Same sun, different clocks',
+        body: 'Pick what your masjid follows and watch the times shift.',
       ),
       const SizedBox(height: AppSpacing.xl),
       if (times != null) _LiveTimesStrip(times: times),
@@ -797,8 +797,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     String window(Prayer p, {bool startOnly = false}) {
       final t = times?[p];
       if (t == null) return '';
-      final start = AppFormatters.formatTime(t.startTime);
-      return startOnly ? 'from $start' : '$start – ${AppFormatters.formatTime(t.endTime)}';
+      // Short enough for one line beside the switch: "6:01–6:31 AM".
+      final end = AppFormatters.formatTime(t.endTime);
+      return startOnly ? AppFormatters.formatTime(t.startTime) : '${_shortTime(t.startTime)}–$end';
     }
 
     Widget disc(Prayer p) => _SkyDisc(prayer: p, size: 40);
@@ -806,14 +807,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Dhuhr · high noon',
-        title: 'Beyond the five',
-        body: 'Add the voluntary prayers to your day, and let Wird bring back one forgotten Sunnah at a time.',
+        title: 'Go the extra rakʿah',
+        body: 'Tahajjud, Ishraq and Duha, plus one Sunnah at a time.',
       ),
       const SizedBox(height: AppSpacing.xl),
       ToggleTile(
         leading: disc(Prayer.tahajjud),
         title: 'Tahajjud',
-        subtitle: 'Last third of the night ${window(Prayer.tahajjud, startOnly: true)}',
+        subtitle: 'Last third · from ${window(Prayer.tahajjud, startOnly: true)}',
         value: _tahajjud,
         onChanged: (v) => setState(() => _tahajjud = v),
       ),
@@ -821,7 +822,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: disc(Prayer.ishraq),
         title: 'Ishraq',
-        subtitle: 'Once the sun has risen · ${window(Prayer.ishraq)}',
+        subtitle: 'Sunrise · ${window(Prayer.ishraq)}',
         value: _ishraq,
         onChanged: (v) => setState(() => _ishraq = v),
       ),
@@ -829,7 +830,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: disc(Prayer.duha),
         title: 'Duha',
-        subtitle: 'The forenoon prayer · ${window(Prayer.duha)}',
+        subtitle: 'Forenoon · ${window(Prayer.duha)}',
         value: _duha,
         onChanged: (v) => setState(() => _duha = v),
       ),
@@ -839,7 +840,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: const _GlyphBadge(WirdGlyph.sunnah),
         title: 'Sunnah revival',
-        subtitle: 'A gentle nudge towards a practice of the Prophet ﷺ',
+        subtitle: 'One Sunnah at a time',
         value: _sunnahReminders,
         onChanged: (v) => setState(() => _sunnahReminders = v),
       ),
@@ -847,7 +848,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: const _GlyphBadge(null, icon: Icons.nightlight_round),
         title: 'Islamic days',
-        subtitle: 'Ramadan, the Eids and the white days, on the Hijri calendar',
+        subtitle: 'Ramadan and the Eids',
         value: _islamicEvents,
         onChanged: (v) => setState(() => _islamicEvents = v),
       ),
@@ -861,9 +862,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   Widget _page4() {
     return _scroll([
       const OnboardingHeading(
-        eyebrow: 'Asr · the afternoon',
-        title: 'Read in the hand you know',
-        body: 'The whole Quran in two mushaf scripts, with translation, transliteration and verses you can share.',
+        eyebrow: 'Asr · golden hour',
+        title: 'Pick your script',
+        body: 'Indo-Pak or Uthmani, offline, with translation.',
       ),
       const SizedBox(height: AppSpacing.xl),
       Row(
@@ -878,14 +879,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       const SizedBox(height: AppSpacing.lg),
       ToggleTile(
         title: 'Translation',
-        subtitle: 'Saheeh International, under each verse',
+        subtitle: 'Saheeh International',
         value: _translation,
         onChanged: (v) => setState(() => _translation = v),
       ),
       const SizedBox(height: AppSpacing.sm),
       ToggleTile(
         title: 'Transliteration',
-        subtitle: 'The Arabic spelled out, to read along',
+        subtitle: 'The Arabic, spelled out',
         value: _transliteration,
         onChanged: (v) => setState(() => _transliteration = v),
       ),
@@ -929,8 +930,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Maghrib · sunset',
-        title: 'Never miss the call',
-        body: 'Wird is built around the call to prayer: a notification as each prayer begins, and a quiet nudge before its time runs out. Allow them to begin.',
+        title: 'Let us nudge you',
+        body: 'A tap on the shoulder at every adhan, and a nudge before time runs out.',
       ),
       const SizedBox(height: AppSpacing.xl),
       _NotificationMock(prayer: upcoming?.$1, time: upcoming?.$2),
@@ -964,13 +965,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       if (_notificationsGranted == false) ...[
         const SizedBox(height: AppSpacing.sm),
         Text(
-          'Notifications are off for Wird. Turn them on in Settings, then come back here.',
+          'Notifications are off. Turn them on in Settings.',
           textAlign: TextAlign.center,
           style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.7)),
         ),
       ],
       const SizedBox(height: AppSpacing.xl),
-      Text('WARN ME BEFORE A PRAYER ENDS', style: AppTextStyles.sectionLabel()),
+      Text('NUDGE ME BEFORE TIME RUNS OUT', style: AppTextStyles.sectionLabel()),
       const SizedBox(height: AppSpacing.md),
       Row(
         children: [
@@ -1014,14 +1015,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Isha · nightfall',
-        title: 'The little touches',
-        body: 'How Wird sounds and feels in your hand. Each one plays as you switch it on, and all of them live in Settings.',
+        title: 'Make it yours',
+        body: 'Sound, feel, and an icon that follows the sky. Change them any time.',
       ),
       const SizedBox(height: AppSpacing.xl),
       ToggleTile(
         leading: const _GlyphBadge(null, icon: Icons.graphic_eq_rounded),
         title: 'Sound effects',
-        subtitle: 'Soft clicks as you tap, a chime when you\'ve prayed',
+        subtitle: 'Soft clicks as you tap',
         value: _sounds,
         onChanged: (v) async {
           setState(() => _sounds = v);
@@ -1032,7 +1033,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: const _GlyphBadge(null, icon: Icons.thunderstorm_rounded),
         title: 'Rain and thunder',
-        subtitle: 'Heard under the home sky when it rains where you are',
+        subtitle: 'When it rains near you',
         value: _weatherSounds,
         onChanged: (v) async {
           setState(() => _weatherSounds = v);
@@ -1044,7 +1045,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: const _GlyphBadge(null, icon: Icons.vibration_rounded),
         title: 'Haptics',
-        subtitle: 'A light touch under every tap',
+        subtitle: 'A tap you can feel',
         value: _haptics,
         onChanged: (v) async {
           setState(() => _haptics = v);
@@ -1056,7 +1057,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: const _GlyphBadge(null, icon: Icons.cloud_rounded),
         title: 'Weather on home',
-        subtitle: 'Today\'s temperature beside the date',
+        subtitle: 'Today\'s temperature',
         value: _weatherWidget,
         onChanged: (v) async {
           setState(() => _weatherWidget = v);
@@ -1079,7 +1080,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                 children: [
                   Text('Follow the prayers', style: AppTextStyles.body(weight: FontWeight.w600)),
                   Text(
-                    'Your icon changes with each prayer\'s sky',
+                    'Changes with each prayer\'s sky',
                     style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.65)),
                   ),
                 ],
@@ -1198,9 +1199,19 @@ class _WelcomePage extends StatelessWidget {
                     const SizedBox(height: AppSpacing.xl),
                     enter(
                       Text(
-                        'Your daily portion of prayer,\nQuran and remembrance.',
+                        'Salah, Quran and dhikr.\nA little every day.',
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.8)),
+                        style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.85)),
+                      ),
+                      2,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    enter(
+                      Text(
+                        'Because tracking prayer\ndoesn\'t have to be boring.',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.small(color: AppColors.spiritualGold.withValues(alpha: 0.85))
+                            .copyWith(fontStyle: FontStyle.italic),
                       ),
                       2,
                     ),
@@ -1213,7 +1224,7 @@ class _WelcomePage extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     enter(
                       Text(
-                        'The sky here follows your prayers.',
+                        'Look up. The sky moves with your salah.',
                         style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)),
                       ),
                       3,
@@ -1231,7 +1242,7 @@ class _WelcomePage extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     enter(
                       Text(
-                        'Sets up in about a minute',
+                        'One minute to set up. Promise.',
                         style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)),
                       ),
                       5,
@@ -1498,11 +1509,6 @@ class _LocationPlaceholder extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [for (final p in _fard) _SkyDisc(prayer: p, size: 30)],
             ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            "Today's times will appear here",
-            style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)),
           ),
         ],
       ),
