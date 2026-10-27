@@ -28,13 +28,32 @@ enum UiSound {
   const UiSound(this.files);
 }
 
+/// How the app's own small sounds (UI sounds, rain and thunder) play.
+///
+/// On the media volume, so the phone's volume buttons turn them up and down
+/// like any other sound in the app. At full media volume they're as loud as
+/// they're ever meant to be. Marked as UI sounds, and they mix with music or
+/// a podcast instead of pausing it. On iOS they follow the silent switch;
+/// Android's ringer mode doesn't govern media, so there the app's own
+/// switches and the volume buttons silence them.
+final AudioContext appSoundContext = AudioContext(
+  android: const AudioContextAndroid(
+    usageType: AndroidUsageType.media,
+    contentType: AndroidContentType.sonification,
+    audioFocus: AndroidAudioFocus.none,
+  ),
+  // Ambient already mixes with other audio; the library rejects adding the
+  // mixWithOthers option to it, and checks that on Android too.
+  iOS: AudioContextIOS(category: AVAudioSessionCategory.ambient),
+);
+
 /// Plays the micro sounds that go with taps, switches and completions.
 ///
 /// Like [HapticService] it checks `AppSettings.soundsEnabled` on every call,
 /// so the Settings toggle silences everything at once. It's meant to be felt
-/// more than heard: it follows the ringer's silent mode, mixes with whatever
-/// else is playing instead of pausing it, and a sound that fails to load is
-/// skipped, since every tap already works without it.
+/// more than heard: it plays on the media volume (see [appSoundContext]),
+/// mixes with whatever else is playing instead of pausing it, and a sound
+/// that fails to load is skipped, since every tap already works without it.
 class SoundService {
   static SoundService? _instance;
   factory SoundService({StorageService? storageService}) {
@@ -82,10 +101,7 @@ class SoundService {
           final player = AudioPlayer();
           await player.setPlayerMode(PlayerMode.lowLatency);
           await player.setReleaseMode(ReleaseMode.stop);
-          await player.setAudioContext(AudioContextConfig(
-            respectSilence: true,
-            focus: AudioContextConfigFocus.mixWithOthers,
-          ).build());
+          await player.setAudioContext(appSoundContext);
           await player.setVolume(_volume);
           await player.setSource(AssetSource('audio/ui/$file.wav'));
           _players[file] = player;
@@ -115,7 +131,9 @@ class SoundService {
   }
 
   /// How long a wait has to be before its end is worth a chime.
-  static const longLoad = Duration(milliseconds: 700);
+  /// Surahs fetched from the network mostly take 0.4-1 s; cached ones about
+  /// 0.1-0.2 s, which shouldn't chime.
+  static const longLoad = Duration(milliseconds: 400);
 
   /// Plays [sound]; [variant] picks one of its files, otherwise they take
   /// turns. [hold] keeps other sounds quiet for a while after, so a chime

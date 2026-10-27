@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+import 'sound_service.dart';
 import 'storage_service.dart';
 import 'weather_service.dart';
 
@@ -12,8 +13,8 @@ import 'weather_service.dart';
 ///
 /// Heard only on the home tab with the app open: it fades out over a couple
 /// of seconds when the user moves to another tab or screen, and back in on
-/// return. It follows the Rain and thunder setting and the ringer's silent
-/// mode, and mixes with other audio instead of pausing it.
+/// return. It follows the Rain and thunder setting and the media volume (see
+/// appSoundContext), and mixes with other audio instead of pausing it.
 class WeatherSoundService {
   static WeatherSoundService? _instance;
   factory WeatherSoundService({StorageService? storageService}) {
@@ -125,10 +126,7 @@ class WeatherSoundService {
   Future<void> _load() => _loading ??= _prepare();
 
   Future<void> _prepare() async {
-    final context = AudioContextConfig(
-      respectSilence: true,
-      focus: AudioContextConfigFocus.mixWithOthers,
-    ).build();
+    final context = appSoundContext;
     try {
       final rain = AudioPlayer();
       // The low-latency player loops without a gap.
