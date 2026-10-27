@@ -1,27 +1,19 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:wird2/main.dart';
+import 'package:wird2/features/home/screens/home_screen.dart';
+import 'package:wird2/features/onboarding/screens/onboarding_screen.dart';
 
-import 'package:wird2/core/repositories/sunnah_repository.dart';
-import 'package:wird2/core/repositories/quran_repository.dart';
+import 'helpers/app_harness.dart';
 
 void main() {
-  testWidgets('App builds successfully', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(WirdApp(
-      sunnahRepository: SunnahRepository(),
-      quranRepository: QuranRepository(),
-    ));
+  setUpApp();
 
-    // Verify that the app builds without exceptions
-    expect(find.byType(MaterialApp), findsOneWidget);
+  testWidgets('a first launch opens onboarding', (tester) async {
+    await runWird(tester, () async {
+      expect(find.byType(MaterialApp), findsOneWidget);
+      expect(find.byType(OnboardingScreen), findsOneWidget);
+      expect(find.byType(HomeScreen), findsNothing);
+    });
   });
 }

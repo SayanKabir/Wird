@@ -62,7 +62,7 @@ class PrayerService {
     required bool includeDuha,
   }) {
     final coords = location.toCoordinates();
-    final params = _getCalculationParameters(calculationMethod, madhab);
+    final params = _getCalculationParameters(calculationMethod, madhab, location.latitude);
     
     // Get prayer times for the date
     final dateComponents = adhan.DateComponents.from(date);
@@ -159,9 +159,17 @@ class PrayerService {
   adhan.CalculationParameters _getCalculationParameters(
     CalculationMethodType method,
     MadhabType madhab,
+    double latitude,
   ) {
     final params = method.toAdhanMethod().getParameters();
     params.madhab = madhab.toAdhanMadhab();
+    // Above 48° the summer twilight never gets deep enough for Fajr and Isha,
+    // and adhan's default (middle of the night) then puts Isha on the same
+    // minute as the next Fajr: Isha's window ran backwards and Tahajjud had
+    // none. A seventh of the night is what adhan's other ports recommend there.
+    if (latitude.abs() > 48) {
+      params.highLatitudeRule = adhan.HighLatitudeRule.seventh_of_the_night;
+    }
     return params;
   }
 

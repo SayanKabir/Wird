@@ -320,10 +320,11 @@ class MockStorageService extends _i1.Mock implements _i15.StorageService {
       ) as bool);
 
   @override
-  _i7.Future<void> init() => (super.noSuchMethod(
+  _i7.Future<void> init({String? path}) => (super.noSuchMethod(
         Invocation.method(
           #init,
           [],
+          {#path: path},
         ),
         returnValue: _i7.Future<void>.value(),
         returnValueForMissingStub: _i7.Future<void>.value(),

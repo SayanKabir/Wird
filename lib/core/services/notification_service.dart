@@ -285,9 +285,10 @@ class NotificationService {
     // Initialize timezone database
     tz_data.initializeTimeZones();
 
-    // Get and set local timezone
-    final String timeZoneName = (await FlutterTimezone.getLocalTimezone()).identifier;
+    // Get and set local timezone. Inside the try: this runs before runApp,
+    // so a platform hiccup here would otherwise stop the app from opening.
     try {
+      final String timeZoneName = (await FlutterTimezone.getLocalTimezone()).identifier;
       tz.setLocalLocation(tz.getLocation(timeZoneName));
       debugPrint('[Notifications] Local timezone set to: $timeZoneName');
     } catch (e) {

@@ -32,9 +32,14 @@ class StorageService {
       _prayerLogsBox != null && 
       _streaksBox != null;
 
-  /// Initialize Hive and register adapters
-  Future<void> init() async {
-    await Hive.initFlutter();
+  /// Initialize Hive and register adapters. Tests pass [path] to keep Hive
+  /// in a temporary folder instead of the app's documents directory.
+  Future<void> init({String? path}) async {
+    if (path != null) {
+      Hive.init(path);
+    } else {
+      await Hive.initFlutter();
+    }
 
     // Register type adapters
     _registerAdapters();

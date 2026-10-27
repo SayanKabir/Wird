@@ -12,9 +12,11 @@ class SurahSearch {
     if (q.isEmpty) return surahs;
     final number = int.tryParse(q);
     if (number != null) return surahs.where((s) => s.id == number).toList();
+    // Arabic or other non-Latin text folds to nothing, which every name
+    // "contains"; skip the Latin comparison then.
     final folded = fold(q);
     return surahs.where((s) {
-      return fold(s.nameTransliteration).contains(folded) ||
+      return (folded.isNotEmpty && fold(s.nameTransliteration).contains(folded)) ||
           s.nameTranslation.toLowerCase().contains(q) ||
           s.nameArabic.contains(query.trim());
     }).toList();

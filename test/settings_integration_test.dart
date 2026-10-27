@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
@@ -20,6 +22,7 @@ import 'package:wird2/features/home/bloc/prayer_bloc.dart';
   PrayerBloc
 ])
 import 'settings_integration_test.mocks.dart';
+import 'helpers/test_hive.dart';
 
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
@@ -96,57 +99,47 @@ void main() {
   });
 
   group('SettingsScreen Widget Test', () {
-    testWidgets('renders Sunnah & Insights section', (tester) async {
-       // Setup mocks
-       when(mockStorage.getSettings()).thenReturn(const AppSettings());
-       when(mockPrayerBloc.state).thenReturn(PrayerLoading());
-       when(mockPrayerBloc.stream).thenAnswer((_) => Stream.value(PrayerLoading()));
-       
-       // Stub NotificationService calls if triggered by built-in logic?
-       // SettingsScreen uses RepositoryProvider for NotificationService.
-       // We can provide our `notificationService` instance which has the mock plugin.
+    late Directory hiveDir;
+    setUp(() async => hiveDir = await openTestStorage());
+    tearDown(() => closeTestStorage(hiveDir));
 
-       await tester.pumpWidget(
-         MultiRepositoryProvider(
-           providers: [
-             RepositoryProvider<StorageService>.value(value: mockStorage),
-             RepositoryProvider<NotificationService>.value(value: notificationService),
-             RepositoryProvider<SunnahRepository>.value(value: mockSunnahRepo),
-           ],
-           child: MultiBlocProvider(
-             providers: [
-               BlocProvider<PrayerBloc>.value(value: mockPrayerBloc),
-             ],
-             child: const MaterialApp(home: SettingsScreen()),
-           ),
-         ),
-       );
-       
-       await tester.pumpAndSettle();
+    testWidgets('opens the Notifications group onto the sunnah and occasion toggles', (tester) async {
+      when(mockPrayerBloc.state).thenReturn(PrayerLoading());
+      when(mockPrayerBloc.stream).thenAnswer((_) => Stream.value(PrayerLoading()));
 
-       // Verify Top Section Title (to confirm render).
-       // Must be something genuinely at the top of the list: sections below the
-       // fold are not built yet, so asserting on them here would fail. Weather
-       // controls now live in their own section further down.
-       expect(find.text('PRAYER TIMES'), findsOneWidget);
+      await tester.pumpWidget(
+        MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<StorageService>.value(value: mockStorage),
+            RepositoryProvider<NotificationService>.value(value: notificationService),
+            RepositoryProvider<SunnahRepository>.value(value: mockSunnahRepo),
+          ],
+          child: MultiBlocProvider(
+            providers: [BlocProvider<PrayerBloc>.value(value: mockPrayerBloc)],
+            child: const MaterialApp(home: SettingsScreen()),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 1));
 
-       // Scroll until the section is on screen. Scrolling by a fixed number of
-       // drags is brittle — it breaks whenever a section above grows or the
-       // order changes — so keep scrolling until the target actually appears.
-       await tester.scrollUntilVisible(
-         find.text('SUNNAH & INSIGHTS'),
-         400,
-         scrollable: find.byType(Scrollable).first,
-       );
-       await tester.pumpAndSettle();
+      // Groups start folded: headers show, rows don't.
+      expect(find.text('Settings'), findsOneWidget);
+      expect(find.text('Prayer times'), findsOneWidget);
+      expect(find.text('Weekly sunnah'), findsNothing);
 
-       // Verify Section Title
-       expect(find.text('SUNNAH & INSIGHTS'), findsOneWidget);
-       
-       // Verify Toggles
-       expect(find.text('Weekly Sunnah Reminder'), findsOneWidget);
-       expect(find.text('Islamic Events'), findsOneWidget);
-       expect(find.byType(Switch), findsWidgets);
+      await tester.scrollUntilVisible(find.text('Notifications'), 300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Notifications'));
+      await tester.pump(const Duration(seconds: 1));
+
+      await tester.scrollUntilVisible(find.text('Islamic occasions'), 300, scrollable: find.byType(Scrollable).first);
+      expect(find.text('Weekly sunnah'), findsOneWidget);
+      expect(find.text('Islamic occasions'), findsOneWidget);
+
+      // Folding it again hides the rows.
+      await tester.scrollUntilVisible(find.text('Notifications'), -300, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Notifications'));
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Islamic occasions'), findsNothing);
     });
   });
 }
