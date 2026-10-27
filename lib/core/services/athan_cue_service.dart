@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
+import 'sound_service.dart' show appSoundContext;
+
 /// The phrases of the iqamah, in order. Onboarding sounds one as the user
 /// enters each step, so walking through it recites the whole call; the
 /// closing takbir and tahlil play as they finish, just before home.
@@ -94,8 +96,9 @@ class CuePhrase {
   int get hashCode => Object.hash(arabic, meaning);
 }
 
-/// Plays [AthanCue]s. Quiet by design: it follows the ringer's silent mode,
-/// mixes with whatever else is playing instead of pausing it, and a missing
+/// Plays [AthanCue]s. Quiet by design: like the app's other sounds it plays
+/// on the media volume (see [appSoundContext]), mixes with whatever else is
+/// playing instead of pausing it, and a missing
 /// clip is skipped rather than surfaced, since the cue only adds to a tap
 /// that already works without it.
 class AthanCueService {
@@ -147,10 +150,7 @@ class AthanCueService {
         final player = AudioPlayer();
         await player.setPlayerMode(PlayerMode.lowLatency);
         await player.setReleaseMode(ReleaseMode.stop);
-        await player.setAudioContext(AudioContextConfig(
-          respectSilence: true,
-          focus: AudioContextConfigFocus.mixWithOthers,
-        ).build());
+        await player.setAudioContext(appSoundContext);
         await player.setVolume(0.85);
         await player.setSource(AssetSource(cue.asset));
         _players[cue] = player;

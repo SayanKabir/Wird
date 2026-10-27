@@ -480,13 +480,15 @@ class AppSettings extends Equatable {
   final String appIcon;
 
   /// Whether the soft UI sounds play on taps, switches and completions.
+  /// Off until the user turns it on (onboarding's last step or Settings).
   /// See SoundService.
-  @HiveField(28, defaultValue: true)
+  @HiveField(28, defaultValue: false)
   final bool soundsEnabled;
 
   /// Whether rain and thunder play under the home screen's sky. Separate
-  /// from [soundsEnabled]. See WeatherSoundService.
-  @HiveField(29, defaultValue: true)
+  /// from [soundsEnabled], and likewise off until turned on. See
+  /// WeatherSoundService.
+  @HiveField(29, defaultValue: false)
   final bool weatherSoundsEnabled;
 
   const AppSettings({
@@ -518,8 +520,8 @@ class AppSettings extends Equatable {
     this.reduceMotionUserSet = false,
     this.performanceMode = 'auto',
     this.appIcon = 'auto',
-    this.soundsEnabled = true,
-    this.weatherSoundsEnabled = true,
+    this.soundsEnabled = false,
+    this.weatherSoundsEnabled = false,
   });
 
   /// Default settings

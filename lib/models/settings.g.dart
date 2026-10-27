@@ -138,8 +138,8 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       // written by another build under this index can't block startup.
       performanceMode: fields[26] is String ? fields[26] as String : 'auto',
       appIcon: fields[27] is String ? fields[27] as String : 'auto',
-      soundsEnabled: fields[28] is bool ? fields[28] as bool : true,
-      weatherSoundsEnabled: fields[29] is bool ? fields[29] as bool : true,
+      soundsEnabled: fields[28] is bool ? fields[28] as bool : false,
+      weatherSoundsEnabled: fields[29] is bool ? fields[29] as bool : false,
     );
   }
 
