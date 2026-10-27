@@ -123,6 +123,23 @@ class WeatherSoundService {
     });
   }
 
+  /// One roll of thunder on demand, so turning Rain and thunder on (in
+  /// onboarding) lets the user hear what they've chosen.
+  Future<void> preview() async {
+    if (!_enabled) return;
+    try {
+      await _load();
+      if (_thunder.length < 3) return;
+      // thunder_roll: rolling but not startling.
+      final player = _thunder[2];
+      await player.setVolume(0.85);
+      await player.stop();
+      await player.resume();
+    } catch (e) {
+      debugPrint('[WeatherSound] preview not played: $e');
+    }
+  }
+
   Future<void> _load() => _loading ??= _prepare();
 
   Future<void> _prepare() async {

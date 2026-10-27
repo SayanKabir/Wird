@@ -4,8 +4,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 /// The phrases of the iqamah, in order. Onboarding sounds one as the user
-/// enters each step, so walking through it recites the whole call, ending
-/// with "the prayer has begun" as they finish.
+/// enters each step, so walking through it recites the whole call; the
+/// closing takbir and tahlil play as they finish, just before home.
 ///
 /// Until Wird has its own recording, the clips are cut from "Adhan.ogg" by
 /// Aishatu98 on Wikimedia Commons (CC0, public domain), an iqamah whose
@@ -47,16 +47,21 @@ enum AthanCue {
     'Come to success',
   ),
 
-  /// Qad qāmati-ṣ-ṣalāh twice, then the closing takbir and tahlil in one
-  /// clip, so the call finishes as home arrives.
   iqamah(
-    'audio/qad_qamat_closing.m4a',
+    'audio/qad_qamat.m4a',
     'قَدْ قَامَتِ الصَّلَاةُ',
     'Qad qāmati-ṣ-ṣalāh',
     'The prayer has begun',
+  ),
+
+  /// The closing takbir pair and tahlil in one clip.
+  closing(
+    'audio/takbir_tahlil.m4a',
+    'اللَّهُ أَكْبَرُ',
+    'Allāhu akbar',
+    'Allah is the greatest',
     later: [
-      (Duration(milliseconds: 6000), CuePhrase('اللَّهُ أَكْبَرُ', 'Allah is the greatest')),
-      (Duration(milliseconds: 9900), CuePhrase('لَا إِلَٰهَ إِلَّا اللَّهُ', 'There is no god but Allah')),
+      (Duration(milliseconds: 4000), CuePhrase('لَا إِلَٰهَ إِلَّا اللَّهُ', 'There is no god but Allah')),
     ],
   );
 

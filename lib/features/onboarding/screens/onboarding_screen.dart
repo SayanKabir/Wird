@@ -16,6 +16,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/prayer_service.dart';
 import '../../../core/services/storage_service.dart';
+import '../../../core/services/weather_sound_service.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../models/prayer.dart';
 import '../../../models/settings.dart';
@@ -50,11 +51,12 @@ const _skies = [
   PrayerPeriod.dhuhr,
   PrayerPeriod.asr,
   PrayerPeriod.maghrib,
+  PrayerPeriod.isha,
 ];
 
-/// The iqamah phrase sounded on arriving at each step, in order; the last
-/// one ([AthanCue.iqamah]) plays on finishing. Going back sounds nothing,
-/// so the phrases are only ever heard in their order.
+/// The iqamah phrase sounded on arriving at each step, in order; the
+/// closing takbir and tahlil ([AthanCue.closing]) play on finishing. Going
+/// back sounds nothing, so the phrases are only ever heard in their order.
 const _entryCues = [
   null,
   AthanCue.takbir,
@@ -62,6 +64,7 @@ const _entryCues = [
   AthanCue.risalah,
   AthanCue.salah,
   AthanCue.falah,
+  AthanCue.iqamah,
 ];
 
 const _fard = [Prayer.fajr, Prayer.dhuhr, Prayer.asr, Prayer.maghrib, Prayer.isha];
@@ -108,6 +111,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   bool _transliteration = false;
 
   bool? _notificationsGranted;
+
+  // The last step's touches. Unlike the rest, these are saved the moment
+  // they change, so each switch can be felt or heard straight away.
+  bool _sounds = true;
+  bool _weatherSounds = true;
+  bool _haptics = true;
+  bool _weatherWidget = true;
+  String _appIcon = AppIconChoice.auto.key;
   int _endWarning = AppDurations.defaultEndWarningMinutes;
 
   int get _lastPage => _skies.length - 1;
@@ -133,6 +144,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     _translation = s.quranShowTranslation;
     _transliteration = s.quranShowTransliteration;
     _endWarning = s.endTimeWarningMinutes;
+    _sounds = s.soundsEnabled;
+    _weatherSounds = s.weatherSoundsEnabled;
+    _haptics = s.hapticsEnabled;
+    _weatherWidget = s.showWeatherWidget;
+    _appIcon = s.appIcon;
     _suggestedMethod = _methodForCountry(_location?.country);
     _cues.warmUp();
     _cues.captionedLocally.value = true;
@@ -171,6 +187,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
   bool get _canContinue => switch (_page) {
         1 => _location != null,
         5 => _notificationsGranted == true,
+        // Notifications can't be revoked from the step after, but a trip to
+        // Settings mid-way could; check again before finishing.
+        6 => _notificationsGranted == true,
         _ => true,
       };
 
@@ -355,24 +374,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     }
     HapticService().heavy();
     FocusScope.of(context).unfocus();
-    final times = PrayerService().calculatePrayerTimes(
-      date: DateTime.now(),
-      location: location,
-      calculationMethod: _method,
-      madhab: _madhab,
-      includeTahajjud: _tahajjud,
-      includeIshraq: _ishraq,
-      includeDuha: _duha,
-    );
-    // Home starts its sun or moon at the beginning of the hour's arc, not
-    // where this one has travelled to, so this one fades out under the
-    // phrase and home brings its own.
+    // The walk-through's sun or moon gives way to the live sky's.
     _celestialOpacity.value = 0;
     setState(() {
-      _homeSky = PrayerService().getCurrentPrayerPeriod(times, DateTime.now());
+      _homeSky = _homeSkyNow();
       _finishing = true;
     });
-    final cue = _cues.play(AthanCue.iqamah);
+    final cue = _cues.play(AthanCue.closing);
 
     final settings = _storageService.getSettings().copyWith(
       onboardingCompleted: true,
@@ -394,16 +402,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     await Future.wait([
       cue,
       _storageService.saveSettings(settings),
-      // Qad qāmati-ṣ-ṣalāh is heard twice under the veil; home arrives with
-      // the closing takbir.
-      Future.delayed(Duration(milliseconds: still ? 600 : 5800)),
+      // The takbir, then the tahlil, each shown in turn; home fades in as
+      // the tahlil closes.
+      Future.delayed(Duration(milliseconds: still ? 600 : 7400)),
     ]);
     if (!mounted) return;
     // The phrase lifts away as home fades in over it, so no empty beat of
     // sky falls between them.
+    // The caption stays onboarding's (and hidden) until it has gone; dispose
+    // hands it back.
     Navigator.of(context).pushReplacement(_HomeArrival());
-    // The takbir and tahlil run on over home, captioned there.
-    _cues.captionedLocally.value = false;
     if (!still) await Future.delayed(const Duration(milliseconds: 350));
     if (mounted) setState(() => _leaving = true);
   }
@@ -423,23 +431,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       child: Scaffold(
         backgroundColor: AppColors.background,
         resizeToAvoidBottomInset: true,
-        body: CelestialBackground(
-          prayerPeriod: period,
-          reduceMotion: motionStill(),
-          lite: lighterVisuals(),
-          latitude: _location?.latitude ?? 0,
-          transitionDuration: const Duration(milliseconds: 2200),
-          // The welcome's wordmark sits where the Tahajjud moon would; the
-          // stars carry that page, and the sun rises on the next.
-          showCelestialBody: _page != 0 || _finishing,
-          celestialOpacity: _celestialOpacity,
-          child: Stack(
-            children: [
-              // Dawn and noon skies are bright where the cards sit; a soft
-              // shade keeps the glass and its text legible on every page.
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: CelestialBackground(
+                prayerPeriod: period,
+                reduceMotion: motionStill(),
+                lite: lighterVisuals(),
+                latitude: _location?.latitude ?? 0,
+                transitionDuration: const Duration(milliseconds: 2200),
+                // The welcome's wordmark sits where the Tahajjud moon would; the
+                // stars carry that page, and the sun rises on the next.
+                showCelestialBody: _page != 0 || _finishing,
+                celestialOpacity: _celestialOpacity,
+                child: const SizedBox.expand(),
+              ),
+            ),
+            // On finishing, the sky home is about to draw (the real sun and
+            // moon over this place) fades in over the day onboarding walked
+            // through, so home opens under the very same sky.
+            if (_finishing && _location != null)
+              Positioned.fill(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: 1),
+                  duration: Duration(milliseconds: motionStill() ? 0 : 1200),
+                  curve: Curves.easeInOut,
+                  builder: (context, t, child) => Opacity(opacity: t, child: child),
+                  child: CelestialBackground(
+                    prayerPeriod: _homeSky,
+                    reduceMotion: motionStill(),
+                    lite: lighterVisuals(),
+                    latitude: _location!.latitude,
+                    longitude: _location!.longitude,
+                    child: const SizedBox.expand(),
+                  ),
+                ),
+              ),
+            // Dawn and noon skies are bright where the cards sit; a soft
+            // shade keeps the glass and its text legible on every page. Home
+            // has none, so it lifts as onboarding finishes.
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _finishing ? 0 : 1,
+                  duration: const Duration(milliseconds: 1200),
+                  child: const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
@@ -451,71 +487,72 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
                   ),
                 ),
               ),
-              // The page's own content dissolves first, leaving only the sky.
-              AnimatedOpacity(
-                opacity: _finishing ? 0 : 1,
-                duration: const Duration(milliseconds: 500),
+            ),
+            // The page's own content dissolves first, leaving only the sky.
+            AnimatedOpacity(
+              opacity: _finishing ? 0 : 1,
+              duration: const Duration(milliseconds: 500),
+              curve: AppCurves.emphasized,
+              child: AnimatedSlide(
+                offset: _finishing ? const Offset(0, 0.02) : Offset.zero,
+                duration: const Duration(milliseconds: 600),
                 curve: AppCurves.emphasized,
-                child: AnimatedSlide(
-                  offset: _finishing ? const Offset(0, 0.02) : Offset.zero,
-                  duration: const Duration(milliseconds: 600),
-                  curve: AppCurves.emphasized,
-                  child: IgnorePointer(
-                    ignoring: _finishing,
-                    child: SafeArea(
-                      child: Column(
-                        children: [
-                          _buildHeader(),
-                          Expanded(
-                            child: PageView(
-                              controller: _pageController,
-                              physics: const NeverScrollableScrollPhysics(),
-                              onPageChanged: (page) {
-                                _celestialOpacity.value = page == 0 ? 1 : 0.5;
-                                setState(() => _page = page);
-                              },
-                              children: [
-                                _WelcomePage(onBegin: _next),
-                                _page1(),
-                                _page2(),
-                                _page3(),
-                                _page4(),
-                                _page5(),
-                              ],
-                            ),
+                child: IgnorePointer(
+                  ignoring: _finishing,
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        _buildHeader(),
+                        Expanded(
+                          child: PageView(
+                            controller: _pageController,
+                            physics: const NeverScrollableScrollPhysics(),
+                            onPageChanged: (page) {
+                              _celestialOpacity.value = page == 0 ? 1 : 0.5;
+                              setState(() => _page = page);
+                            },
+                            children: [
+                              _WelcomePage(onBegin: _next),
+                              _page1(),
+                              _page2(),
+                              _page3(),
+                              _page4(),
+                              _page5(),
+                              _page6(),
+                            ],
                           ),
-                          _buildFooter(),
-                        ],
-                      ),
+                        ),
+                        _buildFooter(),
+                      ],
                     ),
                   ),
                 ),
               ),
-              // Floats over the page under the header, so a phrase coming and
-              // going never moves the content. The finish shows its own.
-              if (!_finishing)
-                Positioned(
-                  top: MediaQuery.paddingOf(context).top + 60,
-                  left: AppSpacing.gutter(context),
-                  right: AppSpacing.gutter(context),
-                  child: const IgnorePointer(child: Center(child: AthanCueCaption())),
-                ),
-              if (_finishing)
-                IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: _leaving ? 0 : 1,
+            ),
+            // Floats over the page under the header, so a phrase coming and
+            // going never moves the content. The finish shows its own.
+            if (!_finishing)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 60,
+                left: AppSpacing.gutter(context),
+                right: AppSpacing.gutter(context),
+                child: const IgnorePointer(child: Center(child: AthanCueCaption())),
+              ),
+            if (_finishing)
+              IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _leaving ? 0 : 1,
+                  duration: const Duration(milliseconds: 600),
+                  curve: AppCurves.exit,
+                  child: AnimatedSlide(
+                    offset: _leaving ? const Offset(0, -0.04) : Offset.zero,
                     duration: const Duration(milliseconds: 600),
                     curve: AppCurves.exit,
-                    child: AnimatedSlide(
-                      offset: _leaving ? const Offset(0, -0.04) : Offset.zero,
-                      duration: const Duration(milliseconds: 600),
-                      curve: AppCurves.exit,
-                      child: _FinishVeil(now: _homeSky),
-                    ),
+                    child: _FinishVeil(now: _homeSky),
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -567,8 +604,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
         child: OnboardingButton(
           label: switch (_page) {
             1 when _location == null => 'Set your location first',
-            5 when _notificationsGranted != true => 'Allow reminders to begin',
-            5 => 'Begin with Wird',
+            5 || 6 when _notificationsGranted != true => 'Allow reminders to continue',
+            6 => 'Begin with Wird',
             _ => 'Continue',
           },
           icon: isLast ? null : Icons.arrow_forward_rounded,
@@ -965,6 +1002,152 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     ]);
   }
 
+  // ---------------------------------------------------------------------------
+  // 6 · Isha — the little touches
+  // ---------------------------------------------------------------------------
+
+  Future<void> _saveTouch(AppSettings Function(AppSettings) change) =>
+      _storageService.saveSettings(change(_storageService.getSettings()));
+
+  Widget _page6() {
+    final shown = _iconFor(_homeSkyNow());
+    return _scroll([
+      const OnboardingHeading(
+        eyebrow: 'Isha · nightfall',
+        title: 'The little touches',
+        body: 'How Wird sounds and feels in your hand. Each one plays as you switch it on, and all of them live in Settings.',
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      ToggleTile(
+        leading: const _GlyphBadge(null, icon: Icons.graphic_eq_rounded),
+        title: 'Sound effects',
+        subtitle: 'Soft clicks as you tap, a chime when you\'ve prayed',
+        value: _sounds,
+        onChanged: (v) async {
+          setState(() => _sounds = v);
+          await _saveTouch((s) => s.copyWith(soundsEnabled: v));
+        },
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        leading: const _GlyphBadge(null, icon: Icons.thunderstorm_rounded),
+        title: 'Rain and thunder',
+        subtitle: 'Heard under the home sky when it rains where you are',
+        value: _weatherSounds,
+        onChanged: (v) async {
+          setState(() => _weatherSounds = v);
+          await _saveTouch((s) => s.copyWith(weatherSoundsEnabled: v));
+          if (v) WeatherSoundService().preview();
+        },
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        leading: const _GlyphBadge(null, icon: Icons.vibration_rounded),
+        title: 'Haptics',
+        subtitle: 'A light touch under every tap',
+        value: _haptics,
+        onChanged: (v) async {
+          setState(() => _haptics = v);
+          await _saveTouch((s) => s.copyWith(hapticsEnabled: v));
+          if (v) HapticService().medium();
+        },
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      ToggleTile(
+        leading: const _GlyphBadge(null, icon: Icons.cloud_rounded),
+        title: 'Weather on home',
+        subtitle: 'Today\'s temperature beside the date',
+        value: _weatherWidget,
+        onChanged: (v) async {
+          setState(() => _weatherWidget = v);
+          await _saveTouch((s) => s.copyWith(showWeatherWidget: v));
+        },
+      ),
+      const SizedBox(height: AppSpacing.xl),
+      Text('HOME SCREEN ICON', style: AppTextStyles.sectionLabel()),
+      const SizedBox(height: AppSpacing.md),
+      ChoiceTile(
+        selected: _appIcon == AppIconChoice.auto.key,
+        onTap: () => _setIcon(AppIconChoice.auto.key),
+        child: Row(
+          children: [
+            _IconThumb(name: shown, size: 44),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Follow the prayers', style: AppTextStyles.body(weight: FontWeight.w600)),
+                  Text(
+                    'Your icon changes with each prayer\'s sky',
+                    style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.65)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Row(
+        children: [
+          for (final p in const ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']) ...[
+            Expanded(
+              child: ChoiceTile(
+                selected: _appIcon == p,
+                onTap: () => _setIcon(p),
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Column(
+                  children: [
+                    _IconThumb(name: p, size: 34),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${p[0].toUpperCase()}${p.substring(1)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.85)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (p != 'isha') const SizedBox(width: 6),
+          ],
+        ],
+      ),
+    ]);
+  }
+
+  void _setIcon(String key) {
+    setState(() => _appIcon = key);
+    _saveTouch((s) => s.copyWith(appIcon: key));
+  }
+
+  /// The sky for right now, from the chosen location and conventions.
+  PrayerPeriod _homeSkyNow() {
+    final location = _location;
+    if (location == null) return PrayerPeriod.isha;
+    final times = PrayerService().calculatePrayerTimes(
+      date: DateTime.now(),
+      location: location,
+      calculationMethod: _method,
+      madhab: _madhab,
+      includeTahajjud: _tahajjud,
+      includeIshraq: _ishraq,
+      includeDuha: _duha,
+    );
+    return PrayerService().getCurrentPrayerPeriod(times, DateTime.now());
+  }
+
+  /// The icon a period's sky is drawn on.
+  static String _iconFor(PrayerPeriod p) => switch (p) {
+        PrayerPeriod.fajr => 'fajr',
+        PrayerPeriod.sunrise || PrayerPeriod.dhuhr => 'dhuhr',
+        PrayerPeriod.asr => 'asr',
+        PrayerPeriod.maghrib => 'maghrib',
+        PrayerPeriod.isha || PrayerPeriod.tahajjud => 'isha',
+      };
+
   (Prayer, DateTime)? _nextFard(Map<Prayer, PrayerTimeData> times) {
     final now = DateTime.now();
     for (final p in _fard) {
@@ -1203,6 +1386,22 @@ class _SkyDisc extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: PrayerGlyph.colored(prayer: prayer, size: size * 0.62),
+    );
+  }
+}
+
+/// A home screen icon, as the launcher would round it.
+class _IconThumb extends StatelessWidget {
+  final String name;
+  final double size;
+
+  const _IconThumb({required this.name, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.26),
+      child: Image.asset('assets/icon/thumbs/$name.png', width: size, height: size, fit: BoxFit.cover),
     );
   }
 }
@@ -1677,8 +1876,8 @@ class _Summary extends StatelessWidget {
   }
 }
 
-/// "The prayer has begun", the iqamah's last call, blooming in over the sky
-/// the home screen is about to open with, then naming the hour they're
+/// The iqamah's closing takbir and tahlil, blooming in over the sky the
+/// home screen is about to open with, then naming the hour they're
 /// arriving in.
 class _FinishVeil extends StatelessWidget {
   final PrayerPeriod now;
@@ -1694,6 +1893,21 @@ class _FinishVeil extends StatelessWidget {
         PrayerPeriod.maghrib => 'Maghrib',
         PrayerPeriod.isha => 'Isha',
       };
+
+  /// Follows the closing clip from the takbir to the tahlil, crossfading
+  /// as each begins and holding the last once the caption clears.
+  static Widget _phrase(Widget Function(CuePhrase) build) => ValueListenableBuilder<CuePhrase?>(
+        valueListenable: AthanCueService.instance.playing,
+        builder: (context, phrase, _) {
+          final p = phrase ?? AthanCue.closing.later.last.$2;
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 500),
+            switchInCurve: AppCurves.emphasized,
+            switchOutCurve: AppCurves.exit,
+            child: KeyedSubtree(key: ValueKey(p), child: build(p)),
+          );
+        },
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1715,15 +1929,15 @@ class _FinishVeil extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           bloom(
-            Text(
-              AthanCue.iqamah.arabic,
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.rtl,
-              style: AppTextStyles.arabic(size: 44, color: Colors.white).copyWith(
-                height: 1.4,
-                shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.45), blurRadius: 28)],
-              ),
-            ),
+            _phrase((p) => Text(
+                  p.arabic,
+                  textAlign: TextAlign.center,
+                  textDirection: TextDirection.rtl,
+                  style: AppTextStyles.arabic(size: 44, color: Colors.white).copyWith(
+                    height: 1.4,
+                    shadows: [Shadow(color: AppColors.spiritualGold.withValues(alpha: 0.45), blurRadius: 28)],
+                  ),
+                )),
             200.ms,
           ),
           const SizedBox(height: 14),
@@ -1733,7 +1947,7 @@ class _FinishVeil extends StatelessWidget {
               : rule,
           const SizedBox(height: 14),
           bloom(
-            Text(AthanCue.iqamah.meaning, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.85))),
+            _phrase((p) => Text(p.meaning, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.85)))),
             700.ms,
           ),
           const SizedBox(height: 28),
