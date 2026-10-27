@@ -144,8 +144,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     _translation = s.quranShowTranslation;
     _transliteration = s.quranShowTransliteration;
     _endWarning = s.endTimeWarningMinutes;
-    _sounds = s.soundsEnabled;
-    _weatherSounds = s.weatherSoundsEnabled;
+    // Both sounds start off here, whatever an earlier run saved, so setup is
+    // quiet until the user asks for them on the last step.
+    _sounds = false;
+    _weatherSounds = false;
+    if (s.soundsEnabled || s.weatherSoundsEnabled) {
+      _storageService.saveSettings(s.copyWith(soundsEnabled: false, weatherSoundsEnabled: false));
+    }
     _haptics = s.hapticsEnabled;
     _weatherWidget = s.showWeatherWidget;
     _appIcon = s.appIcon;
@@ -603,7 +608,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
         width: double.infinity,
         child: OnboardingButton(
           label: switch (_page) {
-            1 when _location == null => 'Find your sky first',
+            1 when _location == null => 'Add your location first',
             5 || 6 when _notificationsGranted != true => 'Allow reminders to continue',
             6 => 'Bismillah, let\'s begin',
             _ => 'Continue',
@@ -649,8 +654,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Fajr · first light',
-        title: 'Find your sky',
-        body: 'We\'ll work out every prayer to the minute, and point you to the Qibla.',
+        title: 'Where do you pray?',
+        because: 'Because Fajr in Dhaka and Fajr in London are hours apart.',
       ),
       const SizedBox(height: AppSpacing.xl),
       GhostButton(
@@ -704,8 +709,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Sunrise · the day opens',
-        title: 'Same sun, different clocks',
-        body: 'Pick what your masjid follows and watch the times shift.',
+        title: 'Pick your method',
+        because: 'Because masjids don\'t all agree on when Fajr and Isha start.',
       ),
       const SizedBox(height: AppSpacing.xl),
       if (times != null) _LiveTimesStrip(times: times),
@@ -807,8 +812,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Dhuhr · high noon',
-        title: 'Go the extra rakʿah',
-        body: 'Tahajjud, Ishraq and Duha, plus one Sunnah at a time.',
+        title: 'Add the extra prayers',
+        because: 'Because a few more rakʿahs a day add up.',
       ),
       const SizedBox(height: AppSpacing.xl),
       ToggleTile(
@@ -840,7 +845,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       ToggleTile(
         leading: const _GlyphBadge(WirdGlyph.sunnah),
         title: 'Sunnah revival',
-        subtitle: 'One Sunnah at a time',
+        subtitle: 'A Sunnah to try each week',
         value: _sunnahReminders,
         onChanged: (v) => setState(() => _sunnahReminders = v),
       ),
@@ -864,7 +869,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       const OnboardingHeading(
         eyebrow: 'Asr · golden hour',
         title: 'Pick your script',
-        body: 'Indo-Pak or Uthmani, offline, with translation.',
+        because: 'Because the Quran should look the way you learned it.',
       ),
       const SizedBox(height: AppSpacing.xl),
       Row(
@@ -930,8 +935,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Maghrib · sunset',
-        title: 'Let us nudge you',
-        body: 'A tap on the shoulder at every adhan, and a nudge before time runs out.',
+        title: 'Turn on reminders',
+        because: 'Because it\'s easy to lose track of Asr at work.',
       ),
       const SizedBox(height: AppSpacing.xl),
       _NotificationMock(prayer: upcoming?.$1, time: upcoming?.$2),
@@ -971,7 +976,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
         ),
       ],
       const SizedBox(height: AppSpacing.xl),
-      Text('NUDGE ME BEFORE TIME RUNS OUT', style: AppTextStyles.sectionLabel()),
+      Text('REMIND ME BEFORE A PRAYER ENDS', style: AppTextStyles.sectionLabel()),
       const SizedBox(height: AppSpacing.md),
       Row(
         children: [
@@ -1011,110 +1016,113 @@ class _OnboardingScreenState extends State<OnboardingScreen> with WidgetsBinding
       _storageService.saveSettings(change(_storageService.getSettings()));
 
   Widget _page6() {
-    final shown = _iconFor(_homeSkyNow());
+    final now = _iconFor(_homeSkyNow());
+    final follow = _appIcon == AppIconChoice.auto.key;
     return _scroll([
       const OnboardingHeading(
         eyebrow: 'Isha · nightfall',
         title: 'Make it yours',
-        body: 'Sound, feel, and an icon that follows the sky. Change them any time.',
+        because: 'Because some people like clicks and some like quiet.',
       ),
       const SizedBox(height: AppSpacing.xl),
-      ToggleTile(
-        leading: const _GlyphBadge(null, icon: Icons.graphic_eq_rounded),
-        title: 'Sound effects',
-        subtitle: 'Soft clicks as you tap',
-        value: _sounds,
-        onChanged: (v) async {
-          setState(() => _sounds = v);
-          await _saveTouch((s) => s.copyWith(soundsEnabled: v));
-        },
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        leading: const _GlyphBadge(null, icon: Icons.thunderstorm_rounded),
-        title: 'Rain and thunder',
-        subtitle: 'When it rains near you',
-        value: _weatherSounds,
-        onChanged: (v) async {
-          setState(() => _weatherSounds = v);
-          await _saveTouch((s) => s.copyWith(weatherSoundsEnabled: v));
-          if (v) WeatherSoundService().preview();
-        },
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        leading: const _GlyphBadge(null, icon: Icons.vibration_rounded),
-        title: 'Haptics',
-        subtitle: 'A tap you can feel',
-        value: _haptics,
-        onChanged: (v) async {
-          setState(() => _haptics = v);
-          await _saveTouch((s) => s.copyWith(hapticsEnabled: v));
-          if (v) HapticService().medium();
-        },
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      ToggleTile(
-        leading: const _GlyphBadge(null, icon: Icons.cloud_rounded),
-        title: 'Weather on home',
-        subtitle: 'Today\'s temperature',
-        value: _weatherWidget,
-        onChanged: (v) async {
-          setState(() => _weatherWidget = v);
-          await _saveTouch((s) => s.copyWith(showWeatherWidget: v));
-        },
-      ),
-      const SizedBox(height: AppSpacing.xl),
-      Text('HOME SCREEN ICON', style: AppTextStyles.sectionLabel()),
-      const SizedBox(height: AppSpacing.md),
-      ChoiceTile(
-        selected: _appIcon == AppIconChoice.auto.key,
-        onTap: () => _setIcon(AppIconChoice.auto.key),
-        child: Row(
-          children: [
-            _IconThumb(name: shown, size: 44),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Follow the prayers', style: AppTextStyles.body(weight: FontWeight.w600)),
-                  Text(
-                    'Changes with each prayer\'s sky',
-                    style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.65)),
-                  ),
-                ],
-              ),
+      Row(
+        children: [
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.graphic_eq_rounded,
+              title: 'Clicks',
+              subtitle: 'When you tap',
+              on: _sounds,
+              onChanged: (v) async {
+                setState(() => _sounds = v);
+                await _saveTouch((s) => s.copyWith(soundsEnabled: v));
+                // Saved first, so turning clicks on is the first one heard.
+                SoundService().toggle(v);
+              },
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.thunderstorm_rounded,
+              title: 'Rain & thunder',
+              subtitle: 'When it rains',
+              on: _weatherSounds,
+              onChanged: (v) async {
+                setState(() => _weatherSounds = v);
+                await _saveTouch((s) => s.copyWith(weatherSoundsEnabled: v));
+                if (v) WeatherSoundService().preview();
+              },
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: AppSpacing.sm),
       Row(
         children: [
-          for (final p in const ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']) ...[
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.vibration_rounded,
+              title: 'Haptics',
+              subtitle: 'Felt on every tap',
+              on: _haptics,
+              onChanged: (v) async {
+                setState(() => _haptics = v);
+                await _saveTouch((s) => s.copyWith(hapticsEnabled: v));
+                if (v) HapticService().medium();
+              },
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: _TouchTile(
+              icon: Icons.thermostat_rounded,
+              title: 'Weather',
+              subtitle: 'Next to the date',
+              on: _weatherWidget,
+              onChanged: (v) async {
+                setState(() => _weatherWidget = v);
+                await _saveTouch((s) => s.copyWith(showWeatherWidget: v));
+              },
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: AppSpacing.section),
+      Text('APP ICON', style: AppTextStyles.sectionLabel()),
+      const SizedBox(height: AppSpacing.md),
+      // Six to a row on every width: each takes an equal share.
+      Row(
+        children: [
+          Expanded(
+            child: _IconChoice(
+              name: now,
+              label: 'Auto',
+              selected: follow,
+              auto: true,
+              onTap: () => _setIcon(AppIconChoice.auto.key),
+            ),
+          ),
+          for (final p in const ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'])
             Expanded(
-              child: ChoiceTile(
+              child: _IconChoice(
+                name: p,
+                label: '${p[0].toUpperCase()}${p.substring(1)}',
                 selected: _appIcon == p,
                 onTap: () => _setIcon(p),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Column(
-                  children: [
-                    _IconThumb(name: p, size: 34),
-                    const SizedBox(height: 6),
-                    Text(
-                      '${p[0].toUpperCase()}${p.substring(1)}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.85)),
-                    ),
-                  ],
-                ),
               ),
             ),
-            if (p != 'isha') const SizedBox(width: 6),
-          ],
         ],
+      ),
+      const SizedBox(height: AppSpacing.md),
+      AnimatedSwitcher(
+        duration: AppDurations.normal,
+        child: Text(
+          follow ? 'Changes with the prayer times' : 'Stays on this one',
+          key: ValueKey(follow),
+          textAlign: TextAlign.center,
+          style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.65)),
+        ),
       ),
     ]);
   }
@@ -1199,7 +1207,7 @@ class _WelcomePage extends StatelessWidget {
                     const SizedBox(height: AppSpacing.xl),
                     enter(
                       Text(
-                        'Salah, Quran and dhikr.\nA little every day.',
+                        'Your five prayers, with a little\nQuran and dhikr each day.',
                         textAlign: TextAlign.center,
                         style: AppTextStyles.bodyLarge(color: Colors.white.withValues(alpha: 0.85)),
                       ),
@@ -1221,14 +1229,6 @@ class _WelcomePage extends StatelessWidget {
                 Column(
                   children: [
                     enter(const _DayStrip(), 3),
-                    const SizedBox(height: AppSpacing.md),
-                    enter(
-                      Text(
-                        'Look up. The sky moves with your salah.',
-                        style: AppTextStyles.small(color: Colors.white.withValues(alpha: 0.6)),
-                      ),
-                      3,
-                    ),
                     const SizedBox(height: AppSpacing.xl),
                     enter(const _FeatureChips(), 4),
                     const SizedBox(height: AppSpacing.xl),
@@ -1242,7 +1242,7 @@ class _WelcomePage extends StatelessWidget {
                     const SizedBox(height: AppSpacing.md),
                     enter(
                       Text(
-                        'One minute to set up. Promise.',
+                        'Takes about a minute',
                         style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.5)),
                       ),
                       5,
@@ -1397,6 +1397,175 @@ class _SkyDisc extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: PrayerGlyph.colored(prayer: prayer, size: size * 0.62),
+    );
+  }
+}
+
+/// A square switch for the last step, lit gold while on, in the manner of
+/// a phone's quick settings.
+class _TouchTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool on;
+  final ValueChanged<bool> onChanged;
+
+  const _TouchTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.on,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gold = AppColors.spiritualGold;
+    return Semantics(
+      toggled: on,
+      button: true,
+      label: title,
+      child: Pressable(
+        pressedScale: 0.96,
+        // The tile's own handler plays the toggle sound once it has saved.
+        haptic: PressableHaptic.selection,
+        onTap: () => onChanged(!on),
+        child: AnimatedContainer(
+          duration: AppDurations.slow,
+          curve: AppCurves.emphasized,
+          height: 124,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppRadii.group),
+            boxShadow: on ? [BoxShadow(color: gold.withValues(alpha: 0.22), blurRadius: 22)] : null,
+          ),
+          child: GlassPanel(
+            radius: AppRadii.group,
+            fill: 0.07,
+            gradient: on
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [gold.withValues(alpha: 0.28), gold.withValues(alpha: 0.08)],
+                  )
+                : null,
+            edgeColor: on ? gold.withValues(alpha: 0.7) : null,
+            edgeWidth: on ? 1.3 : 1,
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: AppDurations.slow,
+                      curve: AppCurves.emphasized,
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: on ? gold : Colors.white.withValues(alpha: 0.1),
+                      ),
+                      child: Icon(icon, size: 20, color: on ? const Color(0xFF0A0E21) : Colors.white70),
+                    ),
+                    const Spacer(),
+                    AnimatedSwitcher(
+                      duration: AppDurations.normal,
+                      child: Text(
+                        on ? 'ON' : 'OFF',
+                        key: ValueKey(on),
+                        style: AppTextStyles.sectionLabel(
+                          color: on ? gold : Colors.white.withValues(alpha: 0.4),
+                        ).copyWith(fontSize: 10),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(title, style: AppTextStyles.body(weight: FontWeight.w600)),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.tiny(color: Colors.white.withValues(alpha: 0.65)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One home screen icon to pick, ringed in gold once chosen. [auto] marks
+/// the one that follows the prayers.
+class _IconChoice extends StatelessWidget {
+  final String name;
+  final String label;
+  final bool selected;
+  final bool auto;
+  final VoidCallback onTap;
+
+  const _IconChoice({
+    required this.name,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.auto = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gold = AppColors.spiritualGold;
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: auto ? 'Follow the prayer times' : '$label icon',
+      child: Pressable(
+        pressedScale: 0.9,
+        haptic: PressableHaptic.selection,
+        onTap: onTap,
+        child: Column(
+          children: [
+            AnimatedContainer(
+              duration: AppDurations.slow,
+              curve: AppCurves.emphasized,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: selected ? gold : Colors.transparent, width: 2),
+                boxShadow: selected ? [BoxShadow(color: gold.withValues(alpha: 0.35), blurRadius: 14)] : null,
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _IconThumb(name: name, size: 40),
+                  if (auto)
+                    Positioned(
+                      right: -4,
+                      bottom: -4,
+                      child: Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: gold,
+                          border: Border.all(color: const Color(0xFF0A0E21), width: 2),
+                        ),
+                        child: const Icon(Icons.autorenew_rounded, size: 12, color: Color(0xFF0A0E21)),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: AppTextStyles.tiny(color: selected ? gold : Colors.white.withValues(alpha: 0.7)),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

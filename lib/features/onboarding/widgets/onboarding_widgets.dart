@@ -81,13 +81,14 @@ class CueMuteButton extends StatelessWidget {
 }
 
 /// Page title block: a small spaced label naming the prayer the sky now
-/// shows, then the question this step asks.
+/// shows, the step's title, and one "Because…" line saying why it matters,
+/// in the same gold as the welcome's.
 class OnboardingHeading extends StatelessWidget {
   final String eyebrow;
   final String title;
-  final String body;
+  final String because;
 
-  const OnboardingHeading({super.key, required this.eyebrow, required this.title, required this.body});
+  const OnboardingHeading({super.key, required this.eyebrow, required this.title, required this.because});
 
   @override
   Widget build(BuildContext context) {
@@ -98,7 +99,10 @@ class OnboardingHeading extends StatelessWidget {
         const SizedBox(height: 10),
         Text(title, style: AppTextStyles.display(size: 34, weight: FontWeight.w300, height: 1.15)),
         const SizedBox(height: 10),
-        Text(body, style: AppTextStyles.body(color: Colors.white.withValues(alpha: 0.75))),
+        Text(
+          because,
+          style: AppTextStyles.body(color: AppColors.spiritualGold.withValues(alpha: 0.9)).copyWith(fontStyle: FontStyle.italic),
+        ),
       ],
     );
   }
