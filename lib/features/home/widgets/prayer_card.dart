@@ -48,20 +48,63 @@ class PrayerCard extends StatefulWidget {
 class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
 
+  /// Drives the body opening and closing. Forward opens on the emphasized
+  /// curve; reverse closes a little quicker so the card gets out of the way.
+  late final AnimationController _expand = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 420),
+    reverseDuration: const Duration(milliseconds: 280),
+  );
+
+  late final Animation<double> _size = CurvedAnimation(
+    parent: _expand,
+    curve: AppCurves.emphasized,
+    reverseCurve: Curves.easeOutCubic.flipped,
+  );
+
   @override
   void didUpdateWidget(PrayerCard oldWidget) {
     super.didUpdateWidget(oldWidget);
     // Auto-expand if this prayer becomes active and isn't done yet
     if (widget.isActive && !oldWidget.isActive && !(widget.entry?.status.isCompleted ?? false)) {
-      setState(() => _isExpanded = true);
+      _setExpanded(true);
     }
+  }
+
+  @override
+  void dispose() {
+    _expand.dispose();
+    super.dispose();
   }
 
   void _toggleExpand() {
     HapticService().selection();
-    setState(() {
-      _isExpanded = !_isExpanded;
-    });
+    _setExpanded(!_isExpanded);
+  }
+
+  void _setExpanded(bool expanded) {
+    setState(() => _isExpanded = expanded);
+    if (motionStill()) {
+      _expand.value = expanded ? 1 : 0;
+      return;
+    }
+    if (expanded) {
+      _expand.forward().whenCompleteOrCancel(_revealIfCut);
+    } else {
+      _expand.reverse();
+    }
+  }
+
+  /// A card opened near the bottom of the list grows below the fold; nudge
+  /// the list just far enough to show all of it.
+  void _revealIfCut() {
+    if (!mounted || !_isExpanded) return;
+    Scrollable.ensureVisible(
+      context,
+      duration: AppDurations.slow,
+      curve: AppCurves.move,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+    );
   }
 
   @override
@@ -86,26 +129,27 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       borderColor = AppColors.statusMissed.withOpacity(0.15);
     }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutQuart,
-      margin: const EdgeInsets.only(bottom: 12),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: AppBackdropFilter(
           filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: Container(
+          // The glow and tint ease in with the body rather than snapping.
+          child: AnimatedContainer(
+              duration: AppDurations.slow,
+              curve: AppCurves.emphasized,
               decoration: BoxDecoration(
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: borderColor, width: 1),
-                boxShadow: (widget.isActive || _isExpanded) ? [
+                boxShadow: [
                   BoxShadow(
-                    color: AppColors.activeGlow.withOpacity(0.05),
+                    color: AppColors.activeGlow.withOpacity((widget.isActive || _isExpanded) ? 0.05 : 0),
                     blurRadius: 20,
                     spreadRadius: -5,
                   )
-                ] : null,
+                ],
               ),
               child: Material(
                 color: Colors.transparent,
@@ -124,23 +168,33 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
                       ),
                     ),
 
-                    // Expandable Body
-                    AnimatedSize(
-                      duration: AppDurations.slow,
-                      curve: AppCurves.emphasized,
-                      alignment: Alignment.topCenter,
-                      child: _isExpanded
-                          ? Padding(
+                    // Expandable Body. It stays built while closing so it can
+                    // fade out as the card folds, instead of vanishing first.
+                    AnimatedBuilder(
+                      animation: _expand,
+                      builder: (context, _) {
+                        if (_expand.isDismissed) return const SizedBox(width: double.infinity);
+                        return ClipRect(
+                          child: Align(
+                            alignment: Alignment.topCenter,
+                            heightFactor: _size.value,
+                            child: Padding(
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                               child: Column(
                                 children: [
-                                  Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+                                  // The divider draws out from the centre.
+                                  Transform.scale(
+                                    scaleX: _stagger(0, 0.5),
+                                    child: Container(height: 1, color: Colors.white.withValues(alpha: 0.1)),
+                                  ),
                                   const SizedBox(height: 16),
                                   _buildExpandedDetails(status),
                                 ],
                               ),
-                            )
-                          : const SizedBox.shrink(),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -158,11 +212,28 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
         _buildIcon(status),
         const SizedBox(width: 14),
         Expanded(child: _buildNameAndArabic()),
-        if (!(_isExpanded && widget.timeData != null))
-          _buildTimeOrStatusPill(status),
-
-        if (_isExpanded && widget.timeData != null)
-          Icon(Icons.keyboard_arrow_up_rounded, color: Colors.white.withOpacity(0.3)),
+        AnimatedSwitcher(
+          duration: AppDurations.normal,
+          switchInCurve: AppCurves.emphasized,
+          switchOutCurve: AppCurves.exit,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween(begin: 0.8, end: 1.0).animate(animation),
+              child: child,
+            ),
+          ),
+          child: _isExpanded && widget.timeData != null
+              ? Icon(
+                  Icons.keyboard_arrow_up_rounded,
+                  key: const ValueKey('chevron'),
+                  color: Colors.white.withOpacity(0.3),
+                )
+              : KeyedSubtree(
+                  key: const ValueKey('pill'),
+                  child: _buildTimeOrStatusPill(status),
+                ),
+        ),
       ],
     );
   }
@@ -261,6 +332,25 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
 
   // --- Expanded Details ---
 
+  /// The expand progress for one step of the cascade: each section starts a
+  /// beat after the one above and takes [span] of the whole open.
+  double _stagger(int step, [double span = 0.55]) {
+    final start = step * 0.1;
+    final t = ((_expand.value - start) / span).clamp(0.0, 1.0);
+    return _expand.status == AnimationStatus.reverse
+        ? t // Closing: everything folds together, no reverse cascade.
+        : AppCurves.emphasized.transform(t);
+  }
+
+  /// A section of the open card fading in and rising a few pixels into place.
+  Widget _rise(int step, Widget child) {
+    final t = _expand.status == AnimationStatus.reverse ? _expand.value : _stagger(step + 1);
+    return Opacity(
+      opacity: t,
+      child: Transform.translate(offset: Offset(0, (1 - t) * 10), child: child),
+    );
+  }
+
   Widget _buildExpandedDetails(PrayerStatus status) {
     final rakahs = _getRakahInfo(widget.prayer, widget.date);
     final notes = _getPrayerNotes(widget.prayer, widget.date);
@@ -270,12 +360,15 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
       children: [
         // 1. Time Info Grid
         if (widget.timeData != null) ...[
-          _buildTimeInfoSection(),
+          _rise(0, _buildTimeInfoSection()),
           const SizedBox(height: 24),
         ],
 
         // 2. Rakahs
         if (rakahs.totalCount > 0) ...[
+          _rise(1, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Text("COMPOSITION", style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.4))),
           const SizedBox(height: 12),
           SizedBox(
@@ -292,11 +385,16 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
               ],
             ),
           ),
+            ],
+          )),
           const SizedBox(height: 24),
         ],
 
         // 3. Notes / Sunnah Info
         if (notes != null) ...[
+          _rise(2, Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Text("SUNNAH & NOTES", style: AppTextStyles.tiny(color: Colors.white.withOpacity(0.4))),
           const SizedBox(height: 8),
           Container(
@@ -321,12 +419,14 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
               ],
             ),
           ),
+            ],
+          )),
           const SizedBox(height: 24),
         ],
 
         // 4. Actions (Buttons)
         // We use the same layout for both states to prevent layout shifts
-        _buildActionButtons(isCompleted: status.isCompleted),
+        _rise(3, _buildActionButtons(isCompleted: status.isCompleted)),
       ],
     );
   }
