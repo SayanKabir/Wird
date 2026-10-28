@@ -39,7 +39,12 @@ class Transliterator {
   static String convert(String latin, TransliterationScript script) {
     if (script == TransliterationScript.latin) return latin;
     final table = script == TransliterationScript.devanagari ? _devanagari : _bengali;
-    return latin.toLowerCase().replaceAllMapped(
+    // A letter written three times ("Jannnati") is a doubled letter; left as
+    // is it would stack three conjuncts (জান্ন্নাতি).
+    return latin
+        .toLowerCase()
+        .replaceAllMapped(RegExp(r'([b-df-hj-np-tv-z])\1{2,}'), (m) => '${m[1]}${m[1]}')
+        .replaceAllMapped(
           RegExp(r"[a-z'\-]+"),
           (m) => _word(m.group(0)!, table),
         );
