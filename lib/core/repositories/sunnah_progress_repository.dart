@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../models/sunnah_progress.dart';
+import 'practice_ids.dart';
 
 class SunnahProgressRepository {
   static const String _boxName = 'sunnah_progress';
@@ -51,6 +52,21 @@ class SunnahProgressRepository {
         : _mark(current, sunnahId, now);
     await _save(updated);
     return updated;
+  }
+
+  static const String _defaultsKey = 'defaultsSeeded';
+
+  /// Adds the starting practice ([PracticeIds.defaults]) once, after any
+  /// Sunnahs the user already keeps. Returns the ids it added, empty on every
+  /// later call, so removing one of them sticks.
+  Future<List<String>> seedDefaultPractice() async {
+    final box = await _getBox();
+    if (box.get(_defaultsKey) == true) return const [];
+    final current = await getProgress();
+    final added = [for (final id in PracticeIds.defaults) if (!current.practiceIds.contains(id)) id];
+    if (added.isNotEmpty) await _save(current.copyWith(practiceIds: [...current.practiceIds, ...added]));
+    await box.put(_defaultsKey, true);
+    return added;
   }
 
   /// Adds [sunnahId] to the user's practice, or removes it if already there.

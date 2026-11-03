@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/repositories/sunnah_progress_repository.dart';
 import 'sunnah_event_state.dart';
+import '../../../core/notifications/reminder_scheduler.dart';
 
 export 'sunnah_event_state.dart';
 
@@ -31,6 +32,7 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
         emit(SunnahLoading());
       }
 
+      final seeded = await _progressRepository.seedDefaultPractice();
       final sunnahsFuture = _repository.getAllSunnahs();
       final weeklySunnahFuture = _repository.getWeeklySunnah();
       final progressFuture = _progressRepository.getProgress();
@@ -50,6 +52,7 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
         sunnahs: sunnahs,
         weeklySunnah: weeklySunnah,
         progress: progress,
+        seeded: seeded,
       ));
     } catch (e) {
       emit(SunnahError(e.toString()));
@@ -66,6 +69,7 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
     try {
       final updated = await _progressRepository.toggleToday(event.sunnahId);
       emit(current.copyWith(progress: updated));
+      ReminderScheduler.refresh();
     } catch (e) {
       // Keep the screen as it was; the tick simply doesn't land.
       debugPrint('[SunnahBloc] toggleToday failed: $e');
@@ -82,6 +86,7 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
     try {
       final updated = await _progressRepository.togglePractice(event.sunnahId);
       emit(current.copyWith(progress: updated));
+      ReminderScheduler.refresh();
     } catch (e) {
       debugPrint('[SunnahBloc] togglePractice failed: $e');
     }

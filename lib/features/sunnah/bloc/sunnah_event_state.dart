@@ -47,10 +47,15 @@ class SunnahLoaded extends SunnahState {
   final Sunnah? weeklySunnah;
   final SunnahProgress progress;
 
+  /// Sunnahs added to the practice by default on this load, so the dhikr
+  /// page can give the dhikr among them a counter. Empty after the first run.
+  final List<String> seeded;
+
   const SunnahLoaded({
     required this.sunnahs,
     this.weeklySunnah,
     required this.progress,
+    this.seeded = const [],
   });
 
   /// The user's practice, in the order they added it.
@@ -75,7 +80,7 @@ class SunnahLoaded extends SunnahState {
   }
 
   @override
-  List<Object> get props => [sunnahs, weeklySunnah ?? '', progress];
+  List<Object> get props => [sunnahs, weeklySunnah ?? '', progress, seeded];
 }
 
 class SunnahError extends SunnahState {
