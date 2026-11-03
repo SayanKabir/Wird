@@ -207,32 +207,49 @@ class _PrayerCardState extends State<PrayerCard> with SingleTickerProviderStateM
 
   // --- Header ---
   Widget _buildHeader(PrayerStatus status) {
+    final still = widget.reduceMotion || motionStill();
     return Row(
       children: [
         _buildIcon(status),
         const SizedBox(width: 14),
         Expanded(child: _buildNameAndArabic()),
-        AnimatedSwitcher(
-          duration: AppDurations.normal,
-          switchInCurve: AppCurves.emphasized,
-          switchOutCurve: AppCurves.exit,
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(
-              scale: Tween(begin: 0.8, end: 1.0).animate(animation),
-              child: child,
+        // The time pill gives way to a chevron as the card opens. Both move
+        // with the card: the width eases between the two instead of the row
+        // reflowing in one frame, and the chevron turns up into place.
+        AnimatedSize(
+          duration: still ? Duration.zero : const Duration(milliseconds: 420),
+          reverseDuration: still ? Duration.zero : const Duration(milliseconds: 280),
+          curve: AppCurves.emphasized,
+          alignment: Alignment.centerRight,
+          child: AnimatedSwitcher(
+            duration: still ? Duration.zero : const Duration(milliseconds: 420),
+            reverseDuration: still ? Duration.zero : const Duration(milliseconds: 280),
+            switchInCurve: AppCurves.emphasized,
+            switchOutCurve: AppCurves.exit,
+            layoutBuilder: (current, previous) => Stack(
+              alignment: Alignment.centerRight,
+              children: [...previous, if (current != null) current],
             ),
+            transitionBuilder: (child, animation) {
+              final chevron = child.key == const ValueKey('chevron');
+              return FadeTransition(
+                opacity: animation,
+                child: chevron
+                    ? RotationTransition(turns: Tween(begin: -0.5, end: 0.0).animate(animation), child: child)
+                    : ScaleTransition(scale: Tween(begin: 0.85, end: 1.0).animate(animation), child: child),
+              );
+            },
+            child: _isExpanded && widget.timeData != null
+                ? Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    key: const ValueKey('chevron'),
+                    color: Colors.white.withOpacity(0.3),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey('pill'),
+                    child: _buildTimeOrStatusPill(status),
+                  ),
           ),
-          child: _isExpanded && widget.timeData != null
-              ? Icon(
-                  Icons.keyboard_arrow_up_rounded,
-                  key: const ValueKey('chevron'),
-                  color: Colors.white.withOpacity(0.3),
-                )
-              : KeyedSubtree(
-                  key: const ValueKey('pill'),
-                  child: _buildTimeOrStatusPill(status),
-                ),
         ),
       ],
     );
