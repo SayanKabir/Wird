@@ -816,8 +816,11 @@ class _Sun extends StatelessWidget {
   }
 }
 
-/// Moon phase painter — draws proper crescent/gibbous shape with matching glow.
-/// Also used for the moon on the verse share card.
+/// The moon as a lit sphere: the terminator follows the true ellipse for the
+/// phase and is softened like the real shadow line, the maria sit where they
+/// are on the near side, the limb darkens a little, and a round halo grows
+/// with the light. Waxing moons are lit on the right, waning on the left;
+/// callers rotate it to face the sun. Also used on the verse share card.
 class MoonPainter extends CustomPainter {
   final double phaseValue; // 0.0 = new, 0.5 = full, 1.0 = new
   final Color moonColor;
@@ -835,112 +838,117 @@ class MoonPainter extends CustomPainter {
     this.earthshine = 0,
   });
 
+  /// The large dark plains as seen from the northern hemisphere, in units of
+  /// the radius: (x, y, width, height). Procellarum, Imbrium, Serenitatis,
+  /// Tranquillitatis, Crisium, Nubium, Fecunditatis.
+  static const List<(double, double, double, double)> _maria = [
+    (-0.5, 0.0, 0.42, 0.78),
+    (-0.24, -0.36, 0.42, 0.36),
+    (0.16, -0.36, 0.26, 0.24),
+    (0.3, -0.04, 0.34, 0.3),
+    (0.64, -0.22, 0.16, 0.2),
+    (-0.14, 0.36, 0.3, 0.24),
+    (0.5, 0.2, 0.18, 0.24),
+  ];
+
+  /// The sunlit part of the disc. Its outer edge is the limb on the lit side;
+  /// its inner edge, the terminator, is a half-ellipse whose width runs from
+  /// the limb itself at new moon, through a straight line at the quarters, to
+  /// the opposite limb at full.
+  @visibleForTesting
+  static Path litPath(double phaseValue, Offset center, double radius) {
+    final side = phaseValue <= 0.5 ? 1.0 : -1.0;
+    final k = math.cos(phaseValue * 2 * math.pi);
+    const steps = 64;
+    final path = Path();
+    for (var i = 0; i <= steps; i++) {
+      final t = -math.pi / 2 + math.pi * i / steps;
+      final x = center.dx + side * math.cos(t) * radius;
+      final y = center.dy + math.sin(t) * radius;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    for (var i = steps; i >= 0; i--) {
+      final t = -math.pi / 2 + math.pi * i / steps;
+      path.lineTo(center.dx + side * k * math.cos(t) * radius, center.dy + math.sin(t) * radius);
+    }
+    return path..close();
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide / 2;
+    final disc = Rect.fromCircle(center: center, radius: radius);
     final illumination = (1 - math.cos(phaseValue * 2 * math.pi)) / 2;
 
-    if (earthshine > 0) {
-      final haloRadius = radius * (2.2 + illumination * 2.5);
-      canvas.drawCircle(
-        center,
-        haloRadius,
-        Paint()
-          ..shader = RadialGradient(
-            colors: [
-              const Color(0xFFDCE6FF).withValues(alpha: (0.03 + 0.07 * illumination) * earthshine),
-              const Color(0x00DCE6FF),
-            ],
-          ).createShader(Rect.fromCircle(center: center, radius: haloRadius)),
-      );
-      // Only a crescent shows earthshine; past the quarters the lit part
-      // outshines it.
-      final shine = (1 - illumination / 0.45).clamp(0.0, 1.0) * earthshine;
-      if (shine > 0) {
-        canvas.drawCircle(
-          center,
-          radius,
-          Paint()..color = const Color(0xFF94A3C8).withValues(alpha: 0.16 * shine),
-        );
-      }
+    // A round halo, wider and brighter as more of the moon is lit.
+    final haloRadius = radius * (1.3 + illumination * 0.9);
+    final haloAlpha = glowColor.a * (0.15 + 0.5 * illumination);
+    canvas.drawCircle(
+      center,
+      haloRadius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [glowColor.withValues(alpha: haloAlpha), glowColor.withValues(alpha: 0)],
+          stops: [radius / haloRadius, 1],
+        ).createShader(Rect.fromCircle(center: center, radius: haloRadius)),
+    );
+
+    canvas.save();
+    canvas.clipPath(Path()..addOval(disc));
+
+    // Earthshine: on a crescent the dark side shows faintly, maria and all.
+    final shine = (1 - illumination / 0.45).clamp(0.0, 1.0) * earthshine;
+    if (shine > 0) {
+      canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF8C9BBE).withValues(alpha: 0.13 * shine));
+      _paintMaria(canvas, center, radius, const Color(0xFF0B1026).withValues(alpha: 0.35 * shine));
     }
 
-    // 1. Calculate the Path of the lit portion
-    final Path moonPath = _calculatePhasePath(center, radius);
-
-    // 2. Draw Glow (behind the moon body) with a blur
-    // We draw the same path but with a mask filter
-    final glowPaint = Paint()
-      ..color = glowColor
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
-    canvas.drawPath(moonPath, glowPaint);
-
-    // 3. Draw Moon Body
-    final moonPaint = Paint()..color = moonColor;
-    canvas.drawPath(moonPath, moonPaint);
-
-    // 4. Draw Craters (Clipped to the lit area)
-    canvas.save();
-    canvas.clipPath(moonPath);
-    
-    final craterPaint = Paint()
-      ..color = const Color(0xFFCBD5E1).withOpacity(0.3); // Slate-200
-
-    canvas.drawCircle(Offset(size.width * 0.3, size.height * 0.4), radius * 0.25, craterPaint);
-    canvas.drawCircle(Offset(size.width * 0.65, size.height * 0.6), radius * 0.16, craterPaint);
-    canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.25), radius * 0.12, craterPaint);
-    canvas.drawCircle(Offset(size.width * 0.8, size.height * 0.35), radius * 0.08, craterPaint);
-    
+    // The sunlit part, on its own layer so shading lands only on it.
+    canvas.saveLayer(disc.inflate(2), Paint());
+    canvas.drawPath(
+      litPath(phaseValue, center, radius),
+      Paint()
+        ..color = moonColor
+        // A soft terminator, less so on a thin crescent so it stays
+        // bright; the clip keeps the limb itself crisp.
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.05 * (0.3 + 0.7 * math.min(1.0, illumination * 4))),
+    );
+    _paintMaria(canvas, center, radius, const Color(0xFF7F8CA6).withValues(alpha: 0.5), blend: BlendMode.srcATop);
+    // Tycho's bright rays near the bottom.
+    canvas.drawCircle(
+      center + Offset(-0.1, 0.66) * radius,
+      radius * 0.05,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..blendMode = BlendMode.srcATop
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.04),
+    );
+    // Limb darkening: a sphere dims a little toward its edge.
+    canvas.drawRect(
+      disc,
+      Paint()
+        ..blendMode = BlendMode.srcATop
+        ..shader = RadialGradient(
+          colors: [Colors.transparent, const Color(0xFF1E293B).withValues(alpha: 0.28)],
+          stops: const [0.62, 1],
+        ).createShader(disc),
+    );
+    canvas.restore();
     canvas.restore();
   }
 
-  /// Calculates the visible moon path (crescent/gibbous)
-  Path _calculatePhasePath(Offset center, double radius) {
-    final path = Path();
-    
-    final double illumination = (1 - math.cos(phaseValue * 2 * math.pi)) / 2;
-    final bool isWaxing = phaseValue <= 0.5;
-    
-    // Terminator offset: -1 (New) to +1 (Full)
-    final double terminatorOffset = (illumination * 2) - 1;
-    final double ellipseWidth = radius * terminatorOffset.abs();
-    final bool isHalfMoon = ellipseWidth < 0.5;
-
-    if (isWaxing) {
-      // WAXING: Right Semicircle is the base (Top -> Right -> Bottom)
-      path.addArc(Rect.fromCircle(center: center, radius: radius), -math.pi / 2, math.pi);
-      
-      if (isHalfMoon) {
-        path.lineTo(center.dx, center.dy - radius);
-      } else {
-        // Return trip from Bottom to Top via terminator
-        path.arcTo(
-          Rect.fromCenter(center: center, width: ellipseWidth * 2, height: radius * 2),
-          math.pi / 2,
-          terminatorOffset < 0 ? -math.pi : math.pi, // -pi for crescent, +pi for gibbous
-          false
-        );
-      }
-    } else {
-      // WANING: Left Semicircle is the base (Bottom -> Left -> Top)
-      path.addArc(Rect.fromCircle(center: center, radius: radius), math.pi / 2, math.pi);
-
-      if (isHalfMoon) {
-        path.lineTo(center.dx, center.dy + radius);
-      } else {
-        // Return trip from Top to Bottom ('-pi/2' start angle works for continuity)
-        path.arcTo(
-           Rect.fromCenter(center: center, width: ellipseWidth * 2, height: radius * 2),
-           -math.pi / 2,
-           terminatorOffset < 0 ? -math.pi : math.pi,
-           false
-        );
-      }
+  static void _paintMaria(Canvas canvas, Offset center, double radius, Color color, {BlendMode? blend}) {
+    final paint = Paint()
+      ..color = color
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.075);
+    if (blend != null) paint.blendMode = blend;
+    for (final (x, y, w, h) in _maria) {
+      canvas.drawOval(
+        Rect.fromCenter(center: center + Offset(x, y) * radius, width: w * radius, height: h * radius),
+        paint,
+      );
     }
-    
-    path.close();
-    return path;
   }
 
   @override
