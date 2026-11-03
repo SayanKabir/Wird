@@ -893,34 +893,28 @@ class MoonPainter extends CustomPainter {
       );
     }
 
-    // The dark side: a flat, quiet disc with a hairline rim, so a half moon
-    // is the lit half of a round moon. Clearer at night, fainter by day.
-    final dark = (0.35 + 0.65 * earthshine) * (1 - illumination * 0.6);
-    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF94A3C8).withValues(alpha: 0.16 * dark));
-    _paintCraters(canvas, size, radius, const Color(0xFFCBD5E1).withValues(alpha: 0.05 * dark));
-    canvas.drawCircle(
-      center,
-      radius - 0.5,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..color = const Color(0xFFDCE6FF).withValues(alpha: 0.14 * dark),
-    );
+    // The dark side, at night only: a flat, quiet disc with a hairline rim,
+    // so a half moon is the lit half of a round moon. By day the sky shows
+    // through, as it does around the sun.
+    final dark = earthshine * (1 - illumination * 0.6);
+    if (dark > 0) {
+      canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF94A3C8).withValues(alpha: 0.16 * dark));
+      _paintCraters(canvas, size, radius, const Color(0xFFCBD5E1).withValues(alpha: 0.05 * dark));
+      canvas.drawCircle(
+        center,
+        radius - 0.5,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1
+          ..color = const Color(0xFFDCE6FF).withValues(alpha: 0.14 * dark),
+      );
+    }
 
     final moonPath = litPath(phaseValue, center, radius);
 
-    // The lit part, with the shadow line feathered a touch so it reads as
-    // light falling away rather than a cut. The disc clip keeps the outer
-    // edge crisp.
+    // The lit part: crisp, like the sun.
+    canvas.drawPath(moonPath, Paint()..color = moonColor);
     canvas.save();
-    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
-    canvas.drawPath(
-      moonPath,
-      Paint()
-        ..color = moonColor
-        // Less on a thin crescent, so it stays bright.
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.035 * (0.3 + 0.7 * math.min(1.0, illumination * 4))),
-    );
     canvas.clipPath(moonPath);
     _paintCraters(canvas, size, radius, const Color(0xFFCBD5E1).withValues(alpha: 0.3));
     canvas.restore();
