@@ -268,4 +268,38 @@ void main() {
       expect(bloc.state, loaded);
     });
   });
+
+  group('Sunnah counters in the TasbihBloc', () {
+    test('linking adds once; unlinking removes only an unused counter', () async {
+      final bloc = TasbihBloc(repository: TasbihRepository());
+      addTearDown(bloc.close);
+      Future<TasbihLoaded> next() => bloc.stream.firstWhere((s) => s is TasbihLoaded).then((s) => s as TasbihLoaded);
+
+      bloc.add(LoadTasbihs());
+      var state = await next();
+      final before = state.tasbihs.length;
+
+      bloc.add(const LinkSunnahCounter('sunnah_x', 'La hawla', 33));
+      state = await next();
+      expect(state.byId('sunnah_x')!.targetCount, 33);
+
+      // Linking again (re-adding to practice) doesn't duplicate it.
+      bloc.add(const LinkSunnahCounter('sunnah_x', 'La hawla', 33));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect((bloc.state as TasbihLoaded).tasbihs, hasLength(before + 1));
+
+      bloc.add(const UnlinkSunnahCounter('sunnah_x'));
+      state = await next();
+      expect(state.byId('sunnah_x'), isNull);
+
+      // Once it has been counted, leaving the practice keeps it.
+      bloc.add(const LinkSunnahCounter('sunnah_y', 'Sayyid al-Istighfar', 1));
+      await next();
+      bloc.add(const CounterTapped('sunnah_y'));
+      await next();
+      bloc.add(const UnlinkSunnahCounter('sunnah_y'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect((bloc.state as TasbihLoaded).byId('sunnah_y')!.totalCount, 1);
+    });
+  });
 }

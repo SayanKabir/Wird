@@ -67,6 +67,30 @@ class EditTasbih extends TasbihEvent {
   List<Object> get props => [id, name, target];
 }
 
+/// A counter for a Sunnah the user added to their practice. Does nothing if
+/// the counter is already there.
+class LinkSunnahCounter extends TasbihEvent {
+  final String id;
+  final String name;
+  final int target;
+
+  const LinkSunnahCounter(this.id, this.name, this.target);
+
+  @override
+  List<Object> get props => [id, name, target];
+}
+
+/// The Sunnah left the practice: its counter goes too, unless it was used,
+/// so counts the user built up are never lost.
+class UnlinkSunnahCounter extends TasbihEvent {
+  final String id;
+
+  const UnlinkSunnahCounter(this.id);
+
+  @override
+  List<Object> get props => [id];
+}
+
 abstract class TasbihState extends Equatable {
   const TasbihState();
 

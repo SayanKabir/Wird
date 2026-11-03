@@ -19,6 +19,7 @@ import '../widgets/sunnah_format.dart';
 import '../../../core/constants/radii.dart';
 import '../../../widgets/common/wird_icons.dart';
 import '../../../widgets/common/glass_panel.dart';
+import '../sunnah_practice.dart';
 
 /// The Sunnah tab: this week's sunnah, the few the user has chosen to keep
 /// (ticked off day by day), and the library to choose them from.
@@ -376,7 +377,7 @@ class _WeeklyCard extends StatelessWidget {
                     )
                   else
                     Pressable(
-                      onTap: () => context.read<SunnahBloc>().add(ToggleSunnahPractice(sunnah.id)),
+                      onTap: () => toggleSunnahPractice(context, sunnah, inPractice: false),
                       haptic: PressableHaptic.light,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(10, 14, 10, 14),

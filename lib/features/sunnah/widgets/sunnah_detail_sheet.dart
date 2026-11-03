@@ -13,6 +13,7 @@ import '../../../widgets/common/pressable.dart';
 import '../bloc/sunnah_bloc.dart';
 import 'sunnah_check.dart';
 import 'sunnah_format.dart';
+import '../sunnah_practice.dart';
 import '../../../widgets/common/app_backdrop_filter.dart';
 import '../../../core/constants/radii.dart';
 
@@ -231,7 +232,7 @@ class _Controls extends StatelessWidget {
               onTap: () {
                 SoundService().toggle(!inPractice);
                 HapticService().selection();
-                context.read<SunnahBloc>().add(ToggleSunnahPractice(sunnah.id));
+                toggleSunnahPractice(context, sunnah, inPractice: inPractice);
               },
               trailing: IgnorePointer(
                 child: Switch(

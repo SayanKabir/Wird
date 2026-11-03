@@ -32,6 +32,33 @@ class TasbihBloc extends Bloc<TasbihEvent, TasbihState> {
         ));
     on<AddTasbih>(_onAdd);
     on<DeleteTasbih>(_onDelete);
+    on<LinkSunnahCounter>(_onLinkSunnah);
+    on<UnlinkSunnahCounter>(_onUnlinkSunnah);
+  }
+
+  Future<void> _onLinkSunnah(LinkSunnahCounter event, Emitter<TasbihState> emit) async {
+    final current = state;
+    if (current is TasbihLoaded && current.byId(event.id) != null) return;
+    final created = Tasbih(id: event.id, name: event.name, targetCount: event.target, lastUpdated: DateTime.now());
+    if (current is TasbihLoaded) emit(TasbihLoaded([...current.tasbihs, created]));
+    try {
+      await _repository.saveTasbih(created);
+    } catch (e) {
+      debugPrint('[TasbihBloc] link failed for ${event.id}: $e');
+    }
+  }
+
+  Future<void> _onUnlinkSunnah(UnlinkSunnahCounter event, Emitter<TasbihState> emit) async {
+    final current = state;
+    if (current is! TasbihLoaded) return;
+    final existing = current.byId(event.id);
+    if (existing == null || existing.totalCount > 0) return;
+    emit(TasbihLoaded(current.tasbihs.where((t) => t.id != event.id).toList()));
+    try {
+      await _repository.deleteTasbih(event.id);
+    } catch (e) {
+      debugPrint('[TasbihBloc] unlink failed for ${event.id}: $e');
+    }
   }
 
   Future<void> _onLoad(LoadTasbihs event, Emitter<TasbihState> emit) async {

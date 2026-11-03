@@ -1,3 +1,4 @@
+import '../../models/sunnah.dart';
 import 'quran_passages.dart';
 
 /// One step of a guided session: a dhikr said [count] times before moving on.
@@ -102,6 +103,47 @@ class DhikrCatalog {
   };
 
   static bool isBuiltIn(String id) => builtInCounterIds.contains(id);
+
+  // ─────────────────── Counters from Sunnahs ───────────────────
+
+  static const String _sunnahPrefix = 'sunnah_';
+
+  /// The counter a Sunnah adds to the hub when it joins the user's practice.
+  static String counterIdForSunnah(String sunnahId) => '$_sunnahPrefix$sunnahId';
+
+  /// Dhikr Sunnahs with words of their own and no counter or session yet
+  /// (Sayyid al-Istighfar, La hawla wa la quwwata). The rest already point
+  /// at a built-in counter or a guided session through their tasbihId.
+  static bool sunnahNeedsCounter(Sunnah s) =>
+      s.category == 'Dhikr & Azkar' && s.tasbihId == null && (s.arabic ?? '').trim().isNotEmpty;
+
+  /// "Say Sayyid al-Istighfar morning and evening" → "Sayyid al-Istighfar".
+  static String counterNameForSunnah(Sunnah s) {
+    var name = s.title.replaceFirst(RegExp(r'^Say\s+'), '');
+    name = name.replaceFirst(RegExp(r'\s+(morning|evening|after|before|\d+ times|daily).*$', caseSensitive: false), '');
+    return name.trim().isEmpty ? s.title : name.trim();
+  }
+
+  /// The Sunnah's count if it has one; a short phrase is counted in 33s,
+  /// a long supplication said once.
+  static int counterTargetForSunnah(Sunnah s) =>
+      s.repetitions ?? ((s.arabic ?? '').length <= 60 ? 33 : 1);
+
+  /// Words for a counter that came from a Sunnah, or null for any other id.
+  static CounterText? counterTextFromSunnahs(String counterId, Iterable<Sunnah> sunnahs) {
+    if (!counterId.startsWith(_sunnahPrefix)) return null;
+    final id = counterId.substring(_sunnahPrefix.length);
+    for (final s in sunnahs) {
+      if (s.id != id) continue;
+      return CounterText(
+        arabic: s.arabic ?? '',
+        transliteration: s.transliteration ?? '',
+        translation: s.translation ?? '',
+        virtue: s.virtue.isEmpty ? null : s.virtue,
+      );
+    }
+    return null;
+  }
 
   static const Map<String, CounterText> counterText = {
     'subhanallah': _subhanallah,

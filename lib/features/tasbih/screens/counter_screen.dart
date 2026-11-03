@@ -5,6 +5,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/text_styles.dart';
 import '../../../core/dhikr/dhikr_catalog.dart';
+import '../../../core/repositories/sunnah_repository.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../models/tasbih.dart';
 import '../bloc/tasbih_bloc.dart';
@@ -64,7 +65,8 @@ class _CounterScreenState extends State<CounterScreen> {
   }
 
   Widget _buildCounter(BuildContext context, Tasbih t) {
-    final text = DhikrCatalog.counterText[t.id];
+    final text = DhikrCatalog.counterText[t.id] ??
+        DhikrCatalog.counterTextFromSunnahs(t.id, context.read<SunnahRepository>().getAllSunnahsSync());
     final full = t.isRoundFull;
     final shown = full ? t.targetCount : t.currentCount;
     final caption = full
