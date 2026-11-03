@@ -816,19 +816,18 @@ class _Sun extends StatelessWidget {
   }
 }
 
-/// The moon as a lit sphere: the terminator follows the true ellipse for the
-/// phase and is softened like the real shadow line, the maria sit where they
-/// are on the near side, the limb darkens a little, and a round halo grows
-/// with the light. Waxing moons are lit on the right, waning on the left;
-/// callers rotate it to face the sun. Also used on the verse share card.
+/// The moon in the app's flat style: a pale lit shape with soft craters and
+/// a glow, and a quiet dark side so every phase reads as one round moon
+/// rather than a shape cut from the sky. Waxing moons are lit on the right,
+/// waning on the left; callers rotate it to face the sun. Also used on the
+/// verse share card.
 class MoonPainter extends CustomPainter {
   final double phaseValue; // 0.0 = new, 0.5 = full, 1.0 = new
   final Color moonColor;
   final Color glowColor;
 
-  /// 0..1: how dark the sky is. At night the unlit part of a crescent shows
-  /// faintly by sunlight bounced off the Earth, and a halo spreads around the
-  /// moon that grows with its phase.
+  /// 0..1: how dark the sky is. At night the dark side shows more and a halo
+  /// spreads around the moon that grows with its phase.
   final double earthshine;
 
   MoonPainter({
@@ -838,23 +837,19 @@ class MoonPainter extends CustomPainter {
     this.earthshine = 0,
   });
 
-  /// The large dark plains as seen from the northern hemisphere, in units of
-  /// the radius: (x, y, width, height). Procellarum, Imbrium, Serenitatis,
-  /// Tranquillitatis, Crisium, Nubium, Fecunditatis.
-  static const List<(double, double, double, double)> _maria = [
-    (-0.5, 0.0, 0.42, 0.78),
-    (-0.24, -0.36, 0.42, 0.36),
-    (0.16, -0.36, 0.26, 0.24),
-    (0.3, -0.04, 0.34, 0.3),
-    (0.64, -0.22, 0.16, 0.2),
-    (-0.14, 0.36, 0.3, 0.24),
-    (0.5, 0.2, 0.18, 0.24),
+  /// Soft craters, as fractions of the moon's size: (x, y, radius).
+  static const List<(double, double, double)> _craters = [
+    (0.3, 0.4, 0.25),
+    (0.65, 0.6, 0.16),
+    (0.5, 0.25, 0.12),
+    (0.8, 0.35, 0.08),
   ];
 
   /// The sunlit part of the disc. Its outer edge is the limb on the lit side;
-  /// its inner edge, the terminator, is a half-ellipse whose width runs from
-  /// the limb itself at new moon, through a straight line at the quarters, to
-  /// the opposite limb at full.
+  /// its inner edge, the terminator, is one smooth half-ellipse whose width
+  /// runs from the limb itself at new moon, through a straight line at the
+  /// quarters, to the opposite limb at full. (It used to be pieced from arcs
+  /// that changed form near the quarters, which looked like a cutout.)
   @visibleForTesting
   static Path litPath(double phaseValue, Offset center, double radius) {
     final side = phaseValue <= 0.5 ? 1.0 : -1.0;
@@ -876,78 +871,70 @@ class MoonPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
-    final radius = size.shortestSide / 2;
-    final disc = Rect.fromCircle(center: center, radius: radius);
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2;
     final illumination = (1 - math.cos(phaseValue * 2 * math.pi)) / 2;
 
-    // A round halo, wider and brighter as more of the moon is lit.
-    final haloRadius = radius * (1.3 + illumination * 0.9);
-    final haloAlpha = glowColor.a * (0.15 + 0.5 * illumination);
-    canvas.drawCircle(
-      center,
-      haloRadius,
-      Paint()
-        ..shader = RadialGradient(
-          colors: [glowColor.withValues(alpha: haloAlpha), glowColor.withValues(alpha: 0)],
-          stops: [radius / haloRadius, 1],
-        ).createShader(Rect.fromCircle(center: center, radius: haloRadius)),
-    );
-
-    canvas.save();
-    canvas.clipPath(Path()..addOval(disc));
-
-    // Earthshine: on a crescent the dark side shows faintly, maria and all.
-    final shine = (1 - illumination / 0.45).clamp(0.0, 1.0) * earthshine;
-    if (shine > 0) {
-      canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF8C9BBE).withValues(alpha: 0.13 * shine));
-      _paintMaria(canvas, center, radius, const Color(0xFF0B1026).withValues(alpha: 0.35 * shine));
+    if (earthshine > 0) {
+      final haloRadius = radius * (2.2 + illumination * 2.5);
+      canvas.drawCircle(
+        center,
+        haloRadius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              const Color(0xFFDCE6FF).withValues(alpha: (0.03 + 0.07 * illumination) * earthshine),
+              const Color(0x00DCE6FF),
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: haloRadius)),
+      );
     }
 
-    // The sunlit part, on its own layer so shading lands only on it.
-    canvas.saveLayer(disc.inflate(2), Paint());
+    // The dark side: a flat, quiet disc with a hairline rim, so a half moon
+    // is the lit half of a round moon. Clearer at night, fainter by day.
+    final dark = (0.35 + 0.65 * earthshine) * (1 - illumination * 0.6);
+    canvas.drawCircle(center, radius, Paint()..color = const Color(0xFF94A3C8).withValues(alpha: 0.16 * dark));
+    _paintCraters(canvas, size, radius, const Color(0xFFCBD5E1).withValues(alpha: 0.05 * dark));
+    canvas.drawCircle(
+      center,
+      radius - 0.5,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = const Color(0xFFDCE6FF).withValues(alpha: 0.14 * dark),
+    );
+
+    final moonPath = litPath(phaseValue, center, radius);
+
+    // Glow behind the lit part.
     canvas.drawPath(
-      litPath(phaseValue, center, radius),
+      moonPath,
+      Paint()
+        ..color = glowColor
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+    );
+
+    // The lit part, with the shadow line feathered a touch so it reads as
+    // light falling away rather than a cut. The disc clip keeps the outer
+    // edge crisp.
+    canvas.save();
+    canvas.clipPath(Path()..addOval(Rect.fromCircle(center: center, radius: radius)));
+    canvas.drawPath(
+      moonPath,
       Paint()
         ..color = moonColor
-        // A soft terminator, less so on a thin crescent so it stays
-        // bright; the clip keeps the limb itself crisp.
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.05 * (0.3 + 0.7 * math.min(1.0, illumination * 4))),
+        // Less on a thin crescent, so it stays bright.
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.035 * (0.3 + 0.7 * math.min(1.0, illumination * 4))),
     );
-    _paintMaria(canvas, center, radius, const Color(0xFF7F8CA6).withValues(alpha: 0.5), blend: BlendMode.srcATop);
-    // Tycho's bright rays near the bottom.
-    canvas.drawCircle(
-      center + Offset(-0.1, 0.66) * radius,
-      radius * 0.05,
-      Paint()
-        ..color = Colors.white.withValues(alpha: 0.7)
-        ..blendMode = BlendMode.srcATop
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.04),
-    );
-    // Limb darkening: a sphere dims a little toward its edge.
-    canvas.drawRect(
-      disc,
-      Paint()
-        ..blendMode = BlendMode.srcATop
-        ..shader = RadialGradient(
-          colors: [Colors.transparent, const Color(0xFF1E293B).withValues(alpha: 0.28)],
-          stops: const [0.62, 1],
-        ).createShader(disc),
-    );
-    canvas.restore();
+    canvas.clipPath(moonPath);
+    _paintCraters(canvas, size, radius, const Color(0xFFCBD5E1).withValues(alpha: 0.3));
     canvas.restore();
   }
 
-  static void _paintMaria(Canvas canvas, Offset center, double radius, Color color, {BlendMode? blend}) {
-    final paint = Paint()
-      ..color = color
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.075);
-    if (blend != null) paint.blendMode = blend;
-    for (final (x, y, w, h) in _maria) {
-      canvas.drawOval(
-        Rect.fromCenter(center: center + Offset(x, y) * radius, width: w * radius, height: h * radius),
-        paint,
-      );
+  static void _paintCraters(Canvas canvas, Size size, double radius, Color color) {
+    final paint = Paint()..color = color;
+    for (final (x, y, r) in _craters) {
+      canvas.drawCircle(Offset(size.width * x, size.height * y), radius * r, paint);
     }
   }
 
