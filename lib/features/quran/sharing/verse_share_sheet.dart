@@ -813,7 +813,7 @@ class VerseShareCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const _WirdMark(size: 26),
+                    _WirdMark(size: 26, asset: background.iconAsset),
                     const SizedBox(width: 8),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -886,26 +886,18 @@ class _Rule extends StatelessWidget {
   }
 }
 
-/// The Wird app icon. wird2.png has a dark backdrop around the icon tile, so
-/// it's scaled up and clipped to show just the tile.
+/// The Wird app icon, in the version drawn for the card's time of day.
 class _WirdMark extends StatelessWidget {
   final double size;
+  final String asset;
 
-  const _WirdMark({required this.size});
+  const _WirdMark({required this.size, required this.asset});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(size * 0.24),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: OverflowBox(
-          maxWidth: size * 2.1,
-          maxHeight: size * 2.1,
-          child: Image.asset('assets/wird2.png', width: size * 2.1, height: size * 2.1, fit: BoxFit.cover),
-        ),
-      ),
+      child: Image.asset(asset, width: size, height: size, fit: BoxFit.cover),
     );
   }
 }

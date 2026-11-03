@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/colors.dart';
 import '../../../core/services/prayer_service.dart' show PrayerPeriod;
+import '../../../core/utils/moon_phase_utils.dart';
+import '../../home/widgets/celestial_background.dart' show MoonPainter;
 
 /// What sits in the sky behind the text.
 enum ShareGlow { none, sun, moon }
@@ -35,6 +37,22 @@ class ShareBackground {
   });
 
   bool get isNight => glow == ShareGlow.moon || period == PrayerPeriod.fajr;
+
+  /// The app icon drawn for the same time of day (assets/icon/thumbs).
+  String get iconAsset {
+    final name = switch (period) {
+      PrayerPeriod.tahajjud || PrayerPeriod.isha => 'isha',
+      PrayerPeriod.fajr || PrayerPeriod.sunrise => 'fajr',
+      PrayerPeriod.dhuhr => 'dhuhr',
+      PrayerPeriod.asr => 'asr',
+      PrayerPeriod.maghrib => 'maghrib',
+    };
+    return 'assets/icon/thumbs/$name.png';
+  }
+
+  /// Sun low on the horizon: warm light along the bottom, as on the
+  /// dashboard at sunrise and sunset.
+  bool get horizonGlow => period == PrayerPeriod.fajr || period == PrayerPeriod.sunrise || period == PrayerPeriod.maghrib;
 
   static ShareBackground forPeriod(PrayerPeriod period) => all.firstWhere((b) => b.period == period);
 
@@ -145,6 +163,22 @@ class ShareSky extends StatelessWidget {
           ),
         ),
         if (background.stars && !weather.overcast) const CustomPaint(painter: _StarsPainter()),
+        if (background.horizonGlow && weather.glowStrength > 0)
+          Positioned(
+            left: -80,
+            right: -80,
+            bottom: -160,
+            height: 320,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(colors: [
+                  const Color(0xFFFFB46B).withValues(alpha: 0.28 * weather.glowStrength),
+                  Colors.transparent,
+                ]),
+              ),
+            ),
+          ),
         if (background.glow != ShareGlow.none && weather.glowStrength > 0)
           Positioned(
             top: -70,
@@ -159,6 +193,37 @@ class ShareSky extends StatelessWidget {
                   Colors.transparent,
                 ]),
               ),
+            ),
+          ),
+        // The sun or tonight's moon itself, in the glow, like the dashboard
+        // sky. Clouds and mist dim it. At dawn and dusk the sun is on the
+        // horizon, which the low glow already shows.
+        if (background.glow != ShareGlow.none && weather.glowStrength > 0 && !background.horizonGlow)
+          Positioned(
+            top: 20,
+            right: 26,
+            width: 28,
+            height: 28,
+            child: Opacity(
+              opacity: weather.glowStrength.clamp(0.0, 1.0),
+              child: background.glow == ShareGlow.sun
+                  ? DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFFFE7A8),
+                        boxShadow: [
+                          BoxShadow(color: const Color(0xFFFFC870).withValues(alpha: 0.7), blurRadius: 28, spreadRadius: 6),
+                        ],
+                      ),
+                    )
+                  : CustomPaint(
+                      painter: MoonPainter(
+                        phaseValue: MoonPhaseUtils.getPhaseValue(DateTime.now()),
+                        moonColor: const Color(0xFFF1F5F9),
+                        glowColor: const Color(0x66E2E8F0),
+                        earthshine: 1,
+                      ),
+                    ),
             ),
           ),
         ..._weatherLayers(),

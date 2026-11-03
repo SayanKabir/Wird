@@ -465,7 +465,7 @@ class _CelestialBackgroundState extends State<CelestialBackground>
                   child: Transform.rotate(
                     angle: phase <= 0.5 ? toSun : toSun - math.pi,
                     child: CustomPaint(
-                      painter: _MoonPainter(
+                      painter: MoonPainter(
                         phaseValue: phase,
                         moonColor: const Color(0xFFF8FAFC),
                         glowColor: Colors.white.withValues(
@@ -649,7 +649,7 @@ class _CelestialBody extends StatelessWidget {
           ? Transform.rotate(
               angle: tiltAngle,
               child: CustomPaint(
-                painter: _MoonPainter(
+                painter: MoonPainter(
                   phaseValue: phaseValue,
                   moonColor: moonColor,
                   glowColor: glowColor,
@@ -816,8 +816,9 @@ class _Sun extends StatelessWidget {
   }
 }
 
-/// Moon phase painter — draws proper crescent/gibbous shape with matching glow
-class _MoonPainter extends CustomPainter {
+/// Moon phase painter — draws proper crescent/gibbous shape with matching glow.
+/// Also used for the moon on the verse share card.
+class MoonPainter extends CustomPainter {
   final double phaseValue; // 0.0 = new, 0.5 = full, 1.0 = new
   final Color moonColor;
   final Color glowColor;
@@ -827,7 +828,7 @@ class _MoonPainter extends CustomPainter {
   /// moon that grows with its phase.
   final double earthshine;
 
-  _MoonPainter({
+  MoonPainter({
     required this.phaseValue,
     required this.moonColor,
     required this.glowColor,
@@ -943,7 +944,7 @@ class _MoonPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MoonPainter oldDelegate) =>
+  bool shouldRepaint(covariant MoonPainter oldDelegate) =>
       oldDelegate.phaseValue != phaseValue ||
       oldDelegate.glowColor != glowColor ||
       oldDelegate.earthshine != earthshine;
