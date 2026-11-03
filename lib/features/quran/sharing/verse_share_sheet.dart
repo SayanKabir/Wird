@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:gal/gal.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -391,7 +392,9 @@ class VerseImagePreview extends StatefulWidget {
 
 class _VerseImagePreviewState extends State<VerseImagePreview> {
   final GlobalKey _cardKey = GlobalKey();
-  bool _busy = false;
+
+  /// What's in progress, if anything: 'share' or 'save'.
+  String? _busy;
   late ShareBackground _background;
   ShareWeather _weather = _lastWeather;
 
@@ -417,21 +420,27 @@ class _VerseImagePreviewState extends State<VerseImagePreview> {
     setState(() => _weather = w);
   }
 
+  /// The card as a PNG, 3× the 360pt card: 1080px wide, the usual size
+  /// for chats, stories and galleries.
+  Future<Uint8List> _renderPng() async {
+    final boundary = _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 3);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    image.dispose();
+    return bytes!.buffer.asUint8List();
+  }
+
+  String get _fileStem => 'quran-${widget.share.reference.replaceAll(RegExp(r'[^0-9]+'), '-')}';
+
   Future<void> _share() async {
-    if (_busy) return;
-    setState(() => _busy = true);
+    if (_busy != null) return;
+    setState(() => _busy = 'share');
     HapticService().medium();
     try {
-      final boundary = _cardKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      // 3× the 360pt card → a 1080px-wide image, the usual size for chats
-      // and stories.
-      final image = await boundary.toImage(pixelRatio: 3);
-      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
+      final png = await _renderPng();
       final dir = await getTemporaryDirectory();
-      final ref = widget.share.reference.replaceAll(RegExp(r'[^0-9]+'), '-');
-      final file = File('${dir.path}/quran-$ref.png');
-      await file.writeAsBytes(bytes!.buffer.asUint8List(), flush: true);
+      final file = File('${dir.path}/$_fileStem.png');
+      await file.writeAsBytes(png, flush: true);
       await SharePlus.instance.share(ShareParams(
         files: [XFile(file.path, mimeType: 'image/png')],
         text: 'Quran, ${widget.share.title}\n${widget.share.link}',
@@ -442,7 +451,46 @@ class _VerseImagePreviewState extends State<VerseImagePreview> {
         GlassSnackBar.show(context, message: 'Couldn\'t create the image', isError: true);
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() => _busy = null);
+    }
+  }
+
+  /// Album the saved images go into, in Photos on iOS and the gallery on
+  /// Android (Pictures/Wird).
+  static const String _album = 'Wird';
+
+  Future<void> _save() async {
+    if (_busy != null) return;
+    setState(() => _busy = 'save');
+    HapticService().medium();
+    String? error;
+    try {
+      if (!await Gal.hasAccess(toAlbum: true) && !await Gal.requestAccess(toAlbum: true)) {
+        error = 'Allow Wird to add photos to save the image';
+      } else {
+        await Gal.putImageBytes(await _renderPng(), album: _album, name: _fileStem);
+      }
+    } on GalException catch (e) {
+      error = switch (e.type) {
+        GalExceptionType.accessDenied => 'Allow Wird to add photos to save the image',
+        GalExceptionType.notEnoughSpace => 'Not enough space to save the image',
+        _ => 'Couldn\'t save the image',
+      };
+    } catch (_) {
+      error = 'Couldn\'t save the image';
+    }
+    if (!mounted) return;
+    setState(() => _busy = null);
+    if (error != null) {
+      GlassSnackBar.show(context, message: error, isError: true);
+    } else {
+      HapticService().light();
+      GlassSnackBar.show(
+        context,
+        message: 'Saved to the Wird album',
+        icon: Icons.check_circle_rounded,
+        action: SnackBarAction(label: 'Open', onPressed: () => Gal.open()),
+      );
     }
   }
 
@@ -537,21 +585,41 @@ class _VerseImagePreviewState extends State<VerseImagePreview> {
                   const SizedBox(height: 10),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _busy ? null : _share,
-                        icon: _busy
-                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                            : const Icon(Icons.ios_share_rounded, size: 18),
-                        label: Text(_busy ? 'Preparing…' : 'Share image'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.spiritualGold,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _busy != null ? null : _save,
+                            icon: _busy == 'save'
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.download_rounded, size: 18),
+                            label: Text(_busy == 'save' ? 'Saving…' : 'Save'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(color: Colors.white.withValues(alpha: 0.25)),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 2,
+                          child: ElevatedButton.icon(
+                            onPressed: _busy != null ? null : _share,
+                            icon: _busy == 'share'
+                                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                                : const Icon(Icons.ios_share_rounded, size: 18),
+                            label: Text(_busy == 'share' ? 'Preparing…' : 'Share image'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.spiritualGold,
+                              foregroundColor: Colors.black,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Wird saves the Quran images you create to your photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Wird keeps the Quran images you save together in a Wird album.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Wird uses your location to work out accurate prayer times and the Qibla direction.</string>
 	<key>UIApplicationSceneManifest</key>
