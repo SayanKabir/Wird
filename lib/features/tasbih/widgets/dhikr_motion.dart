@@ -14,10 +14,12 @@ import '../../../core/constants/durations.dart';
 /// The fold only applies on a side that has more content beyond it, so text
 /// at rest (scrolled to the top, or too short to scroll) sits flat.
 ///
-/// The fold costs an offscreen layer per word, so with lighter visuals the
-/// edges with more content get a single gradient mask instead: text still
-/// fades rather than ending in a hard cut, and the scroll keeps its bounce
-/// (which only stops when the system asks for no animation).
+/// The fade is one gradient mask over the whole view, on the edges that have
+/// more content; the tilt is a plain transform per word. (Each word used to
+/// fade in its own offscreen layer, dozens of them redrawn every frame of a
+/// scroll, which stuttered on long passages.) With lighter visuals the words
+/// stay flat and only the fade remains. The scroll keeps its bounce, which
+/// only stops when the system asks for no animation.
 ///
 /// Wrap text in [FoldText] (or single widgets in [Fold]) to take part: each
 /// word folds on its own, so a long paragraph curls away line by line.
@@ -32,7 +34,7 @@ class FoldingScrollView extends StatefulWidget {
 }
 
 class _FoldingScrollViewState extends State<FoldingScrollView> {
-  static const double _fade = 36;
+  static const double _fade = 40;
 
   final ScrollController _controller = ScrollController();
   bool _moreAbove = false;
@@ -66,14 +68,13 @@ class _FoldingScrollViewState extends State<FoldingScrollView> {
       padding: widget.padding,
       child: widget.child,
     );
-    if (mode == MotionMode.full) return _FoldScope(controller: _controller, child: scroll);
 
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: (n) => _onMetrics(n.metrics),
       child: NotificationListener<ScrollNotification>(
         onNotification: (n) => _onMetrics(n.metrics),
         child: _FoldScope(
-          controller: null,
+          controller: mode == MotionMode.full ? _controller : null,
           child: ShaderMask(
             blendMode: BlendMode.dstIn,
             shaderCallback: (rect) {
@@ -167,8 +168,8 @@ class FoldText extends StatelessWidget {
   }
 }
 
-/// Folds its child back and fades it as it nears an edge of the enclosing
-/// [FoldingScrollView]. Outside one it does nothing.
+/// Folds its child back as it nears an edge of the enclosing
+/// [FoldingScrollView] (which fades it). Outside one it does nothing.
 class Fold extends SingleChildRenderObjectWidget {
   const Fold({super.key, super.child});
 
@@ -237,11 +238,9 @@ class RenderFold extends RenderProxyBox {
       ..rotateX(side * _maxTilt * t)
       ..scaleByDouble(1 - 0.12 * t, 1 - 0.12 * t, 1, 1)
       ..translateByDouble(-pivot.dx, -pivot.dy, 0, 1);
-    final alpha = ((1 - t) * 255).round().clamp(0, 255);
-
-    context.pushOpacity(offset, alpha, (context, offset) {
-      context.pushTransform(needsCompositing, offset, transform, (context, offset) => context.paintChild(c, offset));
-    });
+    // The fade comes from the view's mask; here only the tilt, which needs
+    // no layer of its own.
+    context.pushTransform(needsCompositing, offset, transform, (context, offset) => context.paintChild(c, offset));
   }
 }
 
