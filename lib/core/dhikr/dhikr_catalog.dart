@@ -87,6 +87,15 @@ class DhikrCatalog {
     'astaghfirullah',
     'la_ilaha_illallah',
     'salawat',
+    'subhanallahi_wa_bihamdihi',
+    'subhanallahil_azeem',
+    'la_hawla',
+    'hasbunallah',
+    'dua_yunus',
+    // From the starting practice, so it's here from day one.
+    'sayyid_istighfar',
+    'leaving_home',
+    'bismillah',
   ];
 
   /// Ids the old Tasbih stored that are now session steps, not counters.
@@ -160,6 +169,54 @@ class DhikrCatalog {
       transliteration: 'La ilaha illAllahu wahdahu la sharika lah',
       translation: 'There is no god but Allah alone, with no partner.',
       virtue: 'Said 100 times: the reward of freeing ten slaves and protection from Shaytan. (Bukhari 3293)',
+    ),
+    'subhanallahi_wa_bihamdihi': CounterText(
+      arabic: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ',
+      transliteration: 'SubhanAllahi wa bihamdihi',
+      translation: 'Glory be to Allah, and praise be to Him.',
+      virtue: 'Said 100 times a day, sins are forgiven even if they are like the foam of the sea. (Bukhari 6405)',
+    ),
+    'subhanallahil_azeem': CounterText(
+      arabic: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ سُبْحَانَ اللَّهِ الْعَظِيمِ',
+      transliteration: "SubhanAllahi wa bihamdihi, SubhanAllahil 'Azeem",
+      translation: 'Glory be to Allah, and praise be to Him. Glory be to Allah, the Magnificent.',
+      virtue: 'Two words light on the tongue, heavy on the scale, beloved to the Most Merciful. (Bukhari 6406)',
+    ),
+    'la_hawla': CounterText(
+      arabic: 'لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ',
+      transliteration: 'La hawla wa la quwwata illa billah',
+      translation: 'There is no might nor power except with Allah.',
+      virtue: 'A treasure from the treasures of Paradise. (Bukhari 6384)',
+    ),
+    'hasbunallah': CounterText(
+      arabic: 'حَسْبُنَا اللَّهُ وَنِعْمَ الْوَكِيلُ',
+      transliteration: "Hasbunallahu wa ni'mal wakeel",
+      translation: 'Allah is enough for us, and He is the best to rely on.',
+      virtue: 'Said by Ibrahim when he was thrown into the fire, and by the Prophet ﷺ and his companions. (Quran 3:173, Bukhari 4563)',
+    ),
+    'dua_yunus': CounterText(
+      arabic: 'لَا إِلَهَ إِلَّا أَنْتَ سُبْحَانَكَ إِنِّي كُنْتُ مِنَ الظَّالِمِينَ',
+      transliteration: 'La ilaha illa anta, subhanaka, inni kuntu minaz-zalimeen',
+      translation: 'There is no god but You. Glory be to You. I have been among the wrongdoers.',
+      virtue: 'No Muslim calls on his Lord with it for anything but that He answers him. (Quran 21:87, Tirmidhi 3505)',
+    ),
+    'sayyid_istighfar': CounterText(
+      arabic: _sayyidArabic,
+      transliteration: _sayyidTranslit,
+      translation: _sayyidTranslation,
+      virtue: 'Whoever says it in the day with certainty and dies before evening is among the people of Paradise; likewise at night. (Bukhari 6306)',
+    ),
+    'leaving_home': CounterText(
+      arabic: 'بِسْمِ اللَّهِ تَوَكَّلْتُ عَلَى اللَّهِ وَلَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ',
+      transliteration: 'Bismillah, tawakkaltu ala Allah, wa la hawla wa la quwwata illa billah',
+      translation: 'In the name of Allah, I place my trust in Allah, and there is no might nor power except with Allah.',
+      virtue: 'Whoever says it on leaving home is told: you are guided, defended and protected. (Abu Dawud 5095)',
+    ),
+    'bismillah': CounterText(
+      arabic: 'بِسْمِ اللَّهِ',
+      transliteration: 'Bismillah',
+      translation: 'In the name of Allah. If you forget at the start: Bismillahi awwalahu wa akhirahu.',
+      virtue: 'Mention the name of Allah before eating, and barakah comes into the food. (Bukhari 5376, Abu Dawud 3767)',
     ),
     'salawat': CounterText(
       arabic: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ',

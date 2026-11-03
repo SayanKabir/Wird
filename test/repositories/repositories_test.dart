@@ -174,6 +174,30 @@ void main() {
       expect(second, hasLength(first.length));
     });
 
+    test('all built-in counters are there, in catalog order in the hub', () async {
+      await repo.init();
+      final visible = TasbihRepository.visibleCounters(await repo.getAllTasbihs()).map((t) => t.id).toList();
+      expect(visible, DhikrCatalog.builtInCounterIds);
+    });
+
+    test('a counter an earlier build made for a Sunnah folds into its built-in', () async {
+      await repo.init();
+      final box = await Hive.openBox<Tasbih>('tasbihBox');
+      final now = DateTime.now();
+      const oldId = 'sunnah_dhikr_azkar_say_sayyid_al_istighfar_morning_and_evening';
+      await box.put(oldId, Tasbih(id: oldId, name: 'Sayyid al-Istighfar', targetCount: 1, lastUpdated: now).tallied(4, now: now));
+
+      final all = await repo.getAllTasbihs();
+      expect(all.any((t) => t.id == oldId), isFalse);
+      final sayyid = all.firstWhere((t) => t.id == 'sayyid_istighfar');
+      expect(sayyid.totalCount, 4);
+      expect(sayyid.todayCount(now: now), 4);
+      expect(sayyid.targetCount, 1);
+
+      // Runs once: nothing left to fold the next time.
+      expect((await repo.getAllTasbihs()).firstWhere((t) => t.id == 'sayyid_istighfar').totalCount, 4);
+    });
+
     test('save and delete', () async {
       await repo.init();
       final t = Tasbih(id: 'custom_1', name: 'Mine', targetCount: 7, lastUpdated: DateTime(2026));

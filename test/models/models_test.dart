@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wird2/core/dhikr/dhikr_catalog.dart';
+import 'package:wird2/core/repositories/practice_ids.dart';
 import 'package:wird2/core/repositories/sunnah_repository.dart';
 import 'package:wird2/core/repositories/tasbih_repository.dart';
 import 'package:wird2/models/prayer.dart';
@@ -261,37 +262,61 @@ void main() {
 
   group('Sunnah dhikr counters', () {
     final sunnahs = SunnahRepository().getAllSunnahsSync();
-    Sunnah byTitle(String t) => sunnahs.firstWhere((s) => s.title.startsWith(t));
+    Sunnah byId(String id) => sunnahs.firstWhere((s) => s.id == id);
 
-    test('only dhikr with words of their own and no counter get one', () {
-      final linked = sunnahs.where(DhikrCatalog.sunnahNeedsCounter).map((s) => s.title).toList();
-      expect(linked, contains(startsWith('Say Sayyid al-Istighfar')));
-      expect(linked, contains(startsWith('Say La hawla')));
-      // Already a built-in counter or a guided session.
-      expect(DhikrCatalog.sunnahNeedsCounter(byTitle('Istighfar 100 times')), isFalse);
-      expect(DhikrCatalog.sunnahNeedsCounter(byTitle('Complete Morning Azkar')), isFalse);
+    test('the starting practice\'s dhikr are built-in counters, linked from their Sunnah', () {
+      for (final (sunnahId, counterId) in [
+        (PracticeIds.sayyidIstighfar, 'sayyid_istighfar'),
+        (PracticeIds.leavingHomeDua, 'leaving_home'),
+        (PracticeIds.bismillah, 'bismillah'),
+      ]) {
+        final s = byId(sunnahId);
+        expect(s.tasbihId, counterId);
+        expect(DhikrCatalog.isBuiltIn(counterId), isTrue);
+        expect(DhikrCatalog.counterText[counterId]!.arabic, isNotEmpty);
+        // Already a built-in, so joining the practice adds no extra counter.
+        expect(DhikrCatalog.sunnahNeedsCounter(s), isFalse);
+      }
     });
 
-    test('names, targets and words come from the sunnah', () {
-      final sayyid = byTitle('Say Sayyid al-Istighfar');
-      final hawla = byTitle('Say La hawla');
-      expect(DhikrCatalog.counterNameForSunnah(sayyid), 'Sayyid al-Istighfar');
-      expect(DhikrCatalog.counterNameForSunnah(hawla), 'La hawla wa la quwwata illa billah');
-      expect(DhikrCatalog.counterTargetForSunnah(sayyid), 1);
-      expect(DhikrCatalog.counterTargetForSunnah(hawla), 33);
-
-      final id = DhikrCatalog.counterIdForSunnah(hawla.id);
-      final text = DhikrCatalog.counterTextFromSunnahs(id, sunnahs)!;
-      expect(text.arabic, hawla.arabic);
-      expect(text.translation, hawla.translation);
-      expect(DhikrCatalog.counterTextFromSunnahs('subhanallah', sunnahs), isNull);
+    test('every built-in counter has its words, and every linked Sunnah a real counter', () {
+      for (final id in DhikrCatalog.builtInCounterIds) {
+        final text = DhikrCatalog.counterText[id];
+        expect(text, isNotNull, reason: id);
+        expect(text!.arabic.trim(), isNotEmpty, reason: id);
+        expect(text.transliteration.trim(), isNotEmpty, reason: id);
+        expect(text.translation.trim(), isNotEmpty, reason: id);
+      }
+      for (final s in sunnahs.where((s) => s.tasbihId != null)) {
+        final opensSession = DhikrCatalog.sessionForSunnah(tasbihId: s.tasbihId, title: s.title) != null;
+        expect(opensSession || DhikrCatalog.isBuiltIn(s.tasbihId!), isTrue, reason: s.title);
+      }
     });
 
-    test('a sunnah counter shows in the hub with the custom ones', () {
-      final hawla = byTitle('Say La hawla');
-      final counter = Tasbih(id: DhikrCatalog.counterIdForSunnah(hawla.id), name: 'La hawla', lastUpdated: DateTime(2026));
-      final visible = TasbihRepository.visibleCounters([counter]).map((t) => t.id);
-      expect(visible, contains(counter.id));
+    test('a dhikr Sunnah without a counter still gets one from its own words', () {
+      const s = Sunnah(
+        id: 'dhikr_azkar_say_something_new_morning_and_evening',
+        title: 'Say Something new morning and evening',
+        category: 'Dhikr & Azkar',
+        difficulty: SunnahDifficulty.easy,
+        frequency: SunnahFrequency.daily,
+        description: '',
+        arabic: 'سُبْحَانَ رَبِّيَ الْعَظِيمِ',
+        transliteration: "Subhana Rabbiyal 'Azeem",
+        translation: 'Glory be to my Lord, the Magnificent.',
+        virtue: 'v',
+        reference: {},
+        tips: [],
+        relatedSunnahs: [],
+      );
+      expect(DhikrCatalog.sunnahNeedsCounter(s), isTrue);
+      expect(DhikrCatalog.counterNameForSunnah(s), 'Something new');
+      expect(DhikrCatalog.counterTargetForSunnah(s), 33);
+      final id = DhikrCatalog.counterIdForSunnah(s.id);
+      expect(DhikrCatalog.counterTextFromSunnahs(id, [s])!.arabic, s.arabic);
+      expect(DhikrCatalog.counterTextFromSunnahs('subhanallah', [s]), isNull);
+      final counter = Tasbih(id: id, name: 'Something new', lastUpdated: DateTime(2026));
+      expect(TasbihRepository.visibleCounters([counter]).map((t) => t.id), contains(id));
     });
   });
 }

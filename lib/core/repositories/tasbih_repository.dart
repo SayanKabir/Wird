@@ -14,6 +14,21 @@ class TasbihRepository {
     'astaghfirullah': ('Astaghfirullah', 100),
     'la_ilaha_illallah': ('La ilaha illallah', 100),
     'salawat': ('Salawat', 100),
+    'subhanallahi_wa_bihamdihi': ('SubhanAllahi wa bihamdihi', 100),
+    'subhanallahil_azeem': ("SubhanAllahil 'Azeem", 33),
+    'la_hawla': ('La hawla wa la quwwata', 33),
+    'hasbunallah': ('Hasbunallah', 33),
+    'dua_yunus': ('Dua of Yunus', 33),
+    'sayyid_istighfar': ('Sayyid al-Istighfar', 1),
+    'leaving_home': ('Leaving home', 1),
+    'bismillah': ('Bismillah', 1),
+  };
+
+  /// Counters an earlier build made from a Sunnah in the practice, before
+  /// these became built-ins. Their counts move across and they're removed.
+  static const Map<String, String> _foldedIntoBuiltIns = {
+    'sunnah_dhikr_azkar_say_sayyid_al_istighfar_morning_and_evening': 'sayyid_istighfar',
+    'sunnah_dhikr_azkar_say_la_hawla_wa_la_quwwata_illa_billah': 'la_hawla',
   };
 
   Future<Box<Tasbih>> _getBox() async {
@@ -35,6 +50,23 @@ class TasbihRepository {
   Future<List<Tasbih>> getAllTasbihs() async {
     final box = await _getBox();
     final now = DateTime.now();
+    for (final entry in _foldedIntoBuiltIns.entries) {
+      final old = box.get(entry.key);
+      if (old == null) continue;
+      final current = box.get(entry.value);
+      final (name, target) = _builtIns[entry.value]!;
+      await box.put(
+        entry.value,
+        current == null
+            ? old.copyWith(id: entry.value, name: name, targetCount: target, currentCount: 0, completedRounds: 0)
+            : current.copyWith(
+                totalCount: current.totalCount + old.totalCount,
+                dayCount: current.todayCount(now: now) + old.todayCount(now: now),
+                todayKey: Tasbih.dateKey(now),
+              ),
+      );
+      await box.delete(entry.key);
+    }
     for (final entry in _builtIns.entries) {
       if (!box.containsKey(entry.key)) {
         await box.put(
