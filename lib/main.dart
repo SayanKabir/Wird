@@ -33,6 +33,8 @@ import 'models/quran_progress.dart';
 import 'core/services/device_profile.dart';
 import 'core/services/app_icon_service.dart';
 import 'widgets/common/athan_cue_caption.dart';
+import 'core/dhikr/dhikr_catalog.dart';
+import 'core/notifications/reminder_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -89,6 +91,17 @@ void main() async {
 
   await DeepLinkService(navigatorKey: navigatorKey, quranRepository: quranRepository).init();
 
+  // Reminder taps open their screen: while running, or once the first frame
+  // is up when a tap launched the app.
+  NotificationService.onOpenTarget =
+      (target) => openReminderTarget(target, navigator: navigatorKey.currentState, quran: quranRepository);
+  final launchTarget = await notificationService.launchTarget();
+  if (launchTarget != null) {
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => openReminderTarget(launchTarget, navigator: navigatorKey.currentState, quran: quranRepository),
+    );
+  }
+
   runApp(WirdApp(
     sunnahRepository: sunnahRepository,
     quranRepository: quranRepository,
@@ -139,7 +152,22 @@ class WirdApp extends StatelessWidget {
           )..add(LoadSurahs()),
         ),
       ],
-      child: MaterialApp(
+      // The starting practice can include dhikr with words of their own
+      // (Sayyid al-Istighfar); give those their counter on the dhikr page.
+      child: BlocListener<SunnahBloc, SunnahState>(
+        listenWhen: (previous, current) => current is SunnahLoaded && current.seeded.isNotEmpty,
+        listener: (context, state) {
+          final seeded = (state as SunnahLoaded).seeded;
+          for (final sunnah in state.sunnahs) {
+            if (!seeded.contains(sunnah.id) || !DhikrCatalog.sunnahNeedsCounter(sunnah)) continue;
+            context.read<TasbihBloc>().add(LinkSunnahCounter(
+                  DhikrCatalog.counterIdForSunnah(sunnah.id),
+                  DhikrCatalog.counterNameForSunnah(sunnah),
+                  DhikrCatalog.counterTargetForSunnah(sunnah),
+                ));
+          }
+        },
+        child: MaterialApp(
         navigatorKey: navigatorKey,
         navigatorObservers: [appRouteObserver],
         title: 'Wird',
@@ -157,6 +185,7 @@ class WirdApp extends StatelessWidget {
           '/statistics': (context) => const StatisticsScreen(),
           '/settings': (context) => const SettingsScreen(),
         },
+        ),
       ),
     );
   }

@@ -35,6 +35,7 @@ import '../../../core/constants/radii.dart';
 import '../../../widgets/common/wird_icons.dart';
 import '../../../core/festive/festive_occasion.dart';
 import '../../../widgets/common/glass_panel.dart';
+import '../../../core/notifications/reminder_scheduler.dart';
 
 /// Reading screen for a surah – beautiful verse-by-verse with dynamic gradient
 class SurahReadingScreen extends StatefulWidget {
@@ -314,7 +315,7 @@ class _SurahReadingScreenState extends State<SurahReadingScreen> {
 
       final versesReadInSession = _lastReadVerse - _initialReadVerse + 1;
       if (versesReadInSession > 0) {
-        _progressRepo.markVersesRead(versesReadInSession);
+        _progressRepo.markVersesRead(versesReadInSession).then((_) => ReminderScheduler.refresh());
       }
     }
     _scrollController.dispose();

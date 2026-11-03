@@ -31,6 +31,7 @@ import '../../../core/repositories/quran_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../../../widgets/common/wird_icons.dart';
+import '../../../core/notifications/reminder_scheduler.dart';
 
 /// Settings, grouped by what the user is trying to change:
 ///
@@ -445,6 +446,36 @@ class SettingsScreenState extends State<SettingsScreen> {
                   } else {
                     await _notificationService.cancelEventNotifications();
                   }
+                },
+              ),
+              _SwitchRow(
+                icon: Icons.self_improvement_rounded,
+                title: 'Practice reminders',
+                subtitle: 'Azkar and al-Kahf, only when not yet done',
+                value: _settings.practiceRemindersEnabled,
+                onChanged: (v) async {
+                  await _saveSettings(_settings.copyWith(practiceRemindersEnabled: v));
+                  ReminderScheduler.refresh();
+                },
+              ),
+              _SwitchRow(
+                icon: Icons.menu_book_rounded,
+                title: 'Quran reminder',
+                subtitle: 'After Maghrib, if you haven\'t read yet',
+                value: _settings.quranRemindersEnabled,
+                onChanged: (v) async {
+                  await _saveSettings(_settings.copyWith(quranRemindersEnabled: v));
+                  ReminderScheduler.refresh();
+                },
+              ),
+              _SwitchRow(
+                icon: Icons.nightlight_round,
+                title: 'Fasting days',
+                subtitle: 'The evening before a fasting day',
+                value: _settings.fastingRemindersEnabled,
+                onChanged: (v) async {
+                  await _saveSettings(_settings.copyWith(fastingRemindersEnabled: v));
+                  ReminderScheduler.refresh();
                 },
               ),
             ]),

@@ -491,6 +491,22 @@ class AppSettings extends Equatable {
   @HiveField(29, defaultValue: false)
   final bool weatherSoundsEnabled;
 
+  /// Reminders for the user's Sunnah practice at fitting times: the morning,
+  /// evening and sleep azkar, al-Kahf on Friday, and a nudge before a streak
+  /// lapses. Each only fires for practices not yet done that day. See
+  /// ReminderPlanner.
+  @HiveField(30, defaultValue: true)
+  final bool practiceRemindersEnabled;
+
+  /// An evening reminder to read Quran when nothing has been read that day.
+  @HiveField(31, defaultValue: true)
+  final bool quranRemindersEnabled;
+
+  /// The evening before a fasting day: Mondays and Thursdays and the white
+  /// days when they're in the practice, Arafah, Ashura and Ramadan always.
+  @HiveField(32, defaultValue: true)
+  final bool fastingRemindersEnabled;
+
   const AppSettings({
     this.location,
     this.calculationMethod = CalculationMethodType.muslimWorldLeague,
@@ -522,6 +538,9 @@ class AppSettings extends Equatable {
     this.appIcon = 'auto',
     this.soundsEnabled = false,
     this.weatherSoundsEnabled = false,
+    this.practiceRemindersEnabled = true,
+    this.quranRemindersEnabled = true,
+    this.fastingRemindersEnabled = true,
   });
 
   /// Default settings
@@ -561,6 +580,9 @@ class AppSettings extends Equatable {
     String? appIcon,
     bool? soundsEnabled,
     bool? weatherSoundsEnabled,
+    bool? practiceRemindersEnabled,
+    bool? quranRemindersEnabled,
+    bool? fastingRemindersEnabled,
   }) {
     return AppSettings(
       location: location ?? this.location,
@@ -593,6 +615,9 @@ class AppSettings extends Equatable {
       appIcon: appIcon ?? this.appIcon,
       soundsEnabled: soundsEnabled ?? this.soundsEnabled,
       weatherSoundsEnabled: weatherSoundsEnabled ?? this.weatherSoundsEnabled,
+      practiceRemindersEnabled: practiceRemindersEnabled ?? this.practiceRemindersEnabled,
+      quranRemindersEnabled: quranRemindersEnabled ?? this.quranRemindersEnabled,
+      fastingRemindersEnabled: fastingRemindersEnabled ?? this.fastingRemindersEnabled,
     );
   }
 
@@ -627,6 +652,9 @@ class AppSettings extends Equatable {
     appIcon,
     soundsEnabled,
     weatherSoundsEnabled,
+    practiceRemindersEnabled,
+    quranRemindersEnabled,
+    fastingRemindersEnabled,
   ];
 }
 

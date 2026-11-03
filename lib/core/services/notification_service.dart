@@ -11,6 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_10y.dart' as tz_data;
 import '../../models/prayer.dart';
 import '../../models/settings.dart';
+import '../notifications/reminder_planner.dart';
 import '../utils/islamic_day_utils.dart';
 import 'prayer_service.dart';
 
@@ -195,6 +196,11 @@ class NotificationService {
   static const String _sunnahChannelDesc = 'Weekly sunnah of the week reminder';
 
   /// Notification channel for islamic events
+  static const String _practiceChannelId = 'practice_reminders';
+  static const String _practiceChannelName = 'Practice Reminders';
+  static const String _practiceChannelDesc =
+      'Your Sunnah practice, Quran reading and fasting days, at fitting times';
+
   static const String _eventChannelId = 'islamic_events';
   static const String _eventChannelName = 'Islamic Events';
   static const String _eventChannelDesc = 'Notifications for special Islamic days';
@@ -368,6 +374,18 @@ class NotificationService {
         ),
       );
 
+      // Practice, Quran and fasting reminders
+      await androidPlugin.createNotificationChannel(
+        const AndroidNotificationChannel(
+          _practiceChannelId,
+          _practiceChannelName,
+          description: _practiceChannelDesc,
+          importance: Importance.defaultImportance,
+          playSound: true,
+          enableVibration: true,
+        ),
+      );
+
       // Islamic events channel
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
@@ -399,6 +417,13 @@ class NotificationService {
     final payload = response.payload;
 
     debugPrint('[Notifications] Action received: actionId=$actionId, payload=$payload');
+
+    // Practice, Quran and fasting reminders open a screen, not a prayer.
+    final target = reminderTarget(payload);
+    if (target != null) {
+      onOpenTarget?.call(target);
+      return;
+    }
 
     final parsed = _parsePayload(payload);
     if (parsed == null) {
@@ -907,6 +932,60 @@ class NotificationService {
       ),
       payload: 'islamic_event',
     );
+  }
+
+  // ─────────────── Practice, Quran and fasting reminders ───────────────
+
+  static const String _openPrefix = 'open:';
+
+  /// Opens what a tapped reminder points at (`session:morning`,
+  /// `quran:18`, ...). Set by the app once its navigator exists.
+  static void Function(String target)? onOpenTarget;
+
+  /// The target in a reminder's payload, or null for any other notification.
+  static String? reminderTarget(String? payload) =>
+      payload != null && payload.startsWith(_openPrefix) ? payload.substring(_openPrefix.length) : null;
+
+  /// The reminder target the app was launched from, if a reminder tap
+  /// started it.
+  Future<String?> launchTarget() async {
+    try {
+      final details = await _notificationsPlugin.getNotificationAppLaunchDetails();
+      if (details?.didNotificationLaunchApp != true) return null;
+      return reminderTarget(details!.notificationResponse?.payload);
+    } catch (e) {
+      debugPrint('[Notifications] launch details unavailable: $e');
+      return null;
+    }
+  }
+
+  /// Replaces today's practice, Quran and fasting reminders with [reminders].
+  Future<void> schedulePlannedReminders(List<PlannedReminder> reminders) async {
+    for (final id in ReminderPlanner.allIds) {
+      await _notificationsPlugin.cancel(id);
+    }
+    for (final r in reminders) {
+      debugPrint('[Notifications] Scheduling reminder ${r.id} at ${r.at}: ${r.title}');
+      await _zonedScheduleSafe(
+        id: r.id,
+        title: r.title,
+        body: r.body,
+        scheduledDate: tz.TZDateTime.from(r.at, tz.local),
+        details: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _practiceChannelId,
+            _practiceChannelName,
+            channelDescription: _practiceChannelDesc,
+            importance: Importance.defaultImportance,
+            priority: Priority.defaultPriority,
+            category: AndroidNotificationCategory.reminder,
+            styleInformation: BigTextStyleInformation(r.body),
+          ),
+          iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+        ),
+        payload: '$_openPrefix${r.target}',
+      );
+    }
   }
 
   /// Get pending notifications

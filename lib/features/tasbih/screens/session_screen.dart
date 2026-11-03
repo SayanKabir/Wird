@@ -14,6 +14,7 @@ import '../bloc/tasbih_bloc.dart';
 import '../widgets/dhikr_motion.dart';
 import '../widgets/dhikr_widgets.dart';
 import '../../../core/constants/durations.dart';
+import '../../../core/notifications/reminder_scheduler.dart';
 
 /// A guided session: each step is said its own number of times, then the
 /// next one comes up. The position is saved as you go, so leaving and coming
@@ -110,7 +111,8 @@ class _SessionScreenState extends State<SessionScreen> {
 
   void _finish() {
     setState(() => _finished = true);
-    _store.markDone(widget.sessionId);
+    // A finished session's reminder no longer needs to come.
+    _store.markDone(widget.sessionId).then((_) => ReminderScheduler.refresh());
   }
 
   void _undo() {

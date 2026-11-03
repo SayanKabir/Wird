@@ -11,6 +11,7 @@ import '../../../core/services/storage_service.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/services/widget_service.dart';
 import '../../../core/utils/islamic_day_utils.dart';
+import '../../../core/notifications/reminder_scheduler.dart';
 
 // ============================================
 // EVENTS
@@ -392,6 +393,7 @@ class PrayerBloc extends Bloc<PrayerEvent, PrayerState> {
         completedPrayers: completedPrayers,
         isRamadan: isRamadan,
       );
+      unawaited(ReminderScheduler.refresh());
 
       // Start countdown timer
       _startCountdownTimer();

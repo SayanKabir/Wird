@@ -140,13 +140,16 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       appIcon: fields[27] is String ? fields[27] as String : 'auto',
       soundsEnabled: fields[28] is bool ? fields[28] as bool : false,
       weatherSoundsEnabled: fields[29] is bool ? fields[29] as bool : false,
+      practiceRemindersEnabled: fields[30] is bool ? fields[30] as bool : true,
+      quranRemindersEnabled: fields[31] is bool ? fields[31] as bool : true,
+      fastingRemindersEnabled: fields[32] is bool ? fields[32] as bool : true,
     );
   }
 
   @override
   void write(BinaryWriter writer, AppSettings obj) {
     writer
-      ..writeByte(30)
+      ..writeByte(33)
       ..writeByte(0)
       ..write(obj.location)
       ..writeByte(1)
@@ -206,7 +209,13 @@ class AppSettingsAdapter extends TypeAdapter<AppSettings> {
       ..writeByte(28)
       ..write(obj.soundsEnabled)
       ..writeByte(29)
-      ..write(obj.weatherSoundsEnabled);
+      ..write(obj.weatherSoundsEnabled)
+      ..writeByte(30)
+      ..write(obj.practiceRemindersEnabled)
+      ..writeByte(31)
+      ..write(obj.quranRemindersEnabled)
+      ..writeByte(32)
+      ..write(obj.fastingRemindersEnabled);
   }
 
   @override
