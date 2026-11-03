@@ -816,14 +816,17 @@ class _Sun extends StatelessWidget {
   }
 }
 
-/// The moon in the app's flat style: a pale lit shape with soft craters and
-/// a glow, and a quiet dark side so every phase reads as one round moon
+/// The moon in the app's flat style: a pale lit shape with soft craters, a
+/// faint wash of light in the sky around it at night (no blur on the moon
+/// itself), and a quiet dark side so every phase reads as one round moon
 /// rather than a shape cut from the sky. Waxing moons are lit on the right,
 /// waning on the left; callers rotate it to face the sun. Also used on the
 /// verse share card.
 class MoonPainter extends CustomPainter {
   final double phaseValue; // 0.0 = new, 0.5 = full, 1.0 = new
   final Color moonColor;
+
+  /// Tint of the faint light in the sky around the moon.
   final Color glowColor;
 
   /// 0..1: how dark the sky is. At night the dark side shows more and a halo
@@ -883,8 +886,8 @@ class MoonPainter extends CustomPainter {
         Paint()
           ..shader = RadialGradient(
             colors: [
-              const Color(0xFFDCE6FF).withValues(alpha: (0.03 + 0.07 * illumination) * earthshine),
-              const Color(0x00DCE6FF),
+              glowColor.withValues(alpha: (0.03 + 0.07 * illumination) * earthshine),
+              glowColor.withValues(alpha: 0),
             ],
           ).createShader(Rect.fromCircle(center: center, radius: haloRadius)),
       );
@@ -905,14 +908,6 @@ class MoonPainter extends CustomPainter {
     );
 
     final moonPath = litPath(phaseValue, center, radius);
-
-    // Glow behind the lit part.
-    canvas.drawPath(
-      moonPath,
-      Paint()
-        ..color = glowColor
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
-    );
 
     // The lit part, with the shadow line feathered a touch so it reads as
     // light falling away rather than a cut. The disc clip keeps the outer
