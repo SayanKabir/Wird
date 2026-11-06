@@ -83,8 +83,9 @@ class LiveSky {
   bool get moonVisible =>
       moonAltitude > -4 && ephemeris.moonIllumination > 0.02;
 
-  /// The moon by day is a pale ghost of itself.
-  double get moonOpacity => 1 - 0.6 * _smooth(-4, 8, sunAltitude);
+  /// Full at night, still clear in twilight, and only a faint trace once
+  /// the sun is up and bright, so the day sky belongs to the sun.
+  double get moonOpacity => 1 - 0.88 * _smooth(-6, 15, sunAltitude);
 
   /// Gold overhead, red-orange as it nears the horizon.
   Color get sunColor => Color.lerp(
