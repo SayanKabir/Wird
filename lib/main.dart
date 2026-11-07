@@ -16,6 +16,7 @@ import 'features/statistics/screens/statistics_screen.dart';
 import 'features/islamic_calendar/screens/islamic_calendar_screen.dart';
 import 'features/settings/screens/settings_screen.dart';
 import 'features/sunnah/bloc/sunnah_bloc.dart';
+import 'features/sunnah/practice_keeper.dart';
 import 'core/repositories/sunnah_repository.dart';
 import 'core/repositories/sunnah_progress_repository.dart';
 import 'features/tasbih/bloc/tasbih_bloc.dart';
@@ -154,6 +155,7 @@ class WirdApp extends StatelessWidget {
       ],
       // The starting practice can include dhikr with words of their own
       // (Sayyid al-Istighfar); give those their counter on the dhikr page.
+      child: PracticeKeeper(
       child: BlocListener<SunnahBloc, SunnahState>(
         listenWhen: (previous, current) => current is SunnahLoaded && current.seeded.isNotEmpty,
         listener: (context, state) {
@@ -186,6 +188,7 @@ class WirdApp extends StatelessWidget {
           '/settings': (context) => const SettingsScreen(),
         },
         ),
+      ),
       ),
     );
   }

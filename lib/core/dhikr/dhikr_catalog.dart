@@ -1,4 +1,5 @@
 import '../../models/sunnah.dart';
+import '../../models/tasbih.dart';
 import 'quran_passages.dart';
 
 /// One step of a guided session: a dhikr said [count] times before moving on.
@@ -153,6 +154,43 @@ class DhikrCatalog {
     }
     return null;
   }
+
+  // ─────────────────── Keeping the practice ───────────────────
+
+  /// The counter whose count today keeps [s], or null when a guided session
+  /// keeps it instead, or nothing on the dhikr page does.
+  static String? counterKeeping(Sunnah s) {
+    if (sessionForSunnah(tasbihId: s.tasbihId, title: s.title) != null) return null;
+    if (s.tasbihId != null) return retiredCounterIds.contains(s.tasbihId) ? null : s.tasbihId;
+    return sunnahNeedsCounter(s) ? counterIdForSunnah(s.id) : null;
+  }
+
+  /// Sunnahs among [practiceIds] that [counters] have kept today: their
+  /// counter has been said as many times as the Sunnah asks (its own count,
+  /// or a full round when it names none). Session steps add to the same
+  /// counters, so after-prayer dhikr said in the session counts too.
+  static Set<String> keptByCounters({
+    required Iterable<Sunnah> sunnahs,
+    required Iterable<String> practiceIds,
+    required List<Tasbih> counters,
+    DateTime? now,
+  }) {
+    final ids = practiceIds.toSet();
+    final byId = {for (final t in counters) t.id: t};
+    return {
+      for (final s in sunnahs)
+        if (ids.contains(s.id))
+          if (byId[counterKeeping(s)] case final t?)
+            if (t.todayCount(now: now) >= (s.repetitions ?? t.targetCount)) s.id,
+    };
+  }
+
+  /// Sunnahs a finished [sessionId] keeps: the morning session keeps
+  /// "Complete Morning Azkar", and so on.
+  static Set<String> keptBySession(String sessionId, Iterable<Sunnah> sunnahs) => {
+        for (final s in sunnahs)
+          if (sessionForSunnah(tasbihId: s.tasbihId, title: s.title) == sessionId) s.id,
+      };
 
   static const Map<String, CounterText> counterText = {
     'subhanallah': _subhanallah,

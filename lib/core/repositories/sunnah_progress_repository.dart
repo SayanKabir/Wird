@@ -54,6 +54,19 @@ class SunnahProgressRepository {
     return updated;
   }
 
+  /// Marks each of [sunnahIds] as done today, leaving any already marked as
+  /// they are. Returns the updated progress.
+  Future<SunnahProgress> markToday(Iterable<String> sunnahIds, {DateTime? at}) async {
+    final now = at ?? DateTime.now();
+    var updated = await getProgress();
+    final before = updated;
+    for (final id in sunnahIds) {
+      if (!updated.isPracticedToday(id, now: now)) updated = _mark(updated, id, now);
+    }
+    if (!identical(updated, before)) await _save(updated);
+    return updated;
+  }
+
   static const String _defaultsKey = 'defaultsSeeded';
 
   /// Adds the starting practice ([PracticeIds.defaults]) once, after any

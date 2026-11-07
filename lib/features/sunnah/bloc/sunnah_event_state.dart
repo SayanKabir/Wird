@@ -23,6 +23,17 @@ class ToggleSunnahToday extends SunnahEvent {
   List<Object> get props => [sunnahId];
 }
 
+/// Marks the Sunnahs a finished dhikr keeps as done today. Ones outside the
+/// practice, or already done, are left alone.
+class MarkPracticeDone extends SunnahEvent {
+  final List<String> sunnahIds;
+
+  const MarkPracticeDone(this.sunnahIds);
+
+  @override
+  List<Object> get props => [sunnahIds];
+}
+
 /// Adds a sunnah to the user's practice, or removes it.
 class ToggleSunnahPractice extends SunnahEvent {
   final String sunnahId;

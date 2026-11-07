@@ -21,6 +21,30 @@ class SunnahBloc extends Bloc<SunnahEvent, SunnahState> {
     on<ToggleSunnahToday>(_onToggleToday);
     on<ToggleSunnahPractice>(_onTogglePractice);
     on<SkipWeeklySunnah>(_onSkipWeeklySunnah);
+    on<MarkPracticeDone>(_onMarkPracticeDone);
+  }
+
+  Future<void> _onMarkPracticeDone(
+    MarkPracticeDone event,
+    Emitter<SunnahState> emit,
+  ) async {
+    final current = state;
+    if (current is! SunnahLoaded) return;
+    final ids = [
+      for (final id in event.sunnahIds)
+        if (current.progress.isInPractice(id) && !current.progress.isPracticedToday(id)) id,
+    ];
+    if (ids.isEmpty) return;
+
+    try {
+      final updated = await _progressRepository.markToday(ids);
+      // Taps can land while the write runs; build on the latest state.
+      final latest = state;
+      emit((latest is SunnahLoaded ? latest : current).copyWith(progress: updated));
+      ReminderScheduler.refresh();
+    } catch (e) {
+      debugPrint('[SunnahBloc] markPracticeDone failed: $e');
+    }
   }
 
   Future<void> _onLoadSunnahs(

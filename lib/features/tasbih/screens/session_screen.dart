@@ -10,6 +10,7 @@ import '../../../core/dhikr/dhikr_catalog.dart';
 import '../../../core/repositories/tasbih_repository.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../widgets/common/pressable.dart';
+import '../../sunnah/bloc/sunnah_bloc.dart';
 import '../bloc/tasbih_bloc.dart';
 import '../widgets/dhikr_motion.dart';
 import '../widgets/dhikr_widgets.dart';
@@ -92,6 +93,7 @@ class _SessionScreenState extends State<SessionScreen> {
     last ? HapticService().heavy() : HapticService().medium();
     // Save the outcome now, in case the screen is left during the pause.
     last ? _store.markDone(widget.sessionId) : _store.savePosition(widget.sessionId, _step + 1, 0);
+    if (last) _keepPractice();
     _advance = Timer(_advancePause, () {
       if (!mounted) return;
       _advance = null;
@@ -107,6 +109,15 @@ class _SessionScreenState extends State<SessionScreen> {
       _resumed = false;
     });
     _store.savePosition(widget.sessionId, _step, 0);
+  }
+
+  /// Ticks the Sunnahs in the practice this session keeps.
+  void _keepPractice() {
+    final sunnah = context.read<SunnahBloc>();
+    final state = sunnah.state;
+    if (state is! SunnahLoaded) return;
+    final kept = DhikrCatalog.keptBySession(widget.sessionId, state.sunnahs);
+    if (kept.isNotEmpty) sunnah.add(MarkPracticeDone(kept.toList()));
   }
 
   void _finish() {
