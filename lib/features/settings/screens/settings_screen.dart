@@ -421,10 +421,11 @@ class SettingsScreenState extends State<SettingsScreen> {
                 subtitle: 'Mondays at 9:00 AM',
                 value: _settings.sunnahNotificationsEnabled,
                 onChanged: (v) async {
+                  final sunnahs = context.read<SunnahRepository>();
                   await _saveSettings(_settings.copyWith(sunnahNotificationsEnabled: v));
                   if (v && mounted) {
                     try {
-                      final sunnah = await context.read<SunnahRepository>().getWeeklySunnah();
+                      final sunnah = await sunnahs.getWeeklySunnah();
                       await _notificationService.scheduleWeeklySunnahReminder(sunnah.title);
                     } catch (e) {
                       debugPrint('Error scheduling sunnah reminder: $e');

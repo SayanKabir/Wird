@@ -73,7 +73,6 @@ class _SunnahScreenState extends State<SunnahScreen> {
 
   Widget _buildLoaded(BuildContext context, SunnahLoaded state) {
     _prepareLibrary(state.sunnahs);
-    final size = MediaQuery.sizeOf(context);
     final hPad = AppSpacing.gutter(context);
     final progress = state.progress;
     final practice = state.practice;

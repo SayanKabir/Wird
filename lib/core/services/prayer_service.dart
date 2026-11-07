@@ -68,9 +68,6 @@ class PrayerService {
     final dateComponents = adhan.DateComponents.from(date);
     final prayerTimes = adhan.PrayerTimes(coords, dateComponents, params);
     
-    // Get sunrise and sunset for additional calculations
-    final sunTimes = adhan.SunnahTimes(prayerTimes);
-    
     // Get tomorrow's Fajr for Isha end time
     final tomorrowDate = date.add(const Duration(days: 1));
     final tomorrowComponents = adhan.DateComponents.from(tomorrowDate);
